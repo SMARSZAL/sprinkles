@@ -2,11 +2,12 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use crate::ui::styles::colors;
+use crate::viewport::ViewportLayout;
 
-pub fn draw_inspector(mut contexts: EguiContexts) -> Result {
+pub fn draw_inspector(mut contexts: EguiContexts, mut layout: ResMut<ViewportLayout>) -> Result {
     let ctx = contexts.ctx_mut()?;
 
-    egui::SidePanel::left("inspector")
+    let response = egui::SidePanel::left("inspector")
         .resizable(true)
         .default_width(384.0)
         .min_width(200.0)
@@ -19,6 +20,8 @@ pub fn draw_inspector(mut contexts: EguiContexts) -> Result {
             ui.heading("Inspector");
             ui.separator();
         });
+
+    layout.left_panel_width = response.response.rect.width();
 
     Ok(())
 }

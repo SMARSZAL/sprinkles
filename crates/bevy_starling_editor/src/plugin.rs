@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy_egui::{
+    egui, input::egui_wants_any_pointer_input, EguiContexts, EguiPlugin, EguiPrimaryContextPass,
+};
 use bevy_starling::StarlingPlugin;
 
 use crate::state::{load_editor_data, EditorData, EditorState};
@@ -7,7 +9,8 @@ use crate::ui::modals::{draw_new_project_modal, on_create_project_event, NewProj
 use crate::ui::{configure_style, draw_inspector, draw_topbar};
 use crate::viewport::{
     despawn_preview_on_project_change, draw_grid, orbit_camera, setup_camera,
-    spawn_preview_particle_system, sync_playback_state, OrbitCameraSettings,
+    spawn_preview_particle_system, sync_playback_state, update_camera_viewport, zoom_camera,
+    CameraSettings, ViewportLayout,
 };
 
 pub struct StarlingEditorPlugin;
@@ -19,7 +22,8 @@ impl Plugin for StarlingEditorPlugin {
         app.add_plugins(StarlingPlugin)
             .add_plugins(EguiPlugin::default())
             .init_resource::<EditorState>()
-            .init_resource::<OrbitCameraSettings>()
+            .init_resource::<CameraSettings>()
+            .init_resource::<ViewportLayout>()
             .init_resource::<NewProjectModal>()
             .insert_resource(editor_data)
             .insert_resource(EguiConfigured(false))
@@ -28,7 +32,9 @@ impl Plugin for StarlingEditorPlugin {
             .add_systems(
                 Update,
                 (
-                    orbit_camera,
+                    orbit_camera.run_if(not(egui_wants_any_pointer_input)),
+                    zoom_camera.run_if(not(egui_wants_any_pointer_input)),
+                    update_camera_viewport,
                     draw_grid,
                     spawn_preview_particle_system,
                     despawn_preview_on_project_change,
