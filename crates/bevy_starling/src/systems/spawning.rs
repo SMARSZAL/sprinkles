@@ -46,18 +46,16 @@ pub fn setup_particle_systems(
         let mesh_handle = if let Some(draw_pass) = emitter.draw_passes.first() {
             match &draw_pass.mesh {
                 ParticleMesh::Quad => meshes.add(Rectangle::new(1.0, 1.0)),
-                ParticleMesh::Sphere {
-                    radius,
-                    rings,
-                    sectors,
-                } => meshes.add(Sphere::new(*radius).mesh().uv(*sectors, *rings)),
-                ParticleMesh::Cube { size } => meshes.add(Cuboid::new(*size, *size, *size)),
+                ParticleMesh::Sphere { radius } => meshes.add(Sphere::new(*radius)),
+                ParticleMesh::Cuboid { half_size } => {
+                    meshes.add(Cuboid::new(half_size.x * 2.0, half_size.y * 2.0, half_size.z * 2.0))
+                }
             }
         } else {
             meshes.add(Rectangle::new(1.0, 1.0))
         };
 
-        let use_index_draw_order = emitter.draw_order == DrawOrder::Index;
+        let use_index_draw_order = emitter.drawing.draw_order == DrawOrder::Index;
 
         // add runtime components to the particle system entity
         commands.entity(entity).insert((

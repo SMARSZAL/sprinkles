@@ -24,8 +24,8 @@ pub fn update_particle_time(
             continue;
         }
 
-        let lifetime = emitter.lifetime;
-        let fixed_fps = emitter.fixed_fps;
+        let lifetime = emitter.time.lifetime;
+        let fixed_fps = emitter.time.fixed_fps;
 
         // store previous time for phase calculation
         runtime.prev_system_time = runtime.system_time;
@@ -58,7 +58,7 @@ pub fn update_particle_time(
         }
 
         // handle one-shot mode
-        if emitter.one_shot && runtime.cycle > 0 {
+        if emitter.time.one_shot && runtime.cycle > 0 {
             runtime.emitting = false;
         }
     }

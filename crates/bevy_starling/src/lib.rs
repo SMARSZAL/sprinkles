@@ -54,8 +54,8 @@ impl Plugin for StarlingPlugin {
 
 // re-exports for convenience
 pub use asset::{
-    DrawOrder, DrawPassConfig, EmitterData, ParticleMesh, ParticleProcessConfig,
-    ParticleSystemDimension,
+    DrawOrder, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime, ParticleMesh,
+    ParticleProcessConfig, ParticleSystemDimension,
 };
 pub use core::{ParticleData, ParticleSystem2D, ParticleSystem3D};
 pub use render::material::ParticleMaterialExtension;

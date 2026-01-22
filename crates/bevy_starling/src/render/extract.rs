@@ -63,12 +63,12 @@ pub fn extract_particle_systems(
             continue;
         }
 
-        let lifetime = emitter.lifetime;
+        let lifetime = emitter.time.lifetime;
         // always use actual frame delta for physics simulation
         // fixed_fps only affects emission timing via system_phase
         let delta_time = time.delta_secs();
 
-        let draw_order = match emitter.draw_order {
+        let draw_order = match emitter.drawing.draw_order {
             DrawOrder::Index => 0,
             DrawOrder::Lifetime => 1,
             DrawOrder::ReverseLifetime => 2,
@@ -82,8 +82,8 @@ pub fn extract_particle_systems(
             cycle: runtime.cycle,
 
             amount: emitter.amount,
-            lifetime: emitter.lifetime,
-            lifetime_randomness: emitter.lifetime_randomness,
+            lifetime: emitter.time.lifetime,
+            lifetime_randomness: emitter.time.lifetime_randomness,
             emitting: if runtime.emitting { 1 } else { 0 },
 
             gravity: emitter.process.gravity.into(),
@@ -96,8 +96,8 @@ pub fn extract_particle_systems(
 
             initial_scale: emitter.process.initial_scale,
             initial_scale_randomness: emitter.process.initial_scale_randomness,
-            explosiveness: emitter.explosiveness,
-            randomness: emitter.randomness,
+            explosiveness: emitter.time.explosiveness,
+            randomness: emitter.time.randomness,
 
             draw_order,
             _pad3: [0; 3],

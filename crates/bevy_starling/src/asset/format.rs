@@ -18,14 +18,7 @@ pub enum DrawOrder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmitterData {
-    pub name: String,
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-
-    // emission
-    #[serde(default = "default_amount")]
-    pub amount: u32,
+pub struct EmitterTime {
     #[serde(default = "default_lifetime")]
     pub lifetime: f32,
     #[serde(default)]
@@ -36,18 +29,59 @@ pub struct EmitterData {
     pub explosiveness: f32,
     #[serde(default)]
     pub randomness: f32,
-
-    // timing
-    #[serde(default = "default_fixed_fps")]
+    #[serde(default)]
     pub fixed_fps: u32,
+}
 
-    // draw
+fn default_lifetime() -> f32 {
+    1.0
+}
+
+impl Default for EmitterTime {
+    fn default() -> Self {
+        Self {
+            lifetime: 1.0,
+            lifetime_randomness: 0.0,
+            one_shot: false,
+            explosiveness: 0.0,
+            randomness: 0.0,
+            fixed_fps: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmitterDrawing {
     #[serde(default)]
     pub draw_order: DrawOrder,
-    #[serde(default)]
-    pub draw_passes: Vec<DrawPassConfig>,
+}
 
-    // process
+impl Default for EmitterDrawing {
+    fn default() -> Self {
+        Self {
+            draw_order: DrawOrder::Index,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmitterData {
+    pub name: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+
+    #[serde(default = "default_amount")]
+    pub amount: u32,
+
+    #[serde(default)]
+    pub time: EmitterTime,
+
+    #[serde(default)]
+    pub drawing: EmitterDrawing,
+
+    #[serde(default)]
+    pub draw_passes: Vec<EmitterDrawPass>,
+
     #[serde(default)]
     pub process: ParticleProcessConfig,
 }
@@ -60,39 +94,26 @@ fn default_amount() -> u32 {
     8
 }
 
-fn default_lifetime() -> f32 {
-    1.0
-}
-
-fn default_fixed_fps() -> u32 {
-    0
-}
-
 impl Default for EmitterData {
     fn default() -> Self {
         Self {
             name: "Emitter".to_string(),
             enabled: true,
             amount: 8,
-            lifetime: 1.0,
-            lifetime_randomness: 0.0,
-            one_shot: false,
-            explosiveness: 0.0,
-            randomness: 0.0,
-            fixed_fps: 0,
-            draw_order: DrawOrder::Index,
-            draw_passes: vec![DrawPassConfig::default()],
+            time: EmitterTime::default(),
+            drawing: EmitterDrawing::default(),
+            draw_passes: vec![EmitterDrawPass::default()],
             process: ParticleProcessConfig::default(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DrawPassConfig {
+pub struct EmitterDrawPass {
     pub mesh: ParticleMesh,
 }
 
-impl Default for DrawPassConfig {
+impl Default for EmitterDrawPass {
     fn default() -> Self {
         Self {
             mesh: ParticleMesh::Quad,
@@ -106,22 +127,10 @@ pub enum ParticleMesh {
     Quad,
     Sphere {
         radius: f32,
-        #[serde(default = "default_sphere_rings")]
-        rings: u32,
-        #[serde(default = "default_sphere_sectors")]
-        sectors: u32,
     },
-    Cube {
-        size: f32,
+    Cuboid {
+        half_size: Vec3,
     },
-}
-
-fn default_sphere_rings() -> u32 {
-    16
-}
-
-fn default_sphere_sectors() -> u32 {
-    32
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
