@@ -17,3 +17,4 @@ bevy = { version = "0.18.0", features = ["file_watcher"] }
 serde = { version = "1", features = ["derive"] }
 ron = "0.10"
 thiserror = "2"
+bytemuck = { version = "1.14", features = ["derive"] }

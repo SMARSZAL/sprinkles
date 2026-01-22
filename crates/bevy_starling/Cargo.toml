@@ -11,3 +11,4 @@ bevy = { workspace = true }
 serde = { workspace = true }
 ron = { workspace = true }
 thiserror = { workspace = true }
+bytemuck = { workspace = true }

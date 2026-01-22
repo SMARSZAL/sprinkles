@@ -1,4 +1,4 @@
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::ops::Range;
 
 use bevy::input::mouse::AccumulatedMouseMotion;
@@ -27,7 +27,7 @@ impl Default for OrbitCameraSettings {
     }
 }
 
-pub fn setup_camera(mut commands: Commands) {
+pub fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     let initial_distance = 10.0;
     let initial_pitch = -std::f32::consts::FRAC_PI_4;
     let initial_yaw = std::f32::consts::FRAC_PI_4;
@@ -36,10 +36,22 @@ pub fn setup_camera(mut commands: Commands) {
     let forward = rotation * Vec3::NEG_Z;
     let translation = Vec3::ZERO - forward * initial_distance;
 
+    // spawn camera with environment map
     commands.spawn((
         EditorCamera,
         Camera3d::default(),
         Transform::from_translation(translation).with_rotation(rotation),
+        EnvironmentMapLight {
+            diffuse_map: asset_server.load("pisa_diffuse_rgb9e5_zstd.ktx2"),
+            specular_map: asset_server.load("pisa_specular_rgb9e5_zstd.ktx2"),
+            ..default()
+        },
+    ));
+
+    // spawn directional light
+    commands.spawn((
+        DirectionalLight::default(),
+        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -FRAC_PI_4, 0.0, -FRAC_PI_4)),
     ));
 }
 

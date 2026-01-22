@@ -5,7 +5,10 @@ use bevy_starling::StarlingPlugin;
 use crate::state::{load_editor_data, EditorData, EditorState};
 use crate::ui::modals::{draw_new_project_modal, on_create_project_event, NewProjectModal};
 use crate::ui::{configure_style, draw_inspector, draw_topbar};
-use crate::viewport::{draw_grid, orbit_camera, setup_camera, OrbitCameraSettings};
+use crate::viewport::{
+    despawn_preview_on_project_change, draw_grid, orbit_camera, setup_camera,
+    spawn_preview_particle_system, sync_playback_state, OrbitCameraSettings,
+};
 
 pub struct StarlingEditorPlugin;
 
@@ -21,8 +24,17 @@ impl Plugin for StarlingEditorPlugin {
             .insert_resource(editor_data)
             .insert_resource(EguiConfigured(false))
             .add_observer(on_create_project_event)
-            .add_systems(Startup, (setup_camera, setup_light, load_initial_project))
-            .add_systems(Update, (orbit_camera, draw_grid))
+            .add_systems(Startup, (setup_camera, load_initial_project))
+            .add_systems(
+                Update,
+                (
+                    orbit_camera,
+                    draw_grid,
+                    spawn_preview_particle_system,
+                    despawn_preview_on_project_change,
+                    sync_playback_state,
+                ),
+            )
             .add_systems(
                 EguiPrimaryContextPass,
                 (
@@ -53,16 +65,6 @@ fn setup_egui(mut contexts: EguiContexts, mut configured: ResMut<EguiConfigured>
 
     configured.0 = true;
     Ok(())
-}
-
-fn setup_light(mut commands: Commands) {
-    commands.spawn((
-        DirectionalLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(4.0, 8.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
 }
 
 fn load_initial_project(

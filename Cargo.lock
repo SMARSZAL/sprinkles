@@ -1513,6 +1513,7 @@ name = "bevy_starling"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bytemuck",
  "ron 0.10.1",
  "serde",
  "thiserror 2.0.18",

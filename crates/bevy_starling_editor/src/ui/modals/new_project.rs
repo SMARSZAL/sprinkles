@@ -266,6 +266,7 @@ pub fn on_create_project_event(
         dimension: event.dimension,
         emitters: vec![EmitterData {
             name: "Emitter 1".to_string(),
+            ..Default::default()
         }],
     };
 
