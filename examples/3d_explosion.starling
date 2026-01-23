@@ -15,7 +15,7 @@
                 fixed_fps: 30,
             ),
             drawing: (
-                draw_order: Lifetime,
+                draw_order: Index,
             ),
             draw_passes: [
                 (

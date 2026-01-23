@@ -10,8 +10,8 @@ pub enum ParticleSystemDimension {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DrawOrder {
-    Index,
     #[default]
+    Index,
     Lifetime,
     ReverseLifetime,
     ViewDepth,

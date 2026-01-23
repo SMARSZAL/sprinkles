@@ -98,6 +98,8 @@ fn rand_seed() -> u32 {
 pub struct ParticleBufferHandle {
     pub particle_buffer: Handle<ShaderStorageBuffer>,
     pub indices_buffer: Handle<ShaderStorageBuffer>,
+    /// sorted particle data for rendering (written in draw order)
+    pub sorted_particles_buffer: Handle<ShaderStorageBuffer>,
     pub max_particles: u32,
 }
 

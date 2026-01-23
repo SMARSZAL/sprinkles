@@ -27,19 +27,18 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 }
 #endif
 
-// particle storage buffer at binding 100 to avoid conflict with StandardMaterial bindings
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<storage, read> particles: array<Particle>;
-// particle indices for draw order sorting
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<storage, read> particle_indices: array<u32>;
+// sorted particle data buffer - particles are written here in draw order by the sort compute shader
+// instance 0 contains the first particle to render (back-most), instance N is the last (front-most)
+@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<storage, read> sorted_particles: array<Particle>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> max_particles: u32;
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    // get particle index from mesh tag through indirection buffer
-    let tag = mesh_functions::get_tag(vertex.instance_index);
-    let particle_index = particle_indices[tag];
-    let particle = particles[particle_index];
+    // read particle directly from sorted buffer using instance index
+    // the sort compute shader has already written particles in the correct draw order
+    let particle = sorted_particles[vertex.instance_index];
 
     // check if particle is active
     let flags = bitcast<u32>(particle.custom.w);
@@ -99,14 +98,12 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    // get particle index from instance index through indirection buffer
+    // read particle from sorted buffer
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    let tag = mesh_functions::get_tag(in.instance_index);
-    let particle_index = particle_indices[tag];
+    let particle = sorted_particles[in.instance_index];
 #else
-    let particle_index = 0u;
+    let particle = sorted_particles[0u];
 #endif
-    let particle = particles[particle_index];
 
     // check if particle is active
     let flags = bitcast<u32>(particle.custom.w);

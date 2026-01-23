@@ -27,6 +27,8 @@ struct SortParams {
 @group(0) @binding(0) var<uniform> params: SortParams;
 @group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(2) var<storage, read_write> indices: array<u32>;
+// output buffer: particle data written in sorted order for rendering
+@group(0) @binding(3) var<storage, read_write> sorted_particles: array<Particle>;
 
 fn get_sort_key(particle_index: u32) -> f32 {
     let particle = particles[particle_index];
@@ -131,4 +133,19 @@ fn init_indices(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
     indices[idx] = idx;
+}
+
+// copy particle data to sorted output buffer
+// this writes particles in sorted order so that instance 0 contains the first
+// particle to render (back-most), instance N contains the last (front-most)
+@compute @workgroup_size(256)
+fn copy_sorted(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let idx = global_id.x;
+    if (idx >= params.amount) {
+        return;
+    }
+
+    // indices[idx] contains the original particle index for sorted position idx
+    let particle_index = indices[idx];
+    sorted_particles[idx] = particles[particle_index];
 }

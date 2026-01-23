@@ -47,11 +47,14 @@ pub fn setup_particle_systems(
         let particles: Vec<ParticleData> = (0..amount).map(|_| ParticleData::default()).collect();
 
         // create ShaderStorageBuffer asset for the particle data
-        let particle_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles));
+        let particle_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles.clone()));
 
         // initialize particle indices buffer (identity mapping)
         let indices: Vec<u32> = (0..amount).collect();
         let indices_buffer_handle = buffers.add(ShaderStorageBuffer::from(indices));
+
+        // create sorted particles buffer (same size, written in sorted order for rendering)
+        let sorted_particles_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles));
 
         // create mesh based on draw pass configuration
         let current_mesh = if let Some(draw_pass) = emitter.draw_passes.first() {
@@ -70,8 +73,8 @@ pub fn setup_particle_systems(
                 ..default()
             },
             extension: ParticleMaterialExtension {
-                particles: particle_buffer_handle.clone(),
-                indices: indices_buffer_handle.clone(),
+                sorted_particles: sorted_particles_buffer_handle.clone(),
+                max_particles: amount,
             },
         });
 
@@ -81,6 +84,7 @@ pub fn setup_particle_systems(
             ParticleBufferHandle {
                 particle_buffer: particle_buffer_handle.clone(),
                 indices_buffer: indices_buffer_handle.clone(),
+                sorted_particles_buffer: sorted_particles_buffer_handle.clone(),
                 max_particles: amount,
             },
             CurrentMeshConfig(current_mesh),

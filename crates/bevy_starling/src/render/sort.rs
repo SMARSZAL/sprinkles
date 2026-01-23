@@ -41,6 +41,7 @@ pub struct ParticleSortPipeline {
     pub bind_group_layout: BindGroupLayoutDescriptor,
     pub init_pipeline: CachedComputePipelineId,
     pub sort_pipeline: CachedComputePipelineId,
+    pub copy_pipeline: CachedComputePipelineId,
 }
 
 pub fn init_particle_sort_pipeline(
@@ -56,6 +57,8 @@ pub fn init_particle_sort_pipeline(
                 uniform_buffer::<SortParams>(false),
                 storage_buffer::<crate::core::ParticleData>(false),
                 storage_buffer::<u32>(false),
+                // sorted particles output buffer
+                storage_buffer::<crate::core::ParticleData>(false),
             ),
         ),
     );
@@ -73,8 +76,16 @@ pub fn init_particle_sort_pipeline(
     let sort_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
         label: Some("particle_sort_pipeline".into()),
         layout: vec![bind_group_layout.clone()],
-        shader,
+        shader: shader.clone(),
         entry_point: Some(Cow::from("sort")),
+        ..default()
+    });
+
+    let copy_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+        label: Some("particle_sort_copy_pipeline".into()),
+        layout: vec![bind_group_layout.clone()],
+        shader,
+        entry_point: Some(Cow::from("copy_sorted")),
         ..default()
     });
 
@@ -82,6 +93,7 @@ pub fn init_particle_sort_pipeline(
         bind_group_layout,
         init_pipeline,
         sort_pipeline,
+        copy_pipeline,
     });
 }
 
@@ -94,6 +106,7 @@ pub struct SortEmitterData {
     pub entity: Entity,
     pub particle_buffer: Buffer,
     pub indices_buffer: Buffer,
+    pub sorted_particles_buffer: Buffer,
     pub amount: u32,
     pub draw_order: u32,
     pub camera_position: Vec3,
@@ -118,10 +131,17 @@ pub fn prepare_particle_sort_data(
             continue;
         };
 
+        let Some(sorted_particles_buffer) =
+            gpu_storage_buffers.get(&emitter_data.sorted_particles_buffer_handle)
+        else {
+            continue;
+        };
+
         emitters.push(SortEmitterData {
             entity: *entity,
             particle_buffer: particle_buffer.buffer.clone(),
             indices_buffer: indices_buffer.buffer.clone(),
+            sorted_particles_buffer: sorted_particles_buffer.buffer.clone(),
             amount: emitter_data.amount,
             draw_order: emitter_data.draw_order,
             camera_position: Vec3::from_array(emitter_data.camera_position),
@@ -155,8 +175,12 @@ impl render_graph::Node for ParticleSortNode {
             pipeline_cache.get_compute_pipeline_state(pipeline.sort_pipeline),
             CachedPipelineState::Ok(_)
         );
+        let copy_ready = matches!(
+            pipeline_cache.get_compute_pipeline_state(pipeline.copy_pipeline),
+            CachedPipelineState::Ok(_)
+        );
 
-        self.ready = init_ready && sort_ready;
+        self.ready = init_ready && sort_ready && copy_ready;
     }
 
     fn run(
@@ -181,6 +205,11 @@ impl render_graph::Node for ParticleSortNode {
         };
 
         let Some(sort_pipeline) = pipeline_cache.get_compute_pipeline(pipeline.sort_pipeline)
+        else {
+            return Ok(());
+        };
+
+        let Some(copy_pipeline) = pipeline_cache.get_compute_pipeline(pipeline.copy_pipeline)
         else {
             return Ok(());
         };
@@ -212,6 +241,7 @@ impl render_graph::Node for ParticleSortNode {
                         &uniform_buffer,
                         data.particle_buffer.as_entire_binding(),
                         data.indices_buffer.as_entire_binding(),
+                        data.sorted_particles_buffer.as_entire_binding(),
                     )),
                 );
 
@@ -227,51 +257,87 @@ impl render_graph::Node for ParticleSortNode {
                 pass.dispatch_workgroups(workgroups, 1, 1);
             }
 
-            // skip full sorting for Index draw order (identity mapping is sufficient)
-            if data.draw_order == 0 {
-                continue;
+            // perform bitonic sort (skip for Index draw order - identity mapping is sufficient)
+            if data.draw_order != 0 {
+                let n = data.amount.next_power_of_two();
+                let num_stages = (n as f32).log2().ceil() as u32;
+
+                for stage in 0..num_stages {
+                    for step in (0..=stage).rev() {
+                        let sort_params = SortParams {
+                            amount: data.amount,
+                            draw_order: data.draw_order,
+                            stage,
+                            step,
+                            camera_position: data.camera_position,
+                            _pad: 0.0,
+                            emitter_transform: data.emitter_transform,
+                        };
+
+                        let mut uniform_buffer = UniformBuffer::from(sort_params);
+                        uniform_buffer.write_buffer(render_device, render_queue);
+
+                        let bind_group = render_device.create_bind_group(
+                            Some("particle_sort_bind_group"),
+                            &bind_group_layout,
+                            &BindGroupEntries::sequential((
+                                &uniform_buffer,
+                                data.particle_buffer.as_entire_binding(),
+                                data.indices_buffer.as_entire_binding(),
+                                data.sorted_particles_buffer.as_entire_binding(),
+                            )),
+                        );
+
+                        let mut pass = render_context
+                            .command_encoder()
+                            .begin_compute_pass(&ComputePassDescriptor {
+                                label: Some("particle_sort_pass"),
+                                ..default()
+                            });
+
+                        pass.set_pipeline(sort_pipeline);
+                        pass.set_bind_group(0, &bind_group, &[]);
+                        pass.dispatch_workgroups(workgroups, 1, 1);
+                    }
+                }
             }
 
-            // perform bitonic sort for other draw orders
-            let n = data.amount.next_power_of_two();
-            let num_stages = (n as f32).log2().ceil() as u32;
+            // copy particle data to sorted output buffer
+            {
+                let sort_params = SortParams {
+                    amount: data.amount,
+                    draw_order: data.draw_order,
+                    stage: 0,
+                    step: 0,
+                    camera_position: data.camera_position,
+                    _pad: 0.0,
+                    emitter_transform: data.emitter_transform,
+                };
 
-            for stage in 0..num_stages {
-                for step in (0..=stage).rev() {
-                    let sort_params = SortParams {
-                        amount: data.amount,
-                        draw_order: data.draw_order,
-                        stage,
-                        step,
-                        camera_position: data.camera_position,
-                        _pad: 0.0,
-                        emitter_transform: data.emitter_transform,
-                    };
+                let mut uniform_buffer = UniformBuffer::from(sort_params);
+                uniform_buffer.write_buffer(render_device, render_queue);
 
-                    let mut uniform_buffer = UniformBuffer::from(sort_params);
-                    uniform_buffer.write_buffer(render_device, render_queue);
+                let bind_group = render_device.create_bind_group(
+                    Some("particle_sort_copy_bind_group"),
+                    &bind_group_layout,
+                    &BindGroupEntries::sequential((
+                        &uniform_buffer,
+                        data.particle_buffer.as_entire_binding(),
+                        data.indices_buffer.as_entire_binding(),
+                        data.sorted_particles_buffer.as_entire_binding(),
+                    )),
+                );
 
-                    let bind_group = render_device.create_bind_group(
-                        Some("particle_sort_bind_group"),
-                        &bind_group_layout,
-                        &BindGroupEntries::sequential((
-                            &uniform_buffer,
-                            data.particle_buffer.as_entire_binding(),
-                            data.indices_buffer.as_entire_binding(),
-                        )),
-                    );
+                let mut pass = render_context
+                    .command_encoder()
+                    .begin_compute_pass(&ComputePassDescriptor {
+                        label: Some("particle_sort_copy_pass"),
+                        ..default()
+                    });
 
-                    let mut pass = render_context
-                        .command_encoder()
-                        .begin_compute_pass(&ComputePassDescriptor {
-                            label: Some("particle_sort_pass"),
-                            ..default()
-                        });
-
-                    pass.set_pipeline(sort_pipeline);
-                    pass.set_bind_group(0, &bind_group, &[]);
-                    pass.dispatch_workgroups(workgroups, 1, 1);
-                }
+                pass.set_pipeline(copy_pipeline);
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.dispatch_workgroups(workgroups, 1, 1);
             }
         }
 
