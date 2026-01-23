@@ -1,5 +1,6 @@
 pub mod modals;
 pub mod styles;
+mod color_picker;
 mod inspector;
 mod topbar;
 

@@ -10,6 +10,7 @@ use egui_remixicon::icons;
 use inflector::Inflector;
 
 use crate::state::{EditorState, InspectorState};
+use crate::ui::color_picker::color_picker;
 use crate::ui::modals::ConfirmDeleteModal;
 use crate::ui::styles::{colors, icon_button, styled_checkbox, styled_f32_input, styled_labeled_f32_input, styled_u32_input, ICON_BUTTON_SIZE, TEXT_BASE, TEXT_SM};
 use crate::viewport::ViewportLayout;
@@ -796,18 +797,8 @@ fn inspect_color_rgba(
     indent_level: u8,
 ) -> bool {
     let mut changed = false;
-    inspector_row(ui, label, indent_level, |ui, _width| {
-        let mut color = egui::Color32::from_rgba_unmultiplied(
-            (value[0] * 255.0) as u8,
-            (value[1] * 255.0) as u8,
-            (value[2] * 255.0) as u8,
-            (value[3] * 255.0) as u8,
-        );
-        if ui.color_edit_button_srgba(&mut color).changed() {
-            value[0] = color.r() as f32 / 255.0;
-            value[1] = color.g() as f32 / 255.0;
-            value[2] = color.b() as f32 / 255.0;
-            value[3] = color.a() as f32 / 255.0;
+    inspector_row(ui, label, indent_level, |ui, width| {
+        if color_picker(ui, value, width).changed() {
             changed = true;
         }
     });
