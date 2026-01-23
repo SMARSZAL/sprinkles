@@ -15,6 +15,7 @@ pub mod colors {
     pub const GREEN: Color32 = bevy_to_egui(tailwind::GREEN_500);
     pub const BLUE: Color32 = bevy_to_egui(tailwind::BLUE_500);
 
+    pub const RED_400: Color32 = bevy_to_egui(tailwind::RED_400);
     pub const RED_800: Color32 = bevy_to_egui(tailwind::RED_800);
 
     pub const AXIS_X: Color32 = bevy_to_egui(tailwind::RED_400);

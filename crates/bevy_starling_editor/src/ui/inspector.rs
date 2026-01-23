@@ -478,10 +478,11 @@ fn inspect_particle_mesh(ui: &mut egui::Ui, label: &str, value: &mut ParticleMes
     changed
 }
 
-fn inspect_emitter_time(ui: &mut egui::Ui, id: &str, time: &mut EmitterTime, indent_level: u8) {
+fn inspect_emitter_time(ui: &mut egui::Ui, id: &str, time: &mut EmitterTime, indent_level: u8) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Time", indent_level, |ui, indent| {
-        inspect_f32_positive(ui, &field_label("lifetime"), &mut time.lifetime, indent);
-        inspect_f32_clamped(
+        changed |= inspect_f32_positive(ui, &field_label("lifetime"), &mut time.lifetime, indent);
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("lifetime_randomness"),
             &mut time.lifetime_randomness,
@@ -489,8 +490,8 @@ fn inspect_emitter_time(ui: &mut egui::Ui, id: &str, time: &mut EmitterTime, ind
             1.0,
             indent,
         );
-        inspect_bool(ui, &field_label("one_shot"), &mut time.one_shot, indent);
-        inspect_f32_clamped(
+        changed |= inspect_bool(ui, &field_label("one_shot"), &mut time.one_shot, indent);
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("explosiveness"),
             &mut time.explosiveness,
@@ -498,7 +499,7 @@ fn inspect_emitter_time(ui: &mut egui::Ui, id: &str, time: &mut EmitterTime, ind
             1.0,
             indent,
         );
-        inspect_f32_clamped(
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("randomness"),
             &mut time.randomness,
@@ -506,19 +507,23 @@ fn inspect_emitter_time(ui: &mut egui::Ui, id: &str, time: &mut EmitterTime, ind
             1.0,
             indent,
         );
-        inspect_u32(ui, &field_label("fixed_fps"), &mut time.fixed_fps, indent);
+        changed |= inspect_u32(ui, &field_label("fixed_fps"), &mut time.fixed_fps, indent);
     });
+    changed
 }
 
-fn inspect_emitter_drawing(ui: &mut egui::Ui, id: &str, drawing: &mut EmitterDrawing, indent_level: u8) {
+fn inspect_emitter_drawing(ui: &mut egui::Ui, id: &str, drawing: &mut EmitterDrawing, indent_level: u8) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Drawing", indent_level, |ui, indent| {
-        inspect_draw_order(ui, &field_label("draw_order"), &mut drawing.draw_order, indent);
+        changed |= inspect_draw_order(ui, &field_label("draw_order"), &mut drawing.draw_order, indent);
     });
+    changed
 }
 
 struct DrawPassesActions {
     add_pass: bool,
     remove_pass: Option<usize>,
+    changed: bool,
 }
 
 fn inspect_draw_passes(
@@ -530,6 +535,7 @@ fn inspect_draw_passes(
     let mut actions = DrawPassesActions {
         add_pass: false,
         remove_pass: None,
+        changed: false,
     };
 
     inspector_category(ui, id, "Draw passes", indent_level, |ui, indent| {
@@ -546,7 +552,7 @@ fn inspect_draw_passes(
                     });
                 });
                 ui.indent(pass_idx, |ui| {
-                    inspect_particle_mesh(ui, &field_label("mesh"), &mut pass.mesh, indent + 1);
+                    actions.changed |= inspect_particle_mesh(ui, &field_label("mesh"), &mut pass.mesh, indent + 1);
                 });
             });
         }
@@ -687,27 +693,29 @@ fn inspect_spawn_position(
     id: &str,
     position: &mut ParticleProcessSpawnPosition,
     indent_level: u8,
-) {
+) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Position", indent_level, |ui, indent| {
-        inspect_emission_shape(
+        changed |= inspect_emission_shape(
             ui,
             &field_label("emission_shape"),
             &mut position.emission_shape,
             indent,
         );
-        inspect_vec3(
+        changed |= inspect_vec3(
             ui,
             &field_label("emission_shape_offset"),
             &mut position.emission_shape_offset,
             indent,
         );
-        inspect_vec3(
+        changed |= inspect_vec3(
             ui,
             &field_label("emission_shape_scale"),
             &mut position.emission_shape_scale,
             indent,
         );
     });
+    changed
 }
 
 fn inspect_spawn_velocity(
@@ -715,10 +723,11 @@ fn inspect_spawn_velocity(
     id: &str,
     velocity: &mut ParticleProcessSpawnVelocity,
     indent_level: u8,
-) {
+) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Velocity", indent_level, |ui, indent| {
-        inspect_vec3(ui, &field_label("direction"), &mut velocity.direction, indent);
-        inspect_f32_clamped(
+        changed |= inspect_vec3(ui, &field_label("direction"), &mut velocity.direction, indent);
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("spread"),
             &mut velocity.spread,
@@ -726,7 +735,7 @@ fn inspect_spawn_velocity(
             180.0,
             indent,
         );
-        inspect_f32_clamped(
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("flatness"),
             &mut velocity.flatness,
@@ -734,13 +743,13 @@ fn inspect_spawn_velocity(
             1.0,
             indent,
         );
-        inspect_range(
+        changed |= inspect_range(
             ui,
             &field_label("initial_velocity"),
             &mut velocity.initial_velocity,
             indent,
         );
-        inspect_f32_clamped(
+        changed |= inspect_f32_clamped(
             ui,
             &field_label("inherit_velocity_ratio"),
             &mut velocity.inherit_velocity_ratio,
@@ -748,13 +757,14 @@ fn inspect_spawn_velocity(
             1.0,
             indent,
         );
-        inspect_vec3(
+        changed |= inspect_vec3(
             ui,
             &field_label("velocity_pivot"),
             &mut velocity.velocity_pivot,
             indent,
         );
     });
+    changed
 }
 
 fn inspect_spawn_accelerations(
@@ -762,10 +772,12 @@ fn inspect_spawn_accelerations(
     id: &str,
     accelerations: &mut ParticleProcessSpawnAccelerations,
     indent_level: u8,
-) {
+) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Accelerations", indent_level, |ui, indent| {
-        inspect_vec3(ui, &field_label("gravity"), &mut accelerations.gravity, indent);
+        changed |= inspect_vec3(ui, &field_label("gravity"), &mut accelerations.gravity, indent);
     });
+    changed
 }
 
 fn inspect_process_config(
@@ -773,34 +785,36 @@ fn inspect_process_config(
     id: &str,
     config: &mut ParticleProcessConfig,
     indent_level: u8,
-) {
+) -> bool {
+    let mut changed = false;
     inspector_category(ui, id, "Process", indent_level, |ui, indent| {
-        inspect_spawn_position(
+        changed |= inspect_spawn_position(
             ui,
             &format!("{}_position", id),
             &mut config.spawn.position,
             indent,
         );
-        inspect_spawn_velocity(
+        changed |= inspect_spawn_velocity(
             ui,
             &format!("{}_velocity", id),
             &mut config.spawn.velocity,
             indent,
         );
-        inspect_spawn_accelerations(
+        changed |= inspect_spawn_accelerations(
             ui,
             &format!("{}_accelerations", id),
             &mut config.spawn.accelerations,
             indent,
         );
     });
+    changed
 }
 
 
 pub fn draw_inspector(
     mut contexts: EguiContexts,
     mut layout: ResMut<ViewportLayout>,
-    editor_state: Res<EditorState>,
+    mut editor_state: ResMut<EditorState>,
     mut inspector_state: ResMut<InspectorState>,
     mut confirm_delete_modal: ResMut<ConfirmDeleteModal>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
@@ -835,6 +849,7 @@ pub fn draw_inspector(
 
             let mut toggle_emitter: Option<usize> = None;
             let mut start_editing_emitter: Option<usize> = None;
+            let mut any_changed = false;
 
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -855,6 +870,9 @@ pub fn draw_inspector(
                                     egui::vec2(available_width, EMITTER_HEADER_HEIGHT),
                                     egui::TextEdit::singleline(&mut emitter.name),
                                 );
+                                if response.changed() {
+                                    any_changed = true;
+                                }
                                 if response.lost_focus()
                                     || ui.input(|i| i.key_pressed(egui::Key::Enter))
                                 {
@@ -881,16 +899,16 @@ pub fn draw_inspector(
                             ui.add_space(4.0);
                             let base_indent: u8 = 1;
                             ui.indent(&emitter_id, |ui| {
-                                inspect_bool(ui, &field_label("enabled"), &mut emitter.enabled, base_indent);
-                                inspect_u32(ui, &field_label("amount"), &mut emitter.amount, base_indent);
+                                any_changed |= inspect_bool(ui, &field_label("enabled"), &mut emitter.enabled, base_indent);
+                                any_changed |= inspect_u32(ui, &field_label("amount"), &mut emitter.amount, base_indent);
 
-                                inspect_emitter_time(
+                                any_changed |= inspect_emitter_time(
                                     ui,
                                     &format!("{}_time", emitter_id),
                                     &mut emitter.time,
                                     base_indent,
                                 );
-                                inspect_emitter_drawing(
+                                any_changed |= inspect_emitter_drawing(
                                     ui,
                                     &format!("{}_drawing", emitter_id),
                                     &mut emitter.drawing,
@@ -904,6 +922,7 @@ pub fn draw_inspector(
                                     base_indent,
                                 );
 
+                                any_changed |= pass_actions.changed;
                                 if pass_actions.add_pass {
                                     should_add_pass = Some(idx);
                                 }
@@ -911,7 +930,7 @@ pub fn draw_inspector(
                                     should_remove_pass = Some((idx, pass_idx));
                                 }
 
-                                inspect_process_config(
+                                any_changed |= inspect_process_config(
                                     ui,
                                     &format!("{}_process", emitter_id),
                                     &mut emitter.process,
@@ -934,6 +953,10 @@ pub fn draw_inspector(
                         should_add_emitter = true;
                     }
                 });
+
+            if any_changed {
+                editor_state.mark_unsaved();
+            }
 
             if let Some(idx) = toggle_emitter {
                 inspector_state.toggle_emitter(idx);
@@ -986,7 +1009,7 @@ fn generate_unique_emitter_name(emitters: &[EmitterData]) -> String {
 
 pub fn on_add_emitter(
     _trigger: On<AddEmitterEvent>,
-    editor_state: Res<EditorState>,
+    mut editor_state: ResMut<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
     let Some(handle) = &editor_state.current_project else {
@@ -1001,11 +1024,12 @@ pub fn on_add_emitter(
     let mut new_emitter = EmitterData::default();
     new_emitter.name = name;
     asset.emitters.push(new_emitter);
+    editor_state.mark_unsaved();
 }
 
 pub fn on_remove_emitter(
     trigger: On<RemoveEmitterEvent>,
-    editor_state: Res<EditorState>,
+    mut editor_state: ResMut<EditorState>,
     mut inspector_state: ResMut<InspectorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
@@ -1034,12 +1058,14 @@ pub fn on_remove_emitter(
             .map(|&idx| if idx > event.index { idx - 1 } else { idx })
             .collect();
         inspector_state.collapsed_emitters = updated_collapsed;
+
+        editor_state.mark_unsaved();
     }
 }
 
 pub fn on_add_draw_pass(
     trigger: On<AddDrawPassEvent>,
-    editor_state: Res<EditorState>,
+    mut editor_state: ResMut<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
     let event = trigger.event();
@@ -1054,12 +1080,13 @@ pub fn on_add_draw_pass(
 
     if let Some(emitter) = asset.emitters.get_mut(event.emitter_index) {
         emitter.draw_passes.push(EmitterDrawPass::default());
+        editor_state.mark_unsaved();
     }
 }
 
 pub fn on_remove_draw_pass(
     trigger: On<RemoveDrawPassEvent>,
-    editor_state: Res<EditorState>,
+    mut editor_state: ResMut<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
     let event = trigger.event();
@@ -1075,6 +1102,7 @@ pub fn on_remove_draw_pass(
     if let Some(emitter) = asset.emitters.get_mut(event.emitter_index) {
         if event.pass_index < emitter.draw_passes.len() && emitter.draw_passes.len() > 1 {
             emitter.draw_passes.remove(event.pass_index);
+            editor_state.mark_unsaved();
         }
     }
 }

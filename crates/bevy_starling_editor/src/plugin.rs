@@ -7,7 +7,7 @@ use bevy_starling::StarlingPlugin;
 use crate::state::{load_editor_data, project_path, EditorData, EditorState, InspectorState};
 use crate::ui::modals::{
     draw_confirm_delete_modal, draw_new_project_modal, on_create_project_event,
-    ConfirmDeleteModal, NewProjectModal,
+    on_save_project_event, ConfirmDeleteModal, NewProjectModal,
 };
 use crate::ui::{
     configure_style, draw_inspector, draw_topbar, on_add_draw_pass, on_add_emitter,
@@ -36,6 +36,7 @@ impl Plugin for StarlingEditorPlugin {
             .insert_resource(editor_data)
             .insert_resource(EguiConfigured(false))
             .add_observer(on_create_project_event)
+            .add_observer(on_save_project_event)
             .add_observer(on_add_emitter)
             .add_observer(on_remove_emitter)
             .add_observer(on_add_draw_pass)
@@ -99,5 +100,7 @@ fn load_initial_project(
         }
     }
 
-    editor_state.current_project = Some(asset_server.load("demo.starling"));
+    let demo_file = "demo.starling";
+    editor_state.current_project = Some(asset_server.load(demo_file));
+    editor_state.current_project_path = Some(project_path(demo_file));
 }

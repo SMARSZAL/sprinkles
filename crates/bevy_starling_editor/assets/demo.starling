@@ -5,7 +5,7 @@
         (
             name: "Falling Spheres",
             enabled: true,
-            amount: 8,
+            amount: 16,
             time: (
                 lifetime: 1.0,
                 lifetime_randomness: 0.0,
@@ -18,22 +18,31 @@
                 draw_order: Lifetime,
             ),
             draw_passes: [
-                (mesh: Sphere(radius: 1.0)),
+                (
+                    mesh: Sphere(
+                        radius: 1.0,
+                    ),
+                ),
             ],
             process: (
                 spawn: (
                     position: (
-                        emission_shape: Sphere(radius: 0.2),
+                        emission_shape: Sphere(
+                            radius: 0.2,
+                        ),
                         emission_shape_offset: (0.0, 0.0, 0.0),
                         emission_shape_scale: (1.0, 1.0, 1.0),
                     ),
                     velocity: (
+                        inherit_velocity_ratio: 0.0,
+                        velocity_pivot: (0.0, 0.0, 0.0),
                         direction: (1.0, 0.0, 0.0),
                         spread: 45.0,
                         flatness: 0.0,
-                        initial_velocity: (min: 0.0, max: 0.0),
-                        inherit_velocity_ratio: 0.0,
-                        velocity_pivot: (0.0, 0.0, 0.0),
+                        initial_velocity: (
+                            min: 0.0,
+                            max: 0.0,
+                        ),
                     ),
                     accelerations: (
                         gravity: (0.0, -9.8, 0.0),

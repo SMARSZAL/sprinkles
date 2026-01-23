@@ -1,14 +1,19 @@
 use std::path::Path;
 
 use bevy::prelude::*;
-use bevy_egui::egui::{self, RichText};
+use bevy_egui::egui::{self, Color32, CornerRadius, FontId, Pos2, RichText, Vec2};
 use bevy_egui::EguiContexts;
 use bevy_starling::asset::ParticleSystemAsset;
 use egui_remixicon::icons;
 
 use crate::state::{EditorData, EditorState};
-use crate::ui::modals::NewProjectModal;
-use crate::ui::styles::{self, colors, ghost_button_with_icon, icon_button, icon_button_colored, icon_toggle};
+use crate::ui::modals::{NewProjectModal, SaveProjectEvent};
+use crate::ui::styles::{self, colors, ghost_button_with_icon, icon_button, icon_button_colored, icon_toggle, ICON_BUTTON_SIZE};
+
+const BADGE_SIZE: f32 = 8.0;
+const BADGE_OFFSET: f32 = 6.0;
+const SAVED_LABEL_VISIBLE_DURATION: f64 = 1.0;
+const SAVED_LABEL_FADE_DURATION: f64 = 0.8;
 
 pub fn draw_topbar(
     mut contexts: EguiContexts,
@@ -16,8 +21,23 @@ pub fn draw_topbar(
     mut new_project_modal: ResMut<NewProjectModal>,
     editor_data: Res<EditorData>,
     particle_systems: Res<Assets<ParticleSystemAsset>>,
+    mut commands: Commands,
+    time: Res<Time<Real>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
+    let current_time = time.elapsed_secs_f64();
+
+    // check if save completed
+    editor_state.check_save_completed(current_time);
+
+    // handle Ctrl/Cmd + S keyboard shortcut
+    let modifiers = ctx.input(|i| i.modifiers);
+    let save_shortcut_pressed = ctx.input(|i| i.key_pressed(egui::Key::S))
+        && (modifiers.command || modifiers.ctrl);
+
+    if save_shortcut_pressed && !editor_state.is_saving {
+        commands.trigger(SaveProjectEvent);
+    }
 
     egui::TopBottomPanel::top("topbar")
         .frame(styles::topbar_frame())
@@ -61,6 +81,12 @@ pub fn draw_topbar(
                     });
 
                 ui.separator();
+
+                // save button with badge and "Saved!" label
+                let save_response = draw_save_button(ui, &editor_state, current_time);
+                if save_response.clicked() && !editor_state.is_saving {
+                    commands.trigger(SaveProjectEvent);
+                }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if icon_toggle(
@@ -142,4 +168,137 @@ pub fn draw_topbar(
         });
 
     Ok(())
+}
+
+fn draw_save_button(ui: &mut egui::Ui, editor_state: &EditorState, current_time: f64) -> egui::Response {
+    // calculate "Saved!" label opacity
+    let saved_label_opacity = if let Some(completed_at) = editor_state.save_completed_at {
+        let elapsed = current_time - completed_at;
+        if elapsed < SAVED_LABEL_VISIBLE_DURATION {
+            1.0
+        } else {
+            let fade_progress = (elapsed - SAVED_LABEL_VISIBLE_DURATION) / SAVED_LABEL_FADE_DURATION;
+            (1.0 - fade_progress).max(0.0) as f32
+        }
+    } else {
+        0.0
+    };
+
+    // request repaint during animation
+    if saved_label_opacity > 0.0 {
+        ui.ctx().request_repaint();
+    }
+
+    // also request repaint while saving (for spinner animation)
+    if editor_state.is_saving {
+        ui.ctx().request_repaint();
+    }
+
+    // calculate total width needed
+    let saved_label_text = "Saved!";
+    let label_galley = ui.painter().layout_no_wrap(
+        saved_label_text.to_string(),
+        FontId::proportional(14.0),
+        colors::TEXT_MUTED,
+    );
+    let label_spacing = 4.0;
+    let label_width = if saved_label_opacity > 0.0 {
+        label_galley.size().x + label_spacing
+    } else {
+        0.0
+    };
+
+    let total_width = ICON_BUTTON_SIZE + label_width;
+    let (total_rect, response) = ui.allocate_exact_size(
+        Vec2::new(total_width, ICON_BUTTON_SIZE),
+        egui::Sense::click(),
+    );
+
+    if ui.is_rect_visible(total_rect) {
+        let button_rect = egui::Rect::from_min_size(
+            total_rect.min,
+            Vec2::splat(ICON_BUTTON_SIZE),
+        );
+
+        // draw button background
+        let bg_color = if response.hovered() && !editor_state.is_saving {
+            colors::hover_bg()
+        } else {
+            Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(button_rect, CornerRadius::same(4), bg_color);
+
+        // draw icon (save or loader)
+        let icon_pos = button_rect.center() + Vec2::new(0.0, 1.0);
+        if editor_state.is_saving {
+            // rotating loader icon
+            let rotation = (current_time * 4.0) as f32;
+            let _icon_galley = ui.painter().layout_no_wrap(
+                icons::LOADER_FILL.to_string(),
+                FontId::proportional(16.0),
+                colors::TEXT_MUTED,
+            );
+
+            // use a transform to rotate around center
+            let painter = ui.painter();
+            let icon_center = icon_pos;
+
+            // egui doesn't have built-in rotation for text, so we'll simulate with position offset
+            // for a simple spinning effect, we can just use the loader icon which already looks good
+            painter.text(
+                Pos2::new(
+                    icon_center.x + rotation.sin() * 0.5,
+                    icon_center.y + rotation.cos() * 0.5,
+                ),
+                egui::Align2::CENTER_CENTER,
+                icons::LOADER_FILL,
+                FontId::proportional(16.0),
+                colors::TEXT_MUTED,
+            );
+        } else {
+            ui.painter().text(
+                icon_pos,
+                egui::Align2::CENTER_CENTER,
+                icons::SAVE_3_FILL,
+                FontId::proportional(16.0),
+                ui.visuals().text_color(),
+            );
+        }
+
+        // draw unsaved changes badge
+        if editor_state.has_unsaved_changes && !editor_state.is_saving {
+            let badge_center = Pos2::new(
+                button_rect.center().x + BADGE_OFFSET,
+                button_rect.center().y - BADGE_OFFSET,
+            );
+            ui.painter().circle_filled(
+                badge_center,
+                BADGE_SIZE / 2.0,
+                colors::RED_400,
+            );
+        }
+
+        // draw "Saved!" label
+        if saved_label_opacity > 0.0 {
+            let label_color = Color32::from_rgba_unmultiplied(
+                colors::TEXT_MUTED.r(),
+                colors::TEXT_MUTED.g(),
+                colors::TEXT_MUTED.b(),
+                (saved_label_opacity * 255.0) as u8,
+            );
+            let label_pos = Pos2::new(
+                button_rect.right() + label_spacing,
+                button_rect.center().y,
+            );
+            ui.painter().text(
+                label_pos,
+                egui::Align2::LEFT_CENTER,
+                saved_label_text,
+                FontId::proportional(14.0),
+                label_color,
+            );
+        }
+    }
+
+    response
 }

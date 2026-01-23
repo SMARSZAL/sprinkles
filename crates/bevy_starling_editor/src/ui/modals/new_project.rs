@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
@@ -21,6 +23,9 @@ pub struct CreateProjectEvent {
     pub file_name: String,
     pub dimension: ParticleSystemDimension,
 }
+
+#[derive(Event)]
+pub struct SaveProjectEvent;
 
 const DEFAULT_PROJECT_NAME: &str = "Untitled project";
 
@@ -302,5 +307,49 @@ fn to_file_name(name: &str) -> String {
         .collect::<String>()
         .trim_matches('_')
         .to_string()
+}
+
+pub fn on_save_project_event(
+    _trigger: On<SaveProjectEvent>,
+    mut editor_state: ResMut<EditorState>,
+    particle_systems: Res<Assets<ParticleSystemAsset>>,
+) {
+    if editor_state.is_saving {
+        return;
+    }
+
+    let Some(handle) = &editor_state.current_project else {
+        return;
+    };
+
+    let Some(asset) = particle_systems.get(handle) else {
+        return;
+    };
+
+    let Some(path) = &editor_state.current_project_path else {
+        return;
+    };
+
+    let contents = match ron::ser::to_string_pretty(asset, ron::ser::PrettyConfig::default()) {
+        Ok(contents) => contents,
+        Err(_) => return,
+    };
+
+    let write_path = path.clone();
+    editor_state.is_saving = true;
+    editor_state.save_completed_at = None;
+
+    let complete_flag = Arc::new(AtomicBool::new(false));
+    let task_flag = complete_flag.clone();
+    editor_state.save_complete_flag = Some(complete_flag);
+
+    IoTaskPool::get()
+        .spawn(async move {
+            let mut file = File::create(&write_path).expect("failed to create file");
+            file.write_all(contents.as_bytes())
+                .expect("failed to write to file");
+            task_flag.store(true, Ordering::Relaxed);
+        })
+        .detach();
 }
 
