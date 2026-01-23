@@ -1,7 +1,8 @@
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
@@ -9,7 +10,10 @@ use bevy_egui::egui::{self, RichText};
 use bevy_egui::EguiContexts;
 use bevy_starling::asset::{EmitterData, ParticleSystemAsset, ParticleSystemDimension};
 
-use crate::state::{project_path, save_editor_data, EditorData, EditorState, DEFAULT_PROJECTS_DIR};
+use crate::state::{
+    load_project_from_path, project_path, save_editor_data, EditorData, EditorState,
+    DEFAULT_PROJECTS_DIR,
+};
 use egui_remixicon::icons;
 
 use crate::ui::styles::{
@@ -26,6 +30,23 @@ pub struct CreateProjectEvent {
 
 #[derive(Event)]
 pub struct SaveProjectEvent;
+
+#[derive(Event)]
+pub struct OpenProjectEvent {
+    pub path: PathBuf,
+}
+
+/// Event triggered when the "Open..." button is clicked
+#[derive(Event)]
+pub struct OpenFileDialogEvent;
+
+/// Resource to track the async file dialog state
+#[derive(Resource, Default)]
+pub struct OpenFileDialogState {
+    pub is_open: bool,
+    pub completed: Option<Arc<AtomicBool>>,
+    pub result: Option<Arc<Mutex<Option<PathBuf>>>>,
+}
 
 const DEFAULT_PROJECT_NAME: &str = "Untitled project";
 
@@ -364,5 +385,103 @@ pub fn on_save_project_event(
             task_flag.store(true, Ordering::Relaxed);
         })
         .detach();
+}
+
+pub fn on_open_project_event(
+    trigger: On<OpenProjectEvent>,
+    mut editor_state: ResMut<EditorState>,
+    mut editor_data: ResMut<EditorData>,
+    mut assets: ResMut<Assets<ParticleSystemAsset>>,
+) {
+    let event = trigger.event();
+    let path = &event.path;
+
+    let Some(asset) = load_project_from_path(path) else {
+        warn!("failed to load project from {:?}", path);
+        return;
+    };
+
+    let handle = assets.add(asset);
+    editor_state.current_project = Some(handle);
+    editor_state.current_project_path = Some(path.clone());
+    editor_state.has_unsaved_changes = false;
+
+    // add to recent projects using a path relative to working dir if possible
+    let display_path = path
+        .strip_prefix(std::env::current_dir().unwrap_or_default())
+        .map(|p| format!("./{}", p.display()))
+        .unwrap_or_else(|_| path.display().to_string());
+
+    editor_data.cache.add_recent_project(display_path);
+    save_editor_data(&editor_data);
+}
+
+pub fn on_open_file_dialog_event(
+    _trigger: On<OpenFileDialogEvent>,
+    mut dialog_state: ResMut<OpenFileDialogState>,
+) {
+    if dialog_state.is_open {
+        return;
+    }
+
+    dialog_state.is_open = true;
+
+    let completed = Arc::new(AtomicBool::new(false));
+    let result = Arc::new(Mutex::new(None));
+
+    let task_completed = completed.clone();
+    let task_result = result.clone();
+
+    dialog_state.completed = Some(completed);
+    dialog_state.result = Some(result);
+
+    IoTaskPool::get()
+        .spawn(async move {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("Starling Project", &["starling"])
+                .pick_file()
+                .await;
+
+            if let Some(file) = file {
+                let path = file.path().to_path_buf();
+                if let Ok(mut guard) = task_result.lock() {
+                    *guard = Some(path);
+                }
+            }
+
+            task_completed.store(true, Ordering::Release);
+        })
+        .detach();
+}
+
+pub fn poll_open_file_dialog(
+    mut dialog_state: ResMut<OpenFileDialogState>,
+    mut commands: Commands,
+) {
+    if !dialog_state.is_open {
+        return;
+    }
+
+    let Some(completed) = &dialog_state.completed else {
+        return;
+    };
+
+    if !completed.load(Ordering::Acquire) {
+        return;
+    }
+
+    // dialog completed, check result
+    if let Some(result) = &dialog_state.result {
+        if let Ok(guard) = result.lock() {
+            if let Some(path) = guard.clone() {
+                commands.trigger(OpenProjectEvent { path });
+            }
+        }
+    }
+
+    // reset state
+    dialog_state.is_open = false;
+    dialog_state.completed = None;
+    dialog_state.result = None;
 }
 

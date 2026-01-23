@@ -1,11 +1,13 @@
+use std::path::PathBuf;
+
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32, CornerRadius, FontId, Pos2, RichText, Vec2};
 use bevy_egui::EguiContexts;
 use bevy_starling::asset::ParticleSystemAsset;
 use egui_remixicon::icons;
 
-use crate::state::{format_display_path, save_editor_data, EditorData, EditorState};
-use crate::ui::modals::{NewProjectModal, SaveProjectEvent};
+use crate::state::{format_display_path, project_path, save_editor_data, EditorData, EditorState};
+use crate::ui::modals::{NewProjectModal, OpenFileDialogEvent, OpenProjectEvent, SaveProjectEvent};
 use crate::ui::styles::{self, colors, ghost_button_with_icon, icon_button, icon_button_colored, icon_toggle, ICON_BUTTON_SIZE};
 
 const BADGE_SIZE: f32 = 8.0;
@@ -46,18 +48,24 @@ pub fn draw_topbar(
                 let button_response =
                     ghost_button_with_icon(ui, &project_name, icons::ARROW_DOWN_S_LINE);
 
+                let mut open_file_dialog = false;
+                let mut open_project_path: Option<PathBuf> = None;
+
                 egui::Popup::menu(&button_response).show(|ui| {
-                        if ui
-                            .button(format!("{} New project...", icons::FILE_ADD_LINE))
-                            .clicked()
-                        {
+                        let new_project_response = ui
+                            .button(format!("{} New project...", icons::FILE_ADD_LINE));
+                        if new_project_response.clicked() {
                             new_project_modal.open = true;
                         }
+
+                        // use the width of the first button as reference for recent project rows
+                        let menu_item_width = new_project_response.rect.width();
+
                         if ui
                             .button(format!("{} Open...", icons::FOLDER_OPEN_LINE))
                             .clicked()
                         {
-                            // TODO: implement file open dialog
+                            open_file_dialog = true;
                         }
 
                         ui.separator();
@@ -66,27 +74,35 @@ pub fn draw_topbar(
                         if editor_data.cache.recent_projects.is_empty() {
                             ui.weak("No recent projects");
                         } else {
-                            let mut project_to_remove: Option<String> = None;
+                            let mut path_to_remove: Option<String> = None;
 
-                            for project_path in editor_data.cache.recent_projects.clone() {
-                                let display_path = format_display_path(&project_path);
+                            for recent_path in editor_data.cache.recent_projects.clone() {
+                                let display_path = format_display_path(&recent_path);
 
-                                let row_response = draw_recent_project_row(ui, &display_path);
+                                let row_response =
+                                    draw_recent_project_row(ui, &display_path, menu_item_width);
 
                                 if row_response.clicked {
-                                    // TODO: load the project
+                                    open_project_path = Some(project_path(&recent_path));
                                 }
                                 if row_response.remove_clicked {
-                                    project_to_remove = Some(project_path.clone());
+                                    path_to_remove = Some(recent_path.clone());
                                 }
                             }
 
-                            if let Some(path) = project_to_remove {
+                            if let Some(path) = path_to_remove {
                                 editor_data.cache.remove_recent_project(&path);
                                 save_editor_data(&editor_data);
                             }
                         }
                     });
+
+                if open_file_dialog {
+                    commands.trigger(OpenFileDialogEvent);
+                }
+                if let Some(path) = open_project_path {
+                    commands.trigger(OpenProjectEvent { path });
+                }
 
                 ui.separator();
 
@@ -316,17 +332,28 @@ struct RecentProjectRowResponse {
     remove_clicked: bool,
 }
 
-fn draw_recent_project_row(ui: &mut egui::Ui, display_path: &str) -> RecentProjectRowResponse {
+fn draw_recent_project_row(
+    ui: &mut egui::Ui,
+    display_path: &str,
+    row_width: f32,
+) -> RecentProjectRowResponse {
     let mut response = RecentProjectRowResponse {
         clicked: false,
         remove_clicked: false,
     };
 
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
+    let item_spacing = 4.0;
+    let close_button_size = 24.0;
+    let button_width = row_width - close_button_size - item_spacing;
 
-        // draw clickable text as a button
-        let text_response = ui.button(display_path);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = item_spacing;
+
+        // draw clickable button that fills the row width
+        let text_response = ui.add_sized(
+            Vec2::new(button_width, close_button_size),
+            egui::Button::new(display_path).right_text(""),
+        );
 
         if text_response.clicked() {
             response.clicked = true;
@@ -334,11 +361,10 @@ fn draw_recent_project_row(ui: &mut egui::Ui, display_path: &str) -> RecentProje
 
         // remove button - only show icon on row hover
         let row_hovered = text_response.hovered() || ui.rect_contains_pointer(ui.max_rect());
-        let button_size = text_response.rect.height();
 
         // check if pointer is over the remove button area before drawing
         let button_pos = ui.cursor().min;
-        let button_rect = egui::Rect::from_min_size(button_pos, Vec2::splat(button_size));
+        let button_rect = egui::Rect::from_min_size(button_pos, Vec2::splat(close_button_size));
         let button_hovered = ui.rect_contains_pointer(button_rect);
 
         let icon_color = if button_hovered {
@@ -352,8 +378,9 @@ fn draw_recent_project_row(ui: &mut egui::Ui, display_path: &str) -> RecentProje
         let remove_button = egui::Button::new(
             RichText::new(icons::CLOSE_FILL)
                 .size(14.0)
-                .color(icon_color)
-        ).min_size(Vec2::splat(button_size));
+                .color(icon_color),
+        )
+        .min_size(Vec2::splat(close_button_size));
 
         let remove_response = ui.add(remove_button);
 

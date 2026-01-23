@@ -5,10 +5,11 @@ use bevy_egui::{
 use bevy_starling::asset::ParticleSystemAsset;
 use bevy_starling::StarlingPlugin;
 
-use crate::state::{load_editor_data, project_path, save_editor_data, EditorData, EditorState, InspectorState};
+use crate::state::{load_editor_data, load_project_from_path, project_path, save_editor_data, EditorData, EditorState, InspectorState};
 use crate::ui::modals::{
     draw_confirm_delete_modal, draw_new_project_modal, on_create_project_event,
-    on_save_project_event, ConfirmDeleteModal, NewProjectModal,
+    on_open_file_dialog_event, on_open_project_event, on_save_project_event,
+    poll_open_file_dialog, ConfirmDeleteModal, NewProjectModal, OpenFileDialogState,
 };
 use crate::ui::{
     configure_style, draw_inspector, draw_topbar, on_add_draw_pass, on_add_emitter,
@@ -34,10 +35,13 @@ impl Plugin for StarlingEditorPlugin {
             .init_resource::<ViewportLayout>()
             .init_resource::<NewProjectModal>()
             .init_resource::<ConfirmDeleteModal>()
+            .init_resource::<OpenFileDialogState>()
             .insert_resource(editor_data)
             .insert_resource(EguiConfigured(false))
             .add_observer(on_create_project_event)
             .add_observer(on_save_project_event)
+            .add_observer(on_open_project_event)
+            .add_observer(on_open_file_dialog_event)
             .add_observer(on_add_emitter)
             .add_observer(on_remove_emitter)
             .add_observer(on_add_draw_pass)
@@ -53,6 +57,7 @@ impl Plugin for StarlingEditorPlugin {
                     spawn_preview_particle_system,
                     despawn_preview_on_project_change,
                     sync_playback_state,
+                    poll_open_file_dialog,
                 ),
             )
             .add_systems(
@@ -138,9 +143,3 @@ fn load_initial_project(
     editor_state.current_project = Some(handle);
 }
 
-fn load_project_from_path(
-    path: &std::path::Path,
-) -> Option<bevy_starling::asset::ParticleSystemAsset> {
-    let contents = std::fs::read_to_string(path).ok()?;
-    ron::from_str(&contents).ok()
-}
