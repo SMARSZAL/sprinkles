@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_starling::asset::{
-    DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
-    ParticleMesh, ParticleProcessConfig, ParticleProcessSpawnAccelerations,
-    ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity, ParticleSystemAsset, Range,
+    DrawOrder, EasingCurve, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing,
+    EmitterTime, ParticleMesh, ParticleProcessConfig, ParticleProcessDisplay,
+    ParticleProcessDisplayScale, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
+    ParticleProcessSpawnVelocity, ParticleSystemAsset, Range,
 };
 use egui_remixicon::icons;
 use inflector::Inflector;
@@ -780,6 +781,83 @@ fn inspect_spawn_accelerations(
     changed
 }
 
+fn easing_curve_label(curve: Option<EasingCurve>) -> &'static str {
+    // TODO: add more easing curve labels when implemented
+    match curve {
+        None => "Constant",
+        Some(EasingCurve::LinearIn) => "Linear In",
+        Some(EasingCurve::LinearOut) => "Linear Out",
+    }
+}
+
+fn all_easing_options() -> Vec<(Option<EasingCurve>, &'static str)> {
+    // TODO: add more easing curve options when implemented
+    vec![
+        (None, "Constant"),
+        (Some(EasingCurve::LinearIn), "Linear In"),
+        (Some(EasingCurve::LinearOut), "Linear Out"),
+    ]
+}
+
+fn inspect_easing_curve(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut Option<EasingCurve>,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+    inspector_row(ui, label, indent_level, |ui, width| {
+        let current_text = easing_curve_label(*value);
+
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(current_text)
+            .width(width)
+            .show_ui(ui, |ui| {
+                for (option_value, option_label) in all_easing_options() {
+                    if ui
+                        .selectable_value(value, option_value, option_label)
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                }
+            });
+    });
+    changed
+}
+
+fn inspect_display_scale(
+    ui: &mut egui::Ui,
+    id: &str,
+    scale: &mut ParticleProcessDisplayScale,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+    inspector_category(ui, id, "Scale", indent_level, |ui, indent| {
+        changed |= inspect_range(ui, &field_label("initial range"), &mut scale.range, indent);
+        changed |= inspect_easing_curve(ui, &field_label("scale over lifetime"), &mut scale.curve, indent);
+    });
+    changed
+}
+
+fn inspect_process_display(
+    ui: &mut egui::Ui,
+    id: &str,
+    display: &mut ParticleProcessDisplay,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+    inspector_category(ui, id, "Display", indent_level, |ui, indent| {
+        changed |= inspect_display_scale(
+            ui,
+            &format!("{}_scale", id),
+            &mut display.scale,
+            indent,
+        );
+    });
+    changed
+}
+
 fn inspect_process_config(
     ui: &mut egui::Ui,
     id: &str,
@@ -804,6 +882,12 @@ fn inspect_process_config(
             ui,
             &format!("{}_accelerations", id),
             &mut config.spawn.accelerations,
+            indent,
+        );
+        changed |= inspect_process_display(
+            ui,
+            &format!("{}_display", id),
+            &mut config.display,
             indent,
         );
     });

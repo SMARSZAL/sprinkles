@@ -273,16 +273,63 @@ impl Default for ParticleProcessSpawn {
     }
 }
 
+// TODO: implement more easing curves (Sine, Quad, Cubic, Elastic, Bounce, etc.)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum EasingCurve {
+    #[default]
+    LinearIn,
+    LinearOut,
+}
+
+impl EasingCurve {
+    pub fn to_gpu_constant(&self) -> u32 {
+        match self {
+            Self::LinearIn => 1,
+            Self::LinearOut => 2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessDisplayScale {
+    #[serde(default = "default_scale_range")]
+    pub range: Range,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curve: Option<EasingCurve>,
+}
+
+fn default_scale_range() -> Range {
+    Range { min: 1.0, max: 1.0 }
+}
+
+impl Default for ParticleProcessDisplayScale {
+    fn default() -> Self {
+        Self {
+            range: default_scale_range(),
+            curve: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ParticleProcessDisplay {
+    #[serde(default)]
+    pub scale: ParticleProcessDisplayScale,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
     pub spawn: ParticleProcessSpawn,
+    #[serde(default)]
+    pub display: ParticleProcessDisplay,
 }
 
 impl Default for ParticleProcessConfig {
     fn default() -> Self {
         Self {
             spawn: ParticleProcessSpawn::default(),
+            display: ParticleProcessDisplay::default(),
         }
     }
 }

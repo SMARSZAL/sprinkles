@@ -87,6 +87,7 @@ pub fn extract_particle_systems(
         let position = &spawn.position;
         let velocity = &spawn.velocity;
         let accelerations = &spawn.accelerations;
+        let display = &emitter.process.display;
 
         // convert emission shape to u32 discriminant and extract shape-specific parameters
         let (emission_shape, emission_sphere_radius, emission_box_extents, emission_ring_axis, emission_ring_height, emission_ring_radius, emission_ring_inner_radius) =
@@ -157,7 +158,11 @@ pub fn extract_particle_systems(
 
             draw_order,
             clear_particles: if runtime.clear_requested { 1 } else { 0 },
-            _pad7: [0; 2],
+            scale_min: display.scale.range.min,
+            scale_max: display.scale.range.max,
+
+            scale_curve: display.scale.curve.map(|c| c.to_gpu_constant()).unwrap_or(0),
+            _pad7: [0; 3],
         };
 
         extracted.emitters.push((

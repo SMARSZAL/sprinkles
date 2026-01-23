@@ -56,8 +56,13 @@ struct EmitterParams {
 
     draw_order: u32,
     clear_particles: u32,
+    scale_min: f32,
+    scale_max: f32,
+
+    scale_curve: u32,
     _pad7_a: u32,
     _pad7_b: u32,
+    _pad7_c: u32,
 }
 
 const EMISSION_SHAPE_POINT: u32 = 0u;
@@ -70,6 +75,12 @@ const DRAW_ORDER_INDEX: u32 = 0u;
 const PI: f32 = 3.14159265359;
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
+
+// scale curve constants
+// TODO: implement more easing curves
+const SCALE_CURVE_CONSTANT: u32 = 0u;
+const SCALE_CURVE_LINEAR_IN: u32 = 1u;
+const SCALE_CURVE_LINEAR_OUT: u32 = 2u;
 
 @group(0) @binding(0) var<uniform> params: EmitterParams;
 @group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
@@ -261,12 +272,37 @@ fn get_emission_velocity(seed: u32) -> vec3<f32> {
     return dir * speed;
 }
 
+// TODO: implement more easing curves
+fn apply_easing(curve: u32, t: f32) -> f32 {
+    switch curve {
+        case SCALE_CURVE_LINEAR_IN: { return t; }
+        case SCALE_CURVE_LINEAR_OUT: { return 1.0 - t; }
+        default: { return 1.0; } // SCALE_CURVE_CONSTANT
+    }
+}
+
+fn get_initial_scale(seed: u32) -> f32 {
+    let t = hash_to_float(seed);
+    return mix(params.scale_min, params.scale_max, t);
+}
+
+fn get_scale_at_lifetime(initial_scale: f32, age: f32, lifetime: f32) -> f32 {
+    if (params.scale_curve == SCALE_CURVE_CONSTANT) {
+        return initial_scale;
+    }
+    let t = clamp(age / lifetime, 0.0, 1.0);
+    let eased_t = apply_easing(params.scale_curve, t);
+    return initial_scale * eased_t;
+}
+
 fn spawn_particle(idx: u32) -> Particle {
     var p: Particle;
     let seed = hash(params.random_seed + idx + params.cycle * 1000u);
 
     let emission_pos = get_emission_position(seed);
-    let scale = 1.0; // scale handling deferred for later
+    let initial_scale = get_initial_scale(seed + 20u);
+    // for constant curve, use initial scale directly; for curves, start at eased t=0
+    let scale = get_scale_at_lifetime(initial_scale, 0.0, 1.0);
     p.position = vec4(emission_pos, scale);
 
     let vel = get_emission_velocity(seed + 10u);
@@ -294,18 +330,27 @@ fn update_particle(p_in: Particle) -> Particle {
     let age = p.custom.x + dt;
     p.custom.x = age;
 
+    let lifetime = p.velocity.w;
+
     // check if lifetime exceeded
-    if (age >= p.velocity.w) {
+    if (age >= lifetime) {
         p.custom.w = bitcast<f32>(0u); // deactivate
         return p;
     }
 
     // apply gravity and update velocity
     let velocity = p.velocity.xyz + params.gravity * dt;
-    p.velocity = vec4(velocity, p.velocity.w);
+    p.velocity = vec4(velocity, lifetime);
 
     // update position
-    p.position = vec4(p.position.xyz + velocity * dt, p.position.w);
+    let new_position = p.position.xyz + velocity * dt;
+
+    // update scale based on lifetime progress
+    let seed = bitcast<u32>(p.custom.z);
+    let initial_scale = get_initial_scale(seed + 20u);
+    let scale = get_scale_at_lifetime(initial_scale, age, lifetime);
+
+    p.position = vec4(new_position, scale);
 
     return p;
 }

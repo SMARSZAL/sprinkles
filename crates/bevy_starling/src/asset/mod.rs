@@ -2,8 +2,9 @@ mod format;
 mod loader;
 
 pub use format::{
-    DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
-    ParticleMesh, ParticleProcessConfig, ParticleProcessSpawn, ParticleProcessSpawnAccelerations,
+    DrawOrder, EasingCurve, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing,
+    EmitterTime, ParticleMesh, ParticleProcessConfig, ParticleProcessDisplay,
+    ParticleProcessDisplayScale, ParticleProcessSpawn, ParticleProcessSpawnAccelerations,
     ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity, ParticleSystemAsset,
     ParticleSystemDimension, Range,
 };

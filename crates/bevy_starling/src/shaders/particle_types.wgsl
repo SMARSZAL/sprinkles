@@ -56,8 +56,13 @@ struct EmitterParams {
 
     draw_order: u32,
     clear_particles: u32,
+    scale_min: f32,
+    scale_max: f32,
+
+    scale_curve: u32,
     _pad7_a: u32,
     _pad7_b: u32,
+    _pad7_c: u32,
 }
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;

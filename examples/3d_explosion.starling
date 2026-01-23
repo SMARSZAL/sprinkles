@@ -3,7 +3,7 @@
     dimension: D3,
     emitters: [
         (
-            name: "Falling Spheres",
+            name: "Emitter",
             enabled: true,
             amount: 16,
             time: (
@@ -37,15 +37,24 @@
                         inherit_velocity_ratio: 0.0,
                         velocity_pivot: (0.0, 0.0, 0.0),
                         direction: (1.0, 0.0, 0.0),
-                        spread: 45.0,
+                        spread: 180.0,
                         flatness: 0.0,
                         initial_velocity: (
                             min: 0.0,
-                            max: 0.0,
+                            max: 1.0,
                         ),
                     ),
                     accelerations: (
-                        gravity: (0.0, -9.8, 0.0),
+                        gravity: (0.0, 0.3, 0.0),
+                    ),
+                ),
+                display: (
+                    scale: (
+                        range: (
+                            min: 0.2,
+                            max: 0.4,
+                        ),
+                        curve: Some(LinearOut),
                     ),
                 ),
             ),
