@@ -64,8 +64,6 @@ pub fn setup_particle_systems(
 
         let mesh_handle = create_mesh_from_config(&current_mesh, &mut meshes);
 
-        let use_index_draw_order = emitter.drawing.draw_order == DrawOrder::Index;
-
         // add runtime components to the particle system entity
         commands.entity(entity).insert((
             ParticleSystemRuntime::default(),
@@ -82,13 +80,11 @@ pub fn setup_particle_systems(
 
         // spawn individual particle entities
         for i in 0..amount {
-            let depth_bias = if use_index_draw_order { i as f32 } else { 0.0 };
-
             let material_handle = materials.add(ExtendedMaterial {
                 base: StandardMaterial {
                     base_color: Color::WHITE,
                     alpha_mode: AlphaMode::Blend,
-                    depth_bias,
+                    depth_bias: i as f32,
                     ..default()
                 },
                 extension: ParticleMaterialExtension {

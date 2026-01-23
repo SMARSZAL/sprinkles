@@ -10,8 +10,8 @@ pub enum ParticleSystemDimension {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DrawOrder {
-    #[default]
     Index,
+    #[default]
     Lifetime,
     ReverseLifetime,
     ViewDepth,
@@ -59,7 +59,7 @@ pub struct EmitterDrawing {
 impl Default for EmitterDrawing {
     fn default() -> Self {
         Self {
-            draw_order: DrawOrder::Index,
+            draw_order: DrawOrder::default(),
         }
     }
 }

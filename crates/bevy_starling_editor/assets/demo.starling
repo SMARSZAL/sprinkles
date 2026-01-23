@@ -15,7 +15,7 @@
                 fixed_fps: 30,
             ),
             drawing: (
-                draw_order: Index,
+                draw_order: Lifetime,
             ),
             draw_passes: [
                 (mesh: Sphere(radius: 1.0)),
