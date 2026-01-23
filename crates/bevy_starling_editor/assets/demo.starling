@@ -10,7 +10,7 @@
                 lifetime: 1.0,
                 lifetime_randomness: 0.0,
                 one_shot: false,
-                explosiveness: 0.0,
+                explosiveness: 0.9,
                 randomness: 0.0,
                 fixed_fps: 30,
             ),
@@ -21,11 +21,24 @@
                 (mesh: Sphere(radius: 1.0)),
             ],
             process: (
-                gravity: (0.0, -9.8, 0.0),
-                initial_velocity: (0.0, 0.0, 0.0),
-                initial_velocity_randomness: (0.0, 0.0, 0.0),
-                initial_scale: 1.0,
-                initial_scale_randomness: 0.0,
+                spawn: (
+                    position: (
+                        emission_shape: Sphere(radius: 0.2),
+                        emission_shape_offset: (0.0, 0.0, 0.0),
+                        emission_shape_scale: (1.0, 1.0, 1.0),
+                    ),
+                    velocity: (
+                        direction: (1.0, 0.0, 0.0),
+                        spread: 45.0,
+                        flatness: 0.0,
+                        initial_velocity: (min: 0.0, max: 0.0),
+                        inherit_velocity_ratio: 0.0,
+                        velocity_pivot: (0.0, 0.0, 0.0),
+                    ),
+                    accelerations: (
+                        gravity: (0.0, -9.8, 0.0),
+                    ),
+                ),
             ),
         ),
     ],

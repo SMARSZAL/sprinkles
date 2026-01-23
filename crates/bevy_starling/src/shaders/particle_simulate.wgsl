@@ -21,23 +21,53 @@ struct EmitterParams {
     gravity: vec3<f32>,
     random_seed: u32,
 
-    initial_velocity: vec3<f32>,
-    _pad1: f32,
-    initial_velocity_randomness: vec3<f32>,
-    _pad2: f32,
+    emission_shape: u32,
+    emission_sphere_radius: f32,
+    emission_ring_height: f32,
+    emission_ring_radius: f32,
 
-    initial_scale: f32,
-    initial_scale_randomness: f32,
+    emission_ring_inner_radius: f32,
+    spread: f32,
+    flatness: f32,
+    initial_velocity_min: f32,
+
+    initial_velocity_max: f32,
+    inherit_velocity_ratio: f32,
     explosiveness: f32,
     randomness: f32,
 
+    emission_shape_offset: vec3<f32>,
+    _pad1: f32,
+
+    emission_shape_scale: vec3<f32>,
+    _pad2: f32,
+
+    emission_box_extents: vec3<f32>,
+    _pad3: f32,
+
+    emission_ring_axis: vec3<f32>,
+    _pad4: f32,
+
+    direction: vec3<f32>,
+    _pad5: f32,
+
+    velocity_pivot: vec3<f32>,
+    _pad6: f32,
+
     draw_order: u32,
     clear_particles: u32,
-    _pad3_a: u32,
-    _pad3_b: u32,
+    _pad7_a: u32,
+    _pad7_b: u32,
 }
 
+const EMISSION_SHAPE_POINT: u32 = 0u;
+const EMISSION_SHAPE_SPHERE: u32 = 1u;
+const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2u;
+const EMISSION_SHAPE_BOX: u32 = 3u;
+const EMISSION_SHAPE_RING: u32 = 4u;
+
 const DRAW_ORDER_INDEX: u32 = 0u;
+const PI: f32 = 3.14159265359;
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 
@@ -91,14 +121,155 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     particles[idx] = p;
 }
 
+fn get_emission_position(seed: u32) -> vec3<f32> {
+    var pos = vec3(0.0);
+
+    switch params.emission_shape {
+        case EMISSION_SHAPE_POINT: {
+            pos = vec3(0.0);
+        }
+        case EMISSION_SHAPE_SPHERE: {
+            // uniform distribution inside sphere using rejection sampling approximation
+            let u = hash_to_float(seed);
+            let v = hash_to_float(seed + 1u);
+            let w = hash_to_float(seed + 2u);
+
+            let theta = 2.0 * PI * u;
+            let phi = acos(2.0 * v - 1.0);
+            let r = pow(w, 1.0 / 3.0) * params.emission_sphere_radius;
+
+            pos = vec3(
+                r * sin(phi) * cos(theta),
+                r * sin(phi) * sin(theta),
+                r * cos(phi)
+            );
+        }
+        case EMISSION_SHAPE_SPHERE_SURFACE: {
+            // uniform distribution on sphere surface
+            let u = hash_to_float(seed);
+            let v = hash_to_float(seed + 1u);
+
+            let theta = 2.0 * PI * u;
+            let phi = acos(2.0 * v - 1.0);
+            let r = params.emission_sphere_radius;
+
+            pos = vec3(
+                r * sin(phi) * cos(theta),
+                r * sin(phi) * sin(theta),
+                r * cos(phi)
+            );
+        }
+        case EMISSION_SHAPE_BOX: {
+            // uniform distribution inside box
+            let u = hash_to_float(seed) * 2.0 - 1.0;
+            let v = hash_to_float(seed + 1u) * 2.0 - 1.0;
+            let w = hash_to_float(seed + 2u) * 2.0 - 1.0;
+            pos = vec3(u, v, w) * params.emission_box_extents;
+        }
+        case EMISSION_SHAPE_RING: {
+            // ring emission with configurable axis, height, radius, and inner radius
+            let u = hash_to_float(seed);
+            let v = hash_to_float(seed + 1u);
+            let h = hash_to_float(seed + 2u);
+
+            let theta = 2.0 * PI * u;
+            let r_range = params.emission_ring_radius - params.emission_ring_inner_radius;
+            let r = params.emission_ring_inner_radius + sqrt(v) * r_range;
+            let height_offset = (h - 0.5) * params.emission_ring_height;
+
+            // create position in ring local space (ring lies in XY plane, axis is Z)
+            let local_pos = vec3(r * cos(theta), r * sin(theta), height_offset);
+
+            // rotate to align with the configured axis
+            pos = rotate_to_axis(local_pos, params.emission_ring_axis);
+        }
+        default: {
+            pos = vec3(0.0);
+        }
+    }
+
+    // apply offset and scale
+    return pos * params.emission_shape_scale + params.emission_shape_offset;
+}
+
+fn rotate_to_axis(v: vec3<f32>, axis: vec3<f32>) -> vec3<f32> {
+    let z_axis = vec3(0.0, 0.0, 1.0);
+    let target_axis = normalize(axis);
+
+    // if axis is already Z (or close), no rotation needed
+    let dot_val = dot(z_axis, target_axis);
+    if (abs(dot_val) > 0.9999) {
+        if (dot_val < 0.0) {
+            return vec3(v.x, -v.y, -v.z);
+        }
+        return v;
+    }
+
+    // compute rotation axis and angle
+    let rot_axis = normalize(cross(z_axis, target_axis));
+    let cos_angle = dot_val;
+    let sin_angle = sqrt(1.0 - cos_angle * cos_angle);
+
+    // rodrigues rotation formula
+    return v * cos_angle + cross(rot_axis, v) * sin_angle + rot_axis * dot(rot_axis, v) * (1.0 - cos_angle);
+}
+
+fn get_emission_velocity(seed: u32) -> vec3<f32> {
+    // base direction
+    var dir = normalize(params.direction);
+    if (length(params.direction) < 0.0001) {
+        dir = vec3(1.0, 0.0, 0.0);
+    }
+
+    // apply spread angle to randomize direction within a cone
+    let spread_rad = radians(params.spread);
+    if (spread_rad > 0.0001) {
+        let u = hash_to_float(seed);
+        let v = hash_to_float(seed + 1u);
+
+        // random angle around the cone
+        let phi = 2.0 * PI * u;
+        // random angle from center (0 to spread)
+        let theta = spread_rad * sqrt(v);
+
+        // create a random direction within the cone
+        let cos_theta = cos(theta);
+        let sin_theta = sin(theta);
+
+        // find perpendicular vectors to direction
+        var perp1: vec3<f32>;
+        if (abs(dir.x) < 0.9) {
+            perp1 = normalize(cross(dir, vec3(1.0, 0.0, 0.0)));
+        } else {
+            perp1 = normalize(cross(dir, vec3(0.0, 1.0, 0.0)));
+        }
+        let perp2 = cross(dir, perp1);
+
+        // apply flatness: 0.0 = sphere cone, 1.0 = flat disc
+        let flat_cos_phi = cos(phi);
+        let flat_sin_phi = sin(phi) * (1.0 - params.flatness);
+        let flat_angle = atan2(flat_sin_phi, flat_cos_phi);
+
+        dir = dir * cos_theta + (perp1 * cos(flat_angle) + perp2 * sin(flat_angle)) * sin_theta;
+        dir = normalize(dir);
+    }
+
+    // interpolate between min and max velocity
+    let vel_t = hash_to_float(seed + 2u);
+    let speed = mix(params.initial_velocity_min, params.initial_velocity_max, vel_t);
+
+    return dir * speed;
+}
+
 fn spawn_particle(idx: u32) -> Particle {
     var p: Particle;
     let seed = hash(params.random_seed + idx + params.cycle * 1000u);
 
-    let scale = params.initial_scale + random_range(seed, params.initial_scale_randomness);
-    p.position = vec4(0.0, 0.0, 0.0, scale);
+    let emission_pos = get_emission_position(seed);
+    let scale = 1.0; // scale handling deferred for later
+    p.position = vec4(emission_pos, scale);
 
-    let vel = params.initial_velocity + random_vec3(seed + 1u, params.initial_velocity_randomness);
+    let vel = get_emission_velocity(seed + 10u);
     let lifetime = params.lifetime * (1.0 + random_range(seed + 4u, params.lifetime_randomness));
     p.velocity = vec4(vel, lifetime);
 

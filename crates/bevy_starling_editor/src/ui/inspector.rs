@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_starling::asset::{
-    DrawOrder, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime, ParticleMesh,
-    ParticleProcessConfig, ParticleSystemAsset,
+    DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
+    ParticleMesh, ParticleProcessConfig, ParticleProcessSpawnAccelerations,
+    ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity, ParticleSystemAsset, Range,
 };
 use egui_remixicon::icons;
 use inflector::Inflector;
@@ -77,6 +78,7 @@ fn inspector_row(
 
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.set_height(ROW_HEIGHT);
+                ui.set_max_width(value_width);
                 add_contents(ui, value_width);
             });
 
@@ -285,74 +287,94 @@ fn inspect_bool(ui: &mut egui::Ui, label: &str, value: &mut bool, indent_level: 
     *value != old_value
 }
 
-fn vec3_axis_input(
+const DEFAULT_FIELD_COLORS: [egui::Color32; 3] = [colors::AXIS_X, colors::AXIS_Y, colors::AXIS_Z];
+
+fn inspect_vector_fields<const N: usize>(
     ui: &mut egui::Ui,
-    id: egui::Id,
-    axis: &str,
-    color: egui::Color32,
-    value: &mut f32,
-    width: f32,
+    label: &str,
+    values: &mut [f32; N],
+    labels: &[&str; N],
+    indent_level: u8,
 ) -> bool {
     let mut changed = false;
-    let label_width = 16.0;
-    let input_width = width - label_width;
 
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ROW_HEIGHT), egui::Sense::hover());
+    let font_id = egui::FontId::proportional(11.0);
+    let label_input_spacing = 4.0;
+    let field_spacing = 8.0;
 
-    if ui.is_rect_visible(rect) {
-        let label_rect = egui::Rect::from_min_size(rect.min, egui::vec2(label_width, ROW_HEIGHT));
-        ui.painter().text(
-            label_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            axis,
-            egui::FontId::proportional(12.0),
-            color,
-        );
+    inspector_row(ui, label, indent_level, |ui, width| {
+        // calculate each label's width
+        let label_widths: [f32; N] = std::array::from_fn(|i| {
+            let galley = ui.painter().layout_no_wrap(labels[i].to_string(), font_id.clone(), egui::Color32::WHITE);
+            galley.size().x
+        });
 
-        let input_rect = egui::Rect::from_min_size(
-            egui::pos2(rect.min.x + label_width, rect.min.y),
-            egui::vec2(input_width, ROW_HEIGHT),
-        );
+        let total_label_width: f32 = label_widths.iter().sum();
+        let total_label_input_spacing = N as f32 * label_input_spacing;
+        let total_field_spacing = (N - 1) as f32 * field_spacing;
+        let total_input_width = width - total_label_width - total_label_input_spacing - total_field_spacing;
+        let input_width = total_input_width / N as f32;
 
-        let mut text = format!("{:.2}", value);
-        let response = ui.put(
-            input_rect,
-            egui::TextEdit::singleline(&mut text)
-                .id(id)
-                .desired_width(input_width)
-                .horizontal_align(egui::Align::Center),
-        );
+        ui.spacing_mut().item_spacing.x = 0.0;
 
-        if response.changed() {
-            if let Ok(new_value) = text.parse::<f32>() {
-                *value = new_value;
-                changed = true;
+        for i in 0..N {
+            let color = DEFAULT_FIELD_COLORS.get(i).copied().unwrap_or(colors::TEXT_MUTED);
+
+            // paint label
+            let (label_rect, _) = ui.allocate_exact_size(
+                egui::vec2(label_widths[i], ROW_HEIGHT),
+                egui::Sense::hover(),
+            );
+            ui.painter().text(
+                label_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                labels[i],
+                font_id.clone(),
+                color,
+            );
+
+            // spacing between label and input
+            ui.add_space(label_input_spacing);
+
+            // text input
+            ui.scope(|ui| {
+                ui.set_max_width(input_width);
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::vec2(input_width, ROW_HEIGHT),
+                    egui::Sense::hover(),
+                );
+                let mut text = format!("{:.2}", values[i]);
+                let response = ui.put(
+                    rect,
+                    egui::TextEdit::singleline(&mut text)
+                        .horizontal_align(egui::Align::Center),
+                );
+                if response.changed() {
+                    if let Ok(new_value) = text.parse::<f32>() {
+                        values[i] = new_value;
+                        changed = true;
+                    }
+                }
+            });
+
+            // spacing between fields
+            if i < N - 1 {
+                ui.add_space(field_spacing);
             }
         }
-    }
+    });
 
     changed
 }
 
 fn inspect_vec3(ui: &mut egui::Ui, label: &str, value: &mut Vec3, indent_level: u8) -> bool {
-    let mut changed = false;
-    let base_id = ui.id().with(label);
-
-    inspector_row(ui, label, indent_level, |ui, width| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        let axis_width = (width - 4.0) / 3.0;
-
-        if vec3_axis_input(ui, base_id.with("x"), "X", colors::AXIS_X, &mut value.x, axis_width) {
-            changed = true;
-        }
-        if vec3_axis_input(ui, base_id.with("y"), "Y", colors::AXIS_Y, &mut value.y, axis_width) {
-            changed = true;
-        }
-        if vec3_axis_input(ui, base_id.with("z"), "Z", colors::AXIS_Z, &mut value.z, axis_width) {
-            changed = true;
-        }
-    });
-
+    let mut values = [value.x, value.y, value.z];
+    let changed = inspect_vector_fields(ui, label, &mut values, &["X", "Y", "Z"], indent_level);
+    if changed {
+        value.x = values[0];
+        value.y = values[1];
+        value.z = values[2];
+    }
     changed
 }
 
@@ -544,28 +566,231 @@ fn inspect_draw_passes(
     actions
 }
 
-fn inspect_process_config(ui: &mut egui::Ui, id: &str, config: &mut ParticleProcessConfig, indent_level: u8) {
-    inspector_category(ui, id, "Process", indent_level, |ui, indent| {
-        inspect_vec3(ui, &field_label("gravity"), &mut config.gravity, indent);
-        inspect_vec3(
+fn inspect_range(ui: &mut egui::Ui, label: &str, value: &mut Range, indent_level: u8) -> bool {
+    let mut values = [value.min, value.max];
+    let changed = inspect_vector_fields(ui, label, &mut values, &["min", "max"], indent_level);
+    if changed {
+        value.min = values[0];
+        value.max = values[1];
+    }
+    changed
+}
+
+fn inspect_emission_shape(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut EmissionShape,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    let current_variant = match value {
+        EmissionShape::Point => "Point",
+        EmissionShape::Sphere { .. } => "Sphere",
+        EmissionShape::SphereSurface { .. } => "Sphere surface",
+        EmissionShape::Box { .. } => "Box",
+        EmissionShape::Ring { .. } => "Ring",
+    };
+
+    inspector_row(ui, label, indent_level, |ui, width| {
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(current_variant)
+            .width(width)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(matches!(value, EmissionShape::Point), "Point")
+                    .clicked()
+                {
+                    *value = EmissionShape::Point;
+                    changed = true;
+                }
+                if ui
+                    .selectable_label(matches!(value, EmissionShape::Sphere { .. }), "Sphere")
+                    .clicked()
+                {
+                    *value = EmissionShape::Sphere { radius: 1.0 };
+                    changed = true;
+                }
+                if ui
+                    .selectable_label(
+                        matches!(value, EmissionShape::SphereSurface { .. }),
+                        "Sphere surface",
+                    )
+                    .clicked()
+                {
+                    *value = EmissionShape::SphereSurface { radius: 1.0 };
+                    changed = true;
+                }
+                if ui
+                    .selectable_label(matches!(value, EmissionShape::Box { .. }), "Box")
+                    .clicked()
+                {
+                    *value = EmissionShape::Box {
+                        extents: Vec3::ONE,
+                    };
+                    changed = true;
+                }
+                if ui
+                    .selectable_label(matches!(value, EmissionShape::Ring { .. }), "Ring")
+                    .clicked()
+                {
+                    *value = EmissionShape::Ring {
+                        axis: Vec3::Z,
+                        height: 1.0,
+                        radius: 2.0,
+                        inner_radius: 0.0,
+                    };
+                    changed = true;
+                }
+            });
+    });
+
+    // show shape-specific fields
+    match value {
+        EmissionShape::Point => {}
+        EmissionShape::Sphere { radius } | EmissionShape::SphereSurface { radius } => {
+            if inspect_f32_positive(ui, &field_label("radius"), radius, indent_level) {
+                changed = true;
+            }
+        }
+        EmissionShape::Box { extents } => {
+            if inspect_vec3(ui, &field_label("extents"), extents, indent_level) {
+                changed = true;
+            }
+        }
+        EmissionShape::Ring {
+            axis,
+            height,
+            radius,
+            inner_radius,
+        } => {
+            if inspect_vec3(ui, &field_label("axis"), axis, indent_level) {
+                changed = true;
+            }
+            if inspect_f32_positive(ui, &field_label("height"), height, indent_level) {
+                changed = true;
+            }
+            if inspect_f32_positive(ui, &field_label("radius"), radius, indent_level) {
+                changed = true;
+            }
+            if inspect_f32_positive(ui, &field_label("inner_radius"), inner_radius, indent_level) {
+                changed = true;
+            }
+        }
+    }
+
+    changed
+}
+
+fn inspect_spawn_position(
+    ui: &mut egui::Ui,
+    id: &str,
+    position: &mut ParticleProcessSpawnPosition,
+    indent_level: u8,
+) {
+    inspector_category(ui, id, "Position", indent_level, |ui, indent| {
+        inspect_emission_shape(
             ui,
-            &field_label("initial_velocity"),
-            &mut config.initial_velocity,
+            &field_label("emission_shape"),
+            &mut position.emission_shape,
             indent,
         );
         inspect_vec3(
             ui,
-            &field_label("initial_velocity_randomness"),
-            &mut config.initial_velocity_randomness,
+            &field_label("emission_shape_offset"),
+            &mut position.emission_shape_offset,
             indent,
         );
-        inspect_f32_positive(ui, &field_label("initial_scale"), &mut config.initial_scale, indent);
+        inspect_vec3(
+            ui,
+            &field_label("emission_shape_scale"),
+            &mut position.emission_shape_scale,
+            indent,
+        );
+    });
+}
+
+fn inspect_spawn_velocity(
+    ui: &mut egui::Ui,
+    id: &str,
+    velocity: &mut ParticleProcessSpawnVelocity,
+    indent_level: u8,
+) {
+    inspector_category(ui, id, "Velocity", indent_level, |ui, indent| {
+        inspect_vec3(ui, &field_label("direction"), &mut velocity.direction, indent);
         inspect_f32_clamped(
             ui,
-            &field_label("initial_scale_randomness"),
-            &mut config.initial_scale_randomness,
+            &field_label("spread"),
+            &mut velocity.spread,
+            0.0,
+            180.0,
+            indent,
+        );
+        inspect_f32_clamped(
+            ui,
+            &field_label("flatness"),
+            &mut velocity.flatness,
             0.0,
             1.0,
+            indent,
+        );
+        inspect_range(
+            ui,
+            &field_label("initial_velocity"),
+            &mut velocity.initial_velocity,
+            indent,
+        );
+        inspect_f32_clamped(
+            ui,
+            &field_label("inherit_velocity_ratio"),
+            &mut velocity.inherit_velocity_ratio,
+            0.0,
+            1.0,
+            indent,
+        );
+        inspect_vec3(
+            ui,
+            &field_label("velocity_pivot"),
+            &mut velocity.velocity_pivot,
+            indent,
+        );
+    });
+}
+
+fn inspect_spawn_accelerations(
+    ui: &mut egui::Ui,
+    id: &str,
+    accelerations: &mut ParticleProcessSpawnAccelerations,
+    indent_level: u8,
+) {
+    inspector_category(ui, id, "Accelerations", indent_level, |ui, indent| {
+        inspect_vec3(ui, &field_label("gravity"), &mut accelerations.gravity, indent);
+    });
+}
+
+fn inspect_process_config(
+    ui: &mut egui::Ui,
+    id: &str,
+    config: &mut ParticleProcessConfig,
+    indent_level: u8,
+) {
+    inspector_category(ui, id, "Process", indent_level, |ui, indent| {
+        inspect_spawn_position(
+            ui,
+            &format!("{}_position", id),
+            &mut config.spawn.position,
+            indent,
+        );
+        inspect_spawn_velocity(
+            ui,
+            &format!("{}_velocity", id),
+            &mut config.spawn.velocity,
+            indent,
+        );
+        inspect_spawn_accelerations(
+            ui,
+            &format!("{}_accelerations", id),
+            &mut config.spawn.accelerations,
             indent,
         );
     });

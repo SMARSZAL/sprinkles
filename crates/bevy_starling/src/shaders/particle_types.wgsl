@@ -21,15 +21,43 @@ struct EmitterParams {
     gravity: vec3<f32>,
     random_seed: u32,
 
-    initial_velocity: vec3<f32>,
-    _pad1: f32,
-    initial_velocity_randomness: vec3<f32>,
-    _pad2: f32,
+    emission_shape: u32,
+    emission_sphere_radius: f32,
+    emission_ring_height: f32,
+    emission_ring_radius: f32,
 
-    initial_scale: f32,
-    initial_scale_randomness: f32,
+    emission_ring_inner_radius: f32,
+    spread: f32,
+    flatness: f32,
+    initial_velocity_min: f32,
+
+    initial_velocity_max: f32,
+    inherit_velocity_ratio: f32,
     explosiveness: f32,
     randomness: f32,
+
+    emission_shape_offset: vec3<f32>,
+    _pad1: f32,
+
+    emission_shape_scale: vec3<f32>,
+    _pad2: f32,
+
+    emission_box_extents: vec3<f32>,
+    _pad3: f32,
+
+    emission_ring_axis: vec3<f32>,
+    _pad4: f32,
+
+    direction: vec3<f32>,
+    _pad5: f32,
+
+    velocity_pivot: vec3<f32>,
+    _pad6: f32,
+
+    draw_order: u32,
+    clear_particles: u32,
+    _pad7_a: u32,
+    _pad7_b: u32,
 }
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;

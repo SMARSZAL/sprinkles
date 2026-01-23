@@ -133,32 +133,156 @@ pub enum ParticleMesh {
     },
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Range {
+    #[serde(default)]
+    pub min: f32,
+    #[serde(default)]
+    pub max: f32,
+}
+
+impl Default for Range {
+    fn default() -> Self {
+        Self { min: 0.0, max: 0.0 }
+    }
+}
+
+impl Range {
+    pub fn new(min: f32, max: f32) -> Self {
+        Self { min, max }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+pub enum EmissionShape {
+    #[default]
+    Point,
+    Sphere {
+        radius: f32,
+    },
+    SphereSurface {
+        radius: f32,
+    },
+    Box {
+        extents: Vec3,
+    },
+    Ring {
+        axis: Vec3,
+        height: f32,
+        radius: f32,
+        inner_radius: f32,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessSpawnPosition {
+    #[serde(default)]
+    pub emission_shape: EmissionShape,
+    #[serde(default)]
+    pub emission_shape_offset: Vec3,
+    #[serde(default = "default_emission_shape_scale")]
+    pub emission_shape_scale: Vec3,
+}
+
+fn default_emission_shape_scale() -> Vec3 {
+    Vec3::ONE
+}
+
+impl Default for ParticleProcessSpawnPosition {
+    fn default() -> Self {
+        Self {
+            emission_shape: EmissionShape::default(),
+            emission_shape_offset: Vec3::ZERO,
+            emission_shape_scale: Vec3::ONE,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessSpawnVelocity {
+    #[serde(default)]
+    pub inherit_velocity_ratio: f32,
+    #[serde(default)]
+    pub velocity_pivot: Vec3,
+    #[serde(default = "default_direction")]
+    pub direction: Vec3,
+    #[serde(default = "default_spread")]
+    pub spread: f32,
+    #[serde(default)]
+    pub flatness: f32,
+    #[serde(default)]
+    pub initial_velocity: Range,
+}
+
+fn default_direction() -> Vec3 {
+    Vec3::X
+}
+
+fn default_spread() -> f32 {
+    45.0
+}
+
+impl Default for ParticleProcessSpawnVelocity {
+    fn default() -> Self {
+        Self {
+            inherit_velocity_ratio: 0.0,
+            velocity_pivot: Vec3::ZERO,
+            direction: Vec3::X,
+            spread: 45.0,
+            flatness: 0.0,
+            initial_velocity: Range::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessSpawnAccelerations {
+    #[serde(default = "default_gravity")]
+    pub gravity: Vec3,
+}
+
+fn default_gravity() -> Vec3 {
+    Vec3::new(0.0, -9.8, 0.0)
+}
+
+impl Default for ParticleProcessSpawnAccelerations {
+    fn default() -> Self {
+        Self {
+            gravity: Vec3::new(0.0, -9.8, 0.0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessSpawn {
+    #[serde(default)]
+    pub position: ParticleProcessSpawnPosition,
+    #[serde(default)]
+    pub velocity: ParticleProcessSpawnVelocity,
+    #[serde(default)]
+    pub accelerations: ParticleProcessSpawnAccelerations,
+}
+
+impl Default for ParticleProcessSpawn {
+    fn default() -> Self {
+        Self {
+            position: ParticleProcessSpawnPosition::default(),
+            velocity: ParticleProcessSpawnVelocity::default(),
+            accelerations: ParticleProcessSpawnAccelerations::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
-    pub gravity: Vec3,
-    #[serde(default)]
-    pub initial_velocity: Vec3,
-    #[serde(default)]
-    pub initial_velocity_randomness: Vec3,
-    #[serde(default = "default_initial_scale")]
-    pub initial_scale: f32,
-    #[serde(default)]
-    pub initial_scale_randomness: f32,
-}
-
-fn default_initial_scale() -> f32 {
-    1.0
+    pub spawn: ParticleProcessSpawn,
 }
 
 impl Default for ParticleProcessConfig {
     fn default() -> Self {
         Self {
-            gravity: Vec3::new(0., -9.8, 0.),
-            initial_velocity: Vec3::ZERO,
-            initial_velocity_randomness: Vec3::ZERO,
-            initial_scale: 1.0,
-            initial_scale_randomness: 0.0,
+            spawn: ParticleProcessSpawn::default(),
         }
     }
 }

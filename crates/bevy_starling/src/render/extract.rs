@@ -4,12 +4,15 @@ use bevy::{
 };
 
 use crate::{
-    asset::{DrawOrder, ParticleSystemAsset},
+    asset::{DrawOrder, EmissionShape, ParticleSystemAsset},
     core::ParticleSystem3D,
     runtime::{ParticleBufferHandle, ParticleSystemRuntime},
 };
 
-use super::EmitterUniforms;
+use super::{
+    EmitterUniforms, EMISSION_SHAPE_BOX, EMISSION_SHAPE_POINT, EMISSION_SHAPE_RING,
+    EMISSION_SHAPE_SPHERE, EMISSION_SHAPE_SPHERE_SURFACE,
+};
 
 #[derive(Resource, Default)]
 pub struct ExtractedParticleSystem {
@@ -79,6 +82,31 @@ pub fn extract_particle_systems(
             DrawOrder::ViewDepth => 3,
         };
 
+        let spawn = &emitter.process.spawn;
+        let position = &spawn.position;
+        let velocity = &spawn.velocity;
+        let accelerations = &spawn.accelerations;
+
+        // convert emission shape to u32 discriminant and extract shape-specific parameters
+        let (emission_shape, emission_sphere_radius, emission_box_extents, emission_ring_axis, emission_ring_height, emission_ring_radius, emission_ring_inner_radius) =
+            match position.emission_shape {
+                EmissionShape::Point => {
+                    (EMISSION_SHAPE_POINT, 0.0, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
+                }
+                EmissionShape::Sphere { radius } => {
+                    (EMISSION_SHAPE_SPHERE, radius, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
+                }
+                EmissionShape::SphereSurface { radius } => {
+                    (EMISSION_SHAPE_SPHERE_SURFACE, radius, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
+                }
+                EmissionShape::Box { extents } => {
+                    (EMISSION_SHAPE_BOX, 0.0, extents, Vec3::Z, 0.0, 0.0, 0.0)
+                }
+                EmissionShape::Ring { axis, height, radius, inner_radius } => {
+                    (EMISSION_SHAPE_RING, 0.0, Vec3::ZERO, axis, height, radius, inner_radius)
+                }
+            };
+
         let uniforms = EmitterUniforms {
             delta_time,
             system_phase: runtime.system_phase(lifetime),
@@ -90,22 +118,45 @@ pub fn extract_particle_systems(
             lifetime_randomness: emitter.time.lifetime_randomness,
             emitting: if runtime.emitting { 1 } else { 0 },
 
-            gravity: emitter.process.gravity.into(),
+            gravity: accelerations.gravity.into(),
             random_seed: runtime.random_seed,
 
-            initial_velocity: emitter.process.initial_velocity.into(),
-            _pad1: 0.0,
-            initial_velocity_randomness: emitter.process.initial_velocity_randomness.into(),
-            _pad2: 0.0,
+            emission_shape,
+            emission_sphere_radius,
+            emission_ring_height,
+            emission_ring_radius,
 
-            initial_scale: emitter.process.initial_scale,
-            initial_scale_randomness: emitter.process.initial_scale_randomness,
+            emission_ring_inner_radius,
+            spread: velocity.spread,
+            flatness: velocity.flatness,
+            initial_velocity_min: velocity.initial_velocity.min,
+
+            initial_velocity_max: velocity.initial_velocity.max,
+            inherit_velocity_ratio: velocity.inherit_velocity_ratio,
             explosiveness: emitter.time.explosiveness,
             randomness: emitter.time.randomness,
 
+            emission_shape_offset: position.emission_shape_offset.into(),
+            _pad1: 0.0,
+
+            emission_shape_scale: position.emission_shape_scale.into(),
+            _pad2: 0.0,
+
+            emission_box_extents: emission_box_extents.into(),
+            _pad3: 0.0,
+
+            emission_ring_axis: emission_ring_axis.into(),
+            _pad4: 0.0,
+
+            direction: velocity.direction.into(),
+            _pad5: 0.0,
+
+            velocity_pivot: velocity.velocity_pivot.into(),
+            _pad6: 0.0,
+
             draw_order,
             clear_particles: if runtime.clear_requested { 1 } else { 0 },
-            _pad3: [0; 2],
+            _pad7: [0; 2],
         };
 
         extracted.emitters.push((
