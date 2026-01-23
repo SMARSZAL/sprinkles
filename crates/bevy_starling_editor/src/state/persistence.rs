@@ -24,7 +24,10 @@ impl EditorCache {
     const MAX_RECENT_PROJECTS: usize = 10;
 
     pub fn add_recent_project(&mut self, path: String) {
-        self.recent_projects.retain(|p| p != &path);
+        // remove existing entry by comparing canonical paths to avoid duplicates
+        let new_canonical = canonicalize_path(&path);
+        self.recent_projects
+            .retain(|p| canonicalize_path(p) != new_canonical);
         self.recent_projects.insert(0, path.clone());
         self.recent_projects.truncate(Self::MAX_RECENT_PROJECTS);
         self.last_opened_project = Some(path);
@@ -78,6 +81,15 @@ pub fn format_display_path(path: &str) -> String {
 
 pub fn working_dir() -> PathBuf {
     env::current_dir().unwrap_or_default()
+}
+
+fn canonicalize_path(path: &str) -> PathBuf {
+    let path_buf = if path.starts_with("./") || path.starts_with(".\\") {
+        working_dir().join(&path[2..])
+    } else {
+        PathBuf::from(path)
+    };
+    path_buf.canonicalize().unwrap_or(path_buf)
 }
 
 pub fn editor_data_path() -> PathBuf {
