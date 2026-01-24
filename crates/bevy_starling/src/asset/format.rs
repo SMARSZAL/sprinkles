@@ -345,7 +345,6 @@ impl Gradient {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
 pub enum SolidOrGradientColor {
     Solid { color: [f32; 4] },
     Gradient { gradient: Gradient },
