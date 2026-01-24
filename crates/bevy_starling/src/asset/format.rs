@@ -45,7 +45,7 @@ impl Default for EmitterTime {
             one_shot: false,
             explosiveness: 0.0,
             randomness: 0.0,
-            fixed_fps: 0,
+            fixed_fps: 30,
         }
     }
 }

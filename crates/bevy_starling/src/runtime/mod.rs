@@ -138,14 +138,9 @@ pub struct ParticleGpuBuffers {
     pub max_particles: u32,
 }
 
-/// marker component for individual particle entities
+/// links an emitter's rendering mesh entity to its emitter
 #[derive(Component)]
-pub struct ParticleEntity;
-
-/// stores references to parent entities for cleanup purposes
-#[derive(Component)]
-pub struct ParticleSystemRef {
-    pub system_entity: Entity,
+pub struct EmitterMeshEntity {
     pub emitter_entity: Entity,
 }
 

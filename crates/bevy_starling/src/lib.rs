@@ -85,6 +85,6 @@ pub use asset::{
 pub use core::{ParticleData, ParticleSystem2D, ParticleSystem3D};
 pub use render::material::ParticleMaterialExtension;
 pub use runtime::{
-    EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleEntity, ParticleMaterial,
-    ParticleMaterialHandle, ParticleSystemRef, ParticleSystemRuntime,
+    EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle, ParticleMaterial,
+    ParticleMaterialHandle, ParticleSystemRuntime,
 };

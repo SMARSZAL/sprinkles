@@ -36,9 +36,10 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    // read particle directly from sorted buffer using instance index
-    // the sort compute shader has already written particles in the correct draw order
-    let particle = sorted_particles[vertex.instance_index];
+    // read particle index from uv_b.x (encoded during mesh generation)
+    // this eliminates reliance on instance_index which isn't guaranteed to match particle order
+    let particle_index = u32(vertex.uv_b.x);
+    let particle = sorted_particles[particle_index];
 
     // check if particle is active
     let flags = bitcast<u32>(particle.custom.w);
@@ -54,8 +55,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // translate to particle position
     let local_position = scaled_position + particle_position;
 
-    // get world transform matrix
-    var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
+    // get world transform matrix (single mesh entity per emitter, so index 0)
+    var world_from_local = mesh_functions::get_world_from_local(0u);
 
     // compute world position
     out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4(local_position, 1.0));
@@ -65,7 +66,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // transform normal to world space
 #ifdef VERTEX_NORMALS
-    out.world_normal = mesh_functions::mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(vertex.normal, 0u);
 #endif
 
 #ifdef VERTEX_UVS_A
@@ -77,7 +78,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
 
 #ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
+    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, 0u);
 #endif
 
 #ifdef VERTEX_COLORS
@@ -98,9 +99,11 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    // read particle from sorted buffer
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    let particle = sorted_particles[in.instance_index];
+    // read particle index from interpolated uv_b.x
+    // since all vertices of each quad have the same uv_b.x, interpolation yields the same value
+#ifdef VERTEX_UVS_B
+    let particle_index = u32(in.uv_b.x);
+    let particle = sorted_particles[particle_index];
 #else
     let particle = sorted_particles[0u];
 #endif
