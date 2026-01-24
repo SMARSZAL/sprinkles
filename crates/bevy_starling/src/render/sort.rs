@@ -29,7 +29,9 @@ pub struct SortParams {
     pub stage: u32,
     pub step: u32,
     pub camera_position: Vec3,
-    pub _pad: f32,
+    pub _pad1: f32,
+    pub camera_forward: Vec3,
+    pub _pad2: f32,
     pub emitter_transform: Mat4,
 }
 
@@ -110,6 +112,7 @@ pub struct SortEmitterData {
     pub amount: u32,
     pub draw_order: u32,
     pub camera_position: Vec3,
+    pub camera_forward: Vec3,
     pub emitter_transform: Mat4,
 }
 
@@ -145,6 +148,7 @@ pub fn prepare_particle_sort_data(
             amount: emitter_data.amount,
             draw_order: emitter_data.draw_order,
             camera_position: Vec3::from_array(emitter_data.camera_position),
+            camera_forward: Vec3::from_array(emitter_data.camera_forward),
             emitter_transform: emitter_data.emitter_transform,
         });
     }
@@ -227,7 +231,9 @@ impl render_graph::Node for ParticleSortNode {
                     stage: 0,
                     step: 0,
                     camera_position: data.camera_position,
-                    _pad: 0.0,
+                    _pad1: 0.0,
+                    camera_forward: data.camera_forward,
+                    _pad2: 0.0,
                     emitter_transform: data.emitter_transform,
                 };
 
@@ -270,7 +276,9 @@ impl render_graph::Node for ParticleSortNode {
                             stage,
                             step,
                             camera_position: data.camera_position,
-                            _pad: 0.0,
+                            _pad1: 0.0,
+                    camera_forward: data.camera_forward,
+                    _pad2: 0.0,
                             emitter_transform: data.emitter_transform,
                         };
 
@@ -310,7 +318,9 @@ impl render_graph::Node for ParticleSortNode {
                     stage: 0,
                     step: 0,
                     camera_position: data.camera_position,
-                    _pad: 0.0,
+                    _pad1: 0.0,
+                    camera_forward: data.camera_forward,
+                    _pad2: 0.0,
                     emitter_transform: data.emitter_transform,
                 };
 

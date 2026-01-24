@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+            AsBindGroup, CompareFunction, RenderPipelineDescriptor, SpecializedMeshPipelineError,
         },
         storage::ShaderStorageBuffer,
     },
@@ -34,14 +34,19 @@ impl MaterialExtension for ParticleMaterialExtension {
 
     fn specialize(
         _pipeline: &MaterialExtensionPipeline,
-        _descriptor: &mut RenderPipelineDescriptor,
+        descriptor: &mut RenderPipelineDescriptor,
         _layout: &MeshVertexBufferLayoutRef,
         _key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        // depth writing is kept enabled (default) because we use per-particle
-        // depth bias in the vertex shader to establish consistent render order.
-        // particles sorted later get smaller depth values, ensuring they "win"
-        // the depth test and appear on top regardless of GPU processing order.
+        // enable depth writing for proper 3D depth testing between particles.
+        // this allows particles from different emitters to correctly occlude
+        // each other based on their actual world-space depth, matching Godot's
+        // default behavior. the draw_order sorting within each emitter still
+        // controls submission order for alpha blending correctness.
+        if let Some(depth_stencil) = &mut descriptor.depth_stencil {
+            depth_stencil.depth_write_enabled = true;
+            depth_stencil.depth_compare = CompareFunction::GreaterEqual;
+        }
         Ok(())
     }
 }

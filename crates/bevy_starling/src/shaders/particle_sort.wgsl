@@ -20,7 +20,9 @@ struct SortParams {
     stage: u32,
     step: u32,
     camera_position: vec3<f32>,
-    _pad: f32,
+    _pad1: f32,
+    camera_forward: vec3<f32>,
+    _pad2: f32,
     emitter_transform: mat4x4<f32>,
 }
 
@@ -60,11 +62,14 @@ fn get_sort_key(particle_index: u32) -> f32 {
             return -remaining;
         }
         case DRAW_ORDER_VIEW_DEPTH: {
-            // particles sorted by distance from camera (farthest first for proper transparency)
+            // particles sorted by depth along camera view axis (farthest first for proper transparency)
+            // uses dot product with camera forward direction instead of euclidean distance,
+            // matching Godot's implementation for correct view-relative depth ordering
             let local_pos = particle.position.xyz;
             let world_pos = (params.emitter_transform * vec4(local_pos, 1.0)).xyz;
-            let dist = distance(world_pos, params.camera_position);
-            return -dist;
+            let to_particle = world_pos - params.camera_position;
+            let depth = dot(to_particle, params.camera_forward);
+            return -depth;
         }
         default: {
             return f32(particle_index);

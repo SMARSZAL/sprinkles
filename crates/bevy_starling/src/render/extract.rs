@@ -28,6 +28,7 @@ pub struct ExtractedEmitterData {
     pub amount: u32,
     pub draw_order: u32,
     pub camera_position: [f32; 3],
+    pub camera_forward: [f32; 3],
     pub emitter_transform: Mat4,
     pub gradient_texture_handle: Option<Handle<Image>>,
 }
@@ -51,12 +52,12 @@ pub fn extract_particle_systems(
 ) {
     let mut extracted = ExtractedParticleSystem::default();
 
-    // get camera position for view depth sorting
-    let camera_position = camera_query
+    // get camera position and forward direction for view depth sorting
+    let (camera_position, camera_forward) = camera_query
         .iter()
         .next()
-        .map(|t| t.translation())
-        .unwrap_or(Vec3::ZERO);
+        .map(|t| (t.translation(), t.forward().as_vec3()))
+        .unwrap_or((Vec3::ZERO, Vec3::NEG_Z));
 
     for (entity, emitter_entity, runtime, buffer_handle, global_transform) in emitter_query.iter() {
         let Ok((particle_system, system_runtime)) = system_query.get(emitter_entity.parent_system)
@@ -198,6 +199,7 @@ pub fn extract_particle_systems(
                 amount: emitter.amount,
                 draw_order,
                 camera_position: camera_position.into(),
+                camera_forward: camera_forward.into(),
                 emitter_transform: global_transform.to_matrix(),
                 gradient_texture_handle,
             },
