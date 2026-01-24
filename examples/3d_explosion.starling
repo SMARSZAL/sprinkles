@@ -55,7 +55,7 @@
                             min: 0.2,
                             max: 0.4,
                         ),
-                        curve: Some(LinearOut),
+                        curve: Some(SineInOutReverse),
                     ),
                     color_curves: (
                         initial_color: Gradient(
@@ -130,7 +130,7 @@
                             min: 0.2,
                             max: 0.4,
                         ),
-                        curve: Some(LinearOut),
+                        curve: Some(LinearReverse),
                     ),
                     color_curves: (
                         initial_color: Gradient(

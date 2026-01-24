@@ -14,6 +14,10 @@ use bevy::{
 use asset::{ParticleSystemAsset, ParticleSystemAssetLoader};
 use render::{
     compute::ParticleComputePlugin,
+    curve_texture::{
+        create_fallback_curve_texture, prepare_curve_textures, CurveTextureCache,
+        FallbackCurveTexture,
+    },
     extract::extract_particle_systems,
     gradient_texture::{
         create_fallback_gradient_texture, prepare_gradient_textures, FallbackGradientTexture,
@@ -45,6 +49,11 @@ impl Plugin for StarlingPlugin {
             .add_systems(Startup, create_fallback_gradient_texture)
             .add_systems(PostUpdate, prepare_gradient_textures);
 
+        // curve texture caching
+        app.init_resource::<CurveTextureCache>()
+            .add_systems(Startup, create_fallback_curve_texture)
+            .add_systems(PostUpdate, prepare_curve_textures);
+
         // register the extended material for particle rendering
         app.add_plugins(MaterialPlugin::<runtime::ParticleMaterial>::default());
 
@@ -68,6 +77,7 @@ impl Plugin for StarlingPlugin {
             ParticleComputePlugin,
             ParticleSortPlugin,
             ExtractResourcePlugin::<FallbackGradientTexture>::default(),
+            ExtractResourcePlugin::<FallbackCurveTexture>::default(),
         ));
 
         // extract systems

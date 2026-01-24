@@ -18,6 +18,7 @@ use bevy::{
 };
 use std::borrow::Cow;
 
+use super::curve_texture::FallbackCurveTexture;
 use super::extract::ExtractedParticleSystem;
 use super::gradient_texture::FallbackGradientTexture;
 use super::EmitterUniforms;
@@ -50,6 +51,8 @@ pub fn init_particle_compute_pipeline(
                 storage_buffer::<ParticleData>(false),
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
             ),
         ),
     );
@@ -72,15 +75,28 @@ pub fn init_particle_compute_pipeline(
         ..default()
     });
 
+    let curve_sampler = render_device.create_sampler(&SamplerDescriptor {
+        label: Some("curve_sampler"),
+        address_mode_u: bevy::render::render_resource::AddressMode::ClampToEdge,
+        address_mode_v: bevy::render::render_resource::AddressMode::ClampToEdge,
+        mag_filter: bevy::render::render_resource::FilterMode::Linear,
+        min_filter: bevy::render::render_resource::FilterMode::Linear,
+        ..default()
+    });
+
     commands.insert_resource(ParticleComputePipeline {
         bind_group_layout,
         simulate_pipeline,
     });
     commands.insert_resource(GradientSampler(gradient_sampler));
+    commands.insert_resource(CurveSampler(curve_sampler));
 }
 
 #[derive(Resource)]
 pub struct GradientSampler(pub bevy::render::render_resource::Sampler);
+
+#[derive(Resource)]
+pub struct CurveSampler(pub bevy::render::render_resource::Sampler);
 
 #[derive(Resource, Default)]
 pub struct ParticleComputeBindGroups {
@@ -96,12 +112,18 @@ pub fn prepare_particle_compute_bind_groups(
     extracted_systems: Res<ExtractedParticleSystem>,
     gpu_storage_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
     gpu_images: Res<RenderAssets<GpuImage>>,
-    fallback_texture: Option<Res<FallbackGradientTexture>>,
+    fallback_gradient_texture: Option<Res<FallbackGradientTexture>>,
+    fallback_curve_texture: Option<Res<FallbackCurveTexture>>,
     gradient_sampler: Res<GradientSampler>,
+    curve_sampler: Res<CurveSampler>,
 ) {
     let mut bind_groups = Vec::new();
 
-    let fallback_gpu_image = fallback_texture
+    let fallback_gradient_gpu_image = fallback_gradient_texture
+        .as_ref()
+        .and_then(|ft| gpu_images.get(&ft.handle));
+
+    let fallback_curve_gpu_image = fallback_curve_texture
         .as_ref()
         .and_then(|ft| gpu_images.get(&ft.handle));
 
@@ -114,9 +136,19 @@ pub fn prepare_particle_compute_bind_groups(
             .gradient_texture_handle
             .as_ref()
             .and_then(|h| gpu_images.get(h))
-            .or(fallback_gpu_image);
+            .or(fallback_gradient_gpu_image);
+
+        let curve_gpu_image = emitter_data
+            .curve_texture_handle
+            .as_ref()
+            .and_then(|h| gpu_images.get(h))
+            .or(fallback_curve_gpu_image);
 
         let Some(gradient_image) = gradient_gpu_image else {
+            continue;
+        };
+
+        let Some(curve_image) = curve_gpu_image else {
             continue;
         };
 
@@ -136,6 +168,8 @@ pub fn prepare_particle_compute_bind_groups(
                 gpu_buffer.buffer.as_entire_binding(),
                 &gradient_image.texture_view,
                 &gradient_sampler.0,
+                &curve_image.texture_view,
+                &curve_sampler.0,
             )),
         );
 

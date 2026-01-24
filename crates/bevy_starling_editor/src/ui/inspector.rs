@@ -1,19 +1,22 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_starling::asset::{
-    DrawOrder, EasingCurve, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing,
-    EmitterTime, ParticleMesh, ParticleProcessConfig,
-    ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
-    ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity,
-    ParticleSystemAsset, Range, SolidOrGradientColor,
+    DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
+    ParticleMesh, ParticleProcessConfig, ParticleProcessDisplay, ParticleProcessDisplayColor,
+    ParticleProcessDisplayScale, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
+    ParticleProcessSpawnVelocity, ParticleSystemAsset, Range, SolidOrGradientColor, SplineCurve,
 };
 use egui_remixicon::icons;
 use inflector::Inflector;
 
 use crate::state::{EditorState, InspectorState};
 use crate::ui::color_picker::solid_or_gradient_color_picker;
+use crate::ui::curve_picker::spline_curve_picker;
 use crate::ui::modals::ConfirmDeleteModal;
-use crate::ui::styles::{colors, icon_button, styled_checkbox, styled_f32_input, styled_labeled_f32_input, styled_u32_input, ICON_BUTTON_SIZE, TEXT_BASE, TEXT_SM};
+use crate::ui::styles::{
+    colors, icon_button, styled_checkbox, styled_f32_input, styled_labeled_f32_input,
+    styled_u32_input, ICON_BUTTON_SIZE, TEXT_BASE, TEXT_SM,
+};
 use crate::viewport::ViewportLayout;
 
 const ROW_HEIGHT: f32 = 24.0;
@@ -747,47 +750,17 @@ fn inspect_spawn_accelerations(
     changed
 }
 
-fn easing_curve_label(curve: Option<EasingCurve>) -> &'static str {
-    // TODO: add more easing curve labels when implemented
-    match curve {
-        None => "Constant",
-        Some(EasingCurve::LinearIn) => "Linear In",
-        Some(EasingCurve::LinearOut) => "Linear Out",
-    }
-}
-
-fn all_easing_options() -> Vec<(Option<EasingCurve>, &'static str)> {
-    // TODO: add more easing curve options when implemented
-    vec![
-        (None, "Constant"),
-        (Some(EasingCurve::LinearIn), "Linear In"),
-        (Some(EasingCurve::LinearOut), "Linear Out"),
-    ]
-}
-
-fn inspect_easing_curve(
+fn inspect_spline_curve(
     ui: &mut egui::Ui,
     label: &str,
-    value: &mut Option<EasingCurve>,
+    value: &mut Option<SplineCurve>,
     indent_level: u8,
 ) -> bool {
     let mut changed = false;
     inspector_row(ui, label, indent_level, |ui, width| {
-        let current_text = easing_curve_label(*value);
-
-        egui::ComboBox::from_id_salt(label)
-            .selected_text(current_text)
-            .width(width)
-            .show_ui(ui, |ui| {
-                for (option_value, option_label) in all_easing_options() {
-                    if ui
-                        .selectable_value(value, option_value, option_label)
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                }
-            });
+        if spline_curve_picker(ui, label, value, width) {
+            changed = true;
+        }
     });
     changed
 }
@@ -839,7 +812,8 @@ fn inspect_display_scale(
     let mut changed = false;
     inspector_category(ui, id, "Scale", indent_level, |ui, indent| {
         changed |= inspect_range(ui, &field_label("initial range"), &mut scale.range, indent);
-        changed |= inspect_easing_curve(ui, &field_label("scale over lifetime"), &mut scale.curve, indent);
+        changed |=
+            inspect_spline_curve(ui, &field_label("scale over lifetime"), &mut scale.curve, indent);
     });
     changed
 }

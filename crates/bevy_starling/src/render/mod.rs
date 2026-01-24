@@ -1,4 +1,5 @@
 pub mod compute;
+pub mod curve_texture;
 pub mod extract;
 pub mod gradient_texture;
 pub mod material;
@@ -12,12 +13,6 @@ pub const EMISSION_SHAPE_SPHERE: u32 = 1;
 pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
 pub const EMISSION_SHAPE_BOX: u32 = 3;
 pub const EMISSION_SHAPE_RING: u32 = 4;
-
-// scale curve constants (0 = constant/no curve, 1+ = easing curve type)
-// TODO: implement more easing curves
-pub const SCALE_CURVE_CONSTANT: u32 = 0;
-pub const SCALE_CURVE_LINEAR_IN: u32 = 1;
-pub const SCALE_CURVE_LINEAR_OUT: u32 = 2;
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
@@ -74,7 +69,7 @@ pub struct EmitterUniforms {
     pub scale_min: f32,
     pub scale_max: f32,
 
-    pub scale_curve: u32,
+    pub use_scale_curve: u32,
     pub use_initial_color_gradient: u32,
     pub _pad7: [u32; 2],
 

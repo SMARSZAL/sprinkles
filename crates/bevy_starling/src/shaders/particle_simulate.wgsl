@@ -59,7 +59,7 @@ struct EmitterParams {
     scale_min: f32,
     scale_max: f32,
 
-    scale_curve: u32,
+    use_scale_curve: u32,
     use_initial_color_gradient: u32,
     _pad7_a: u32,
     _pad7_b: u32,
@@ -78,16 +78,12 @@ const PI: f32 = 3.14159265359;
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 
-// scale curve constants
-// TODO: implement more easing curves
-const SCALE_CURVE_CONSTANT: u32 = 0u;
-const SCALE_CURVE_LINEAR_IN: u32 = 1u;
-const SCALE_CURVE_LINEAR_OUT: u32 = 2u;
-
 @group(0) @binding(0) var<uniform> params: EmitterParams;
 @group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(2) var gradient_texture: texture_2d<f32>;
 @group(0) @binding(3) var gradient_sampler: sampler;
+@group(0) @binding(4) var curve_texture: texture_2d<f32>;
+@group(0) @binding(5) var curve_sampler: sampler;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -276,27 +272,18 @@ fn get_emission_velocity(seed: u32) -> vec3<f32> {
     return dir * speed;
 }
 
-// TODO: implement more easing curves
-fn apply_easing(curve: u32, t: f32) -> f32 {
-    switch curve {
-        case SCALE_CURVE_LINEAR_IN: { return t; }
-        case SCALE_CURVE_LINEAR_OUT: { return 1.0 - t; }
-        default: { return 1.0; } // SCALE_CURVE_CONSTANT
-    }
-}
-
 fn get_initial_scale(seed: u32) -> f32 {
     let t = hash_to_float(seed);
     return mix(params.scale_min, params.scale_max, t);
 }
 
 fn get_scale_at_lifetime(initial_scale: f32, age: f32, lifetime: f32) -> f32 {
-    if (params.scale_curve == SCALE_CURVE_CONSTANT) {
+    if (params.use_scale_curve == 0u) {
         return initial_scale;
     }
     let t = clamp(age / lifetime, 0.0, 1.0);
-    let eased_t = apply_easing(params.scale_curve, t);
-    return initial_scale * eased_t;
+    let curve_value = textureSampleLevel(curve_texture, curve_sampler, vec2(t, 0.5), 0.0).r;
+    return initial_scale * curve_value;
 }
 
 fn spawn_particle(idx: u32) -> Particle {

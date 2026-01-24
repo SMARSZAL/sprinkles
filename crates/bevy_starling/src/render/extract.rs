@@ -6,7 +6,7 @@ use bevy::{
 use crate::{
     asset::{DrawOrder, EmissionShape, ParticleSystemAsset, SolidOrGradientColor},
     core::ParticleSystem3D,
-    render::gradient_texture::GradientTextureCache,
+    render::{curve_texture::CurveTextureCache, gradient_texture::GradientTextureCache},
     runtime::{EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystemRuntime},
 };
 
@@ -31,6 +31,7 @@ pub struct ExtractedEmitterData {
     pub camera_forward: [f32; 3],
     pub emitter_transform: Mat4,
     pub gradient_texture_handle: Option<Handle<Image>>,
+    pub curve_texture_handle: Option<Handle<Image>>,
 }
 
 pub fn extract_particle_systems(
@@ -48,6 +49,7 @@ pub fn extract_particle_systems(
     camera_query: Extract<Query<&GlobalTransform, With<Camera3d>>>,
     assets: Extract<Res<Assets<ParticleSystemAsset>>>,
     gradient_cache: Extract<Res<GradientTextureCache>>,
+    curve_cache: Extract<Res<CurveTextureCache>>,
     time: Extract<Res<Time>>,
 ) {
     let mut extracted = ExtractedParticleSystem::default();
@@ -175,7 +177,10 @@ pub fn extract_particle_systems(
             scale_min: display.scale.range.min,
             scale_max: display.scale.range.max,
 
-            scale_curve: display.scale.curve.map(|c| c.to_gpu_constant()).unwrap_or(0),
+            use_scale_curve: match &display.scale.curve {
+                Some(c) if !c.is_constant() => 1,
+                _ => 0,
+            },
             use_initial_color_gradient: match &display.color_curves.initial_color {
                 SolidOrGradientColor::Solid { .. } => 0,
                 SolidOrGradientColor::Gradient { .. } => 1,
@@ -193,6 +198,13 @@ pub fn extract_particle_systems(
             SolidOrGradientColor::Solid { .. } => None,
         };
 
+        let curve_texture_handle = display
+            .scale
+            .curve
+            .as_ref()
+            .filter(|c| !c.is_constant())
+            .and_then(|c| curve_cache.get(c));
+
         extracted.emitters.push((
             entity,
             ExtractedEmitterData {
@@ -206,6 +218,7 @@ pub fn extract_particle_systems(
                 camera_forward: camera_forward.into(),
                 emitter_transform: global_transform.to_matrix(),
                 gradient_texture_handle,
+                curve_texture_handle,
             },
         ));
     }
