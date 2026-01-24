@@ -33,6 +33,7 @@ pub struct ExtractedEmitterData {
     pub gradient_texture_handle: Option<Handle<Image>>,
     pub curve_texture_handle: Option<Handle<Image>>,
     pub alpha_curve_texture_handle: Option<Handle<Image>>,
+    pub turbulence_influence_curve_texture_handle: Option<Handle<Image>>,
 }
 
 pub fn extract_particle_systems(
@@ -190,12 +191,65 @@ pub fn extract_particle_systems(
                 Some(c) if !c.is_constant() => 1,
                 _ => 0,
             },
-            _pad7: 0,
+            turbulence_enabled: match &emitter.process.turbulence {
+                Some(t) if t.enabled => 1,
+                _ => 0,
+            },
 
             initial_color: match &display.color_curves.initial_color {
                 SolidOrGradientColor::Solid { color } => *color,
                 SolidOrGradientColor::Gradient { .. } => [1.0, 1.0, 1.0, 1.0],
             },
+
+            // turbulence
+            turbulence_noise_strength: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.noise_strength)
+                .unwrap_or(1.0),
+            turbulence_noise_scale: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.noise_scale)
+                .unwrap_or(2.5),
+            turbulence_noise_speed_random: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.noise_speed_random)
+                .unwrap_or(0.0),
+            turbulence_influence_min: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.influence.min)
+                .unwrap_or(0.0),
+
+            turbulence_noise_speed: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.noise_speed.into())
+                .unwrap_or([0.0, 0.0, 0.0]),
+            turbulence_influence_max: emitter
+                .process
+                .turbulence
+                .as_ref()
+                .map(|t| t.influence.max)
+                .unwrap_or(0.1),
+
+            use_turbulence_influence_curve: match &emitter.process.turbulence {
+                Some(t) => match &t.influence_curve {
+                    Some(c) if !c.is_constant() => 1,
+                    _ => 0,
+                },
+                None => 0,
+            },
+            _pad8: 0,
+            _pad9: 0,
+            _pad10: 0,
         };
 
         let gradient_texture_handle = match &display.color_curves.initial_color {
@@ -217,6 +271,14 @@ pub fn extract_particle_systems(
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(c));
 
+        let turbulence_influence_curve_texture_handle = emitter
+            .process
+            .turbulence
+            .as_ref()
+            .and_then(|t| t.influence_curve.as_ref())
+            .filter(|c| !c.is_constant())
+            .and_then(|c| curve_cache.get(c));
+
         extracted.emitters.push((
             entity,
             ExtractedEmitterData {
@@ -232,6 +294,7 @@ pub fn extract_particle_systems(
                 gradient_texture_handle,
                 curve_texture_handle,
                 alpha_curve_texture_handle,
+                turbulence_influence_curve_texture_handle,
             },
         ));
     }

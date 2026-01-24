@@ -6,7 +6,7 @@ pub use format::{
     GradientInterpolation, GradientStop, Knot, ParticleMesh, ParticleProcessConfig,
     ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
     ParticleProcessSpawn, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
-    ParticleProcessSpawnVelocity, ParticleSystemAsset, ParticleSystemDimension, Range,
-    SolidOrGradientColor, SplineCurve,
+    ParticleProcessSpawnVelocity, ParticleProcessTurbulence, ParticleSystemAsset,
+    ParticleSystemDimension, Range, SolidOrGradientColor, SplineCurve,
 };
 pub use loader::{ParticleSystemAssetLoader, ParticleSystemAssetLoaderError};

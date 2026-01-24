@@ -42,7 +42,7 @@
                         flatness: 0.0,
                         initial_velocity: (
                             min: 0.0,
-                            max: 1.0,
+                            max: 5.0,
                         ),
                     ),
                     accelerations: (
@@ -75,6 +75,17 @@
                         ),
                     ),
                 ),
+                turbulence: Some((
+                    enabled: false,
+                    noise_strength: 0.1,
+                    noise_scale: 2.5,
+                    noise_speed: (0.0, 0.0, 0.0),
+                    noise_speed_random: 0.2,
+                    influence: (
+                        min: 0.01,
+                        max: 0.04,
+                    ),
+                )),
             ),
         ),
         (
@@ -104,7 +115,7 @@
                 spawn: (
                     position: (
                         emission_shape: Sphere(
-                            radius: 0.2,
+                            radius: 0.3,
                         ),
                         emission_shape_offset: (0.0, 0.0, 0.0),
                         emission_shape_scale: (1.0, 1.0, 1.0),
@@ -128,7 +139,7 @@
                     scale: (
                         range: (
                             min: 0.2,
-                            max: 0.4,
+                            max: 0.3,
                         ),
                         curve: Some(LinearReverse),
                     ),
@@ -151,6 +162,18 @@
                         alpha_curve: Some(SineInOutReverse),
                     ),
                 ),
+                turbulence: Some((
+                    enabled: true,
+                    noise_strength: 0.1,
+                    noise_scale: 0.2,
+                    noise_speed: (0.0, 0.0, 0.0),
+                    noise_speed_random: 0.2,
+                    influence: (
+                        min: 0.01,
+                        max: 0.04,
+                    ),
+                    influence_curve: Some(SineInOut),
+                )),
             ),
         ),
     ],

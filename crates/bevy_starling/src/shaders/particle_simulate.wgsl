@@ -62,9 +62,23 @@ struct EmitterParams {
     use_scale_curve: u32,
     use_initial_color_gradient: u32,
     use_alpha_curve: u32,
-    _pad7: u32,
+    turbulence_enabled: u32,
 
     initial_color: vec4<f32>,
+
+    // turbulence
+    turbulence_noise_strength: f32,
+    turbulence_noise_scale: f32,
+    turbulence_noise_speed_random: f32,
+    turbulence_influence_min: f32,
+
+    turbulence_noise_speed: vec3<f32>,
+    turbulence_influence_max: f32,
+
+    use_turbulence_influence_curve: u32,
+    _pad8: u32,
+    _pad9: u32,
+    _pad10: u32,
 }
 
 const EMISSION_SHAPE_POINT: u32 = 0u;
@@ -86,6 +100,8 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 @group(0) @binding(5) var curve_sampler: sampler;
 @group(0) @binding(6) var alpha_curve_texture: texture_2d<f32>;
 @group(0) @binding(7) var alpha_curve_sampler: sampler;
+@group(0) @binding(8) var turbulence_influence_curve_texture: texture_2d<f32>;
+@group(0) @binding(9) var turbulence_influence_curve_sampler: sampler;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -279,6 +295,124 @@ fn get_initial_scale(seed: u32) -> f32 {
     return mix(params.scale_min, params.scale_max, t);
 }
 
+// turbulence noise functions (based on godot's implementation)
+fn grad(p: vec4<f32>) -> vec4<f32> {
+    let frac_p = fract(vec4(
+        dot(p, vec4(0.143081, 0.001724, 0.280166, 0.262771)),
+        dot(p, vec4(0.645401, -0.047791, -0.146698, 0.595016)),
+        dot(p, vec4(-0.499665, -0.095734, 0.425674, -0.207367)),
+        dot(p, vec4(-0.013596, -0.848588, 0.423736, 0.17044))
+    ));
+    return fract((frac_p.xyzw * frac_p.yzwx) * 2365.952041) * 2.0 - 1.0;
+}
+
+fn noise_4d(coord: vec4<f32>) -> f32 {
+    // domain rotation for better xyz slices + animation patterns
+    let rotated = vec4(
+        coord.xyz + dot(coord, vec4(vec3(-0.1666667), -0.5)),
+        dot(coord, vec4(0.5))
+    );
+
+    let base = floor(rotated);
+    let delta = rotated - base;
+
+    let grad_0000 = grad(base + vec4(0.0, 0.0, 0.0, 0.0));
+    let grad_1000 = grad(base + vec4(1.0, 0.0, 0.0, 0.0));
+    let grad_0100 = grad(base + vec4(0.0, 1.0, 0.0, 0.0));
+    let grad_1100 = grad(base + vec4(1.0, 1.0, 0.0, 0.0));
+    let grad_0010 = grad(base + vec4(0.0, 0.0, 1.0, 0.0));
+    let grad_1010 = grad(base + vec4(1.0, 0.0, 1.0, 0.0));
+    let grad_0110 = grad(base + vec4(0.0, 1.0, 1.0, 0.0));
+    let grad_1110 = grad(base + vec4(1.0, 1.0, 1.0, 0.0));
+    let grad_0001 = grad(base + vec4(0.0, 0.0, 0.0, 1.0));
+    let grad_1001 = grad(base + vec4(1.0, 0.0, 0.0, 1.0));
+    let grad_0101 = grad(base + vec4(0.0, 1.0, 0.0, 1.0));
+    let grad_1101 = grad(base + vec4(1.0, 1.0, 0.0, 1.0));
+    let grad_0011 = grad(base + vec4(0.0, 0.0, 1.0, 1.0));
+    let grad_1011 = grad(base + vec4(1.0, 0.0, 1.0, 1.0));
+    let grad_0111 = grad(base + vec4(0.0, 1.0, 1.0, 1.0));
+    let grad_1111 = grad(base + vec4(1.0, 1.0, 1.0, 1.0));
+
+    let result_0123 = vec4(
+        dot(delta - vec4(0.0, 0.0, 0.0, 0.0), grad_0000),
+        dot(delta - vec4(1.0, 0.0, 0.0, 0.0), grad_1000),
+        dot(delta - vec4(0.0, 1.0, 0.0, 0.0), grad_0100),
+        dot(delta - vec4(1.0, 1.0, 0.0, 0.0), grad_1100)
+    );
+    let result_4567 = vec4(
+        dot(delta - vec4(0.0, 0.0, 1.0, 0.0), grad_0010),
+        dot(delta - vec4(1.0, 0.0, 1.0, 0.0), grad_1010),
+        dot(delta - vec4(0.0, 1.0, 1.0, 0.0), grad_0110),
+        dot(delta - vec4(1.0, 1.0, 1.0, 0.0), grad_1110)
+    );
+    let result_89ab = vec4(
+        dot(delta - vec4(0.0, 0.0, 0.0, 1.0), grad_0001),
+        dot(delta - vec4(1.0, 0.0, 0.0, 1.0), grad_1001),
+        dot(delta - vec4(0.0, 1.0, 0.0, 1.0), grad_0101),
+        dot(delta - vec4(1.0, 1.0, 0.0, 1.0), grad_1101)
+    );
+    let result_cdef = vec4(
+        dot(delta - vec4(0.0, 0.0, 1.0, 1.0), grad_0011),
+        dot(delta - vec4(1.0, 0.0, 1.0, 1.0), grad_1011),
+        dot(delta - vec4(0.0, 1.0, 1.0, 1.0), grad_0111),
+        dot(delta - vec4(1.0, 1.0, 1.0, 1.0), grad_1111)
+    );
+
+    let fade = delta * delta * delta * (10.0 + delta * (-15.0 + delta * 6.0));
+    let result_w0 = mix(result_0123, result_89ab, fade.w);
+    let result_w1 = mix(result_4567, result_cdef, fade.w);
+    let result_wz = mix(result_w0, result_w1, fade.z);
+    let result_wzy = mix(result_wz.xy, result_wz.zw, fade.y);
+    return mix(result_wzy.x, result_wzy.y, fade.x);
+}
+
+fn noise_3x(p: vec4<f32>) -> vec3<f32> {
+    let s = noise_4d(p);
+    let s1 = noise_4d(p + vec4(vec3(0.0), 1.7320508 * 2048.333333));
+    let s2 = noise_4d(p - vec4(vec3(0.0), 1.7320508 * 2048.333333));
+    return vec3(s, s1, s2);
+}
+
+fn curl_3d(p: vec4<f32>, c: f32) -> vec3<f32> {
+    let epsilon = 0.001 + c;
+    let dx = vec4(epsilon, 0.0, 0.0, 0.0);
+    let dy = vec4(0.0, epsilon, 0.0, 0.0);
+    let dz = vec4(0.0, 0.0, epsilon, 0.0);
+    let x0 = noise_3x(p - dx);
+    let x1 = noise_3x(p + dx);
+    let y0 = noise_3x(p - dy);
+    let y1 = noise_3x(p + dy);
+    let z0 = noise_3x(p - dz);
+    let z1 = noise_3x(p + dz);
+    let curl_x = (y1.z - y0.z) - (z1.y - z0.y);
+    let curl_y = (z1.x - z0.x) - (x1.z - x0.z);
+    let curl_z = (x1.y - x0.y) - (y1.x - y0.x);
+    return normalize(vec3(curl_x, curl_y, curl_z));
+}
+
+fn get_noise_direction(pos: vec3<f32>, time: f32, random_offset: f32) -> vec3<f32> {
+    let adj_contrast = max((params.turbulence_noise_strength - 1.0), 0.0) * 70.0;
+    let noise_time = time * vec4(params.turbulence_noise_speed, params.turbulence_noise_speed_random * random_offset);
+    let noise_pos = vec4(pos * params.turbulence_noise_scale, 0.0);
+    var noise_direction = curl_3d(noise_pos + noise_time, adj_contrast);
+    noise_direction = mix(0.9 * noise_direction, noise_direction, params.turbulence_noise_strength - 9.0);
+    return noise_direction;
+}
+
+fn get_turbulence_influence(seed: u32) -> f32 {
+    let t = hash_to_float(seed);
+    return mix(params.turbulence_influence_min, params.turbulence_influence_max, t);
+}
+
+fn get_turbulence_influence_at_lifetime(base_influence: f32, age: f32, lifetime: f32) -> f32 {
+    if (params.use_turbulence_influence_curve == 0u) {
+        return base_influence;
+    }
+    let t = clamp(age / lifetime, 0.0, 1.0);
+    let curve_value = textureSampleLevel(turbulence_influence_curve_texture, turbulence_influence_curve_sampler, vec2(t, 0.5), 0.0).r;
+    return base_influence * curve_value;
+}
+
 fn get_scale_at_lifetime(initial_scale: f32, age: f32, lifetime: f32) -> f32 {
     if (params.use_scale_curve == 0u) {
         return initial_scale;
@@ -358,15 +492,29 @@ fn update_particle(p_in: Particle) -> Particle {
         return p;
     }
 
+    let seed = bitcast<u32>(p.custom.z);
+
     // apply gravity and update velocity
-    let velocity = p.velocity.xyz + params.gravity * dt;
+    var velocity = p.velocity.xyz + params.gravity * dt;
+
+    // apply turbulence
+    if (params.turbulence_enabled != 0u) {
+        let base_influence = get_turbulence_influence(seed + 40u);
+        let influence = get_turbulence_influence_at_lifetime(base_influence, age, lifetime);
+        let random_offset = hash_to_float(seed + 41u);
+        let noise_direction = get_noise_direction(p.position.xyz, age, random_offset);
+        let vel_magnitude = length(velocity);
+        if (vel_magnitude > 0.0001) {
+            velocity = mix(velocity, noise_direction * vel_magnitude, influence);
+        }
+    }
+
     p.velocity = vec4(velocity, lifetime);
 
     // update position
     let new_position = p.position.xyz + velocity * dt;
 
     // update scale based on lifetime progress
-    let seed = bitcast<u32>(p.custom.z);
     let initial_scale = get_initial_scale(seed + 20u);
     let scale = get_scale_at_lifetime(initial_scale, age, lifetime);
 

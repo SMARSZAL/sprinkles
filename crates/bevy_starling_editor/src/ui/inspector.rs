@@ -5,7 +5,7 @@ use bevy_starling::asset::{
     Gradient, GradientInterpolation, GradientStop, ParticleMesh, ParticleProcessConfig,
     ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
     ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity,
-    ParticleSystemAsset, Range, SolidOrGradientColor, SplineCurve,
+    ParticleProcessTurbulence, ParticleSystemAsset, Range, SolidOrGradientColor, SplineCurve,
 };
 use egui_remixicon::icons;
 use inflector::Inflector;
@@ -1062,6 +1062,69 @@ fn inspect_process_display(
     changed
 }
 
+fn inspect_turbulence(
+    ui: &mut egui::Ui,
+    id: &str,
+    turbulence: &mut Option<ParticleProcessTurbulence>,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    inspector_category(ui, id, "Turbulence", indent_level, |ui, indent| {
+        let mut enabled = turbulence.as_ref().is_some_and(|t| t.enabled);
+        if inspect_bool(ui, "Enabled", &mut enabled, indent) {
+            if enabled {
+                if turbulence.is_none() {
+                    *turbulence = Some(ParticleProcessTurbulence::default());
+                }
+                turbulence.as_mut().unwrap().enabled = true;
+            } else if let Some(t) = turbulence {
+                t.enabled = false;
+            }
+            changed = true;
+        }
+
+        if let Some(turb) = turbulence {
+            if turb.enabled {
+                changed |= inspect_f32_clamped(
+                    ui,
+                    &field_label("noise_strength"),
+                    &mut turb.noise_strength,
+                    0.0,
+                    20.0,
+                    indent,
+                );
+                changed |= inspect_f32_clamped(
+                    ui,
+                    &field_label("noise_scale"),
+                    &mut turb.noise_scale,
+                    0.0,
+                    10.0,
+                    indent,
+                );
+                changed |= inspect_vec3(ui, &field_label("noise_speed"), &mut turb.noise_speed, indent);
+                changed |= inspect_f32_clamped(
+                    ui,
+                    &field_label("noise_speed_random"),
+                    &mut turb.noise_speed_random,
+                    0.0,
+                    4.0,
+                    indent,
+                );
+                changed |= inspect_range(ui, &field_label("influence"), &mut turb.influence, indent);
+                changed |= inspect_spline_curve(
+                    ui,
+                    &field_label("influence over lifetime"),
+                    &mut turb.influence_curve,
+                    indent,
+                );
+            }
+        }
+    });
+
+    changed
+}
+
 fn inspect_process_config(
     ui: &mut egui::Ui,
     id: &str,
@@ -1095,6 +1158,12 @@ fn inspect_process_config(
             &mut config.display,
             indent,
             panel_right_edge,
+        );
+        changed |= inspect_turbulence(
+            ui,
+            &format!("{}_turbulence", id),
+            &mut config.turbulence,
+            indent,
         );
     });
     changed

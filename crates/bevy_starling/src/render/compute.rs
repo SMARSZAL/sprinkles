@@ -55,6 +55,8 @@ pub fn init_particle_compute_pipeline(
                 sampler(SamplerBindingType::Filtering),
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
             ),
         ),
     );
@@ -152,6 +154,12 @@ pub fn prepare_particle_compute_bind_groups(
             .and_then(|h| gpu_images.get(h))
             .or(fallback_curve_gpu_image);
 
+        let turbulence_influence_curve_gpu_image = emitter_data
+            .turbulence_influence_curve_texture_handle
+            .as_ref()
+            .and_then(|h| gpu_images.get(h))
+            .or(fallback_curve_gpu_image);
+
         let Some(gradient_image) = gradient_gpu_image else {
             continue;
         };
@@ -161,6 +169,10 @@ pub fn prepare_particle_compute_bind_groups(
         };
 
         let Some(alpha_curve_image) = alpha_curve_gpu_image else {
+            continue;
+        };
+
+        let Some(turbulence_influence_curve_image) = turbulence_influence_curve_gpu_image else {
             continue;
         };
 
@@ -183,6 +195,8 @@ pub fn prepare_particle_compute_bind_groups(
                 &curve_image.texture_view,
                 &curve_sampler.0,
                 &alpha_curve_image.texture_view,
+                &curve_sampler.0,
+                &turbulence_influence_curve_image.texture_view,
                 &curve_sampler.0,
             )),
         );

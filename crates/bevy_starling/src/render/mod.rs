@@ -72,7 +72,21 @@ pub struct EmitterUniforms {
     pub use_scale_curve: u32,
     pub use_initial_color_gradient: u32,
     pub use_alpha_curve: u32,
-    pub _pad7: u32,
+    pub turbulence_enabled: u32,
 
     pub initial_color: [f32; 4],
+
+    // turbulence
+    pub turbulence_noise_strength: f32,
+    pub turbulence_noise_scale: f32,
+    pub turbulence_noise_speed_random: f32,
+    pub turbulence_influence_min: f32,
+
+    pub turbulence_noise_speed: [f32; 3],
+    pub turbulence_influence_max: f32,
+
+    pub use_turbulence_influence_curve: u32,
+    pub _pad8: u32,
+    pub _pad9: u32,
+    pub _pad10: u32,
 }

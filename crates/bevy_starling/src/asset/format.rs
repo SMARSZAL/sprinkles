@@ -964,12 +964,64 @@ pub struct ParticleProcessDisplay {
     pub color_curves: ParticleProcessDisplayColor,
 }
 
+fn default_turbulence_noise_strength() -> f32 {
+    1.0
+}
+
+fn default_turbulence_noise_scale() -> f32 {
+    2.5
+}
+
+fn default_turbulence_influence() -> Range {
+    Range { min: 0.0, max: 0.1 }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessTurbulence {
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(default = "default_turbulence_noise_strength")]
+    pub noise_strength: f32,
+
+    #[serde(default = "default_turbulence_noise_scale")]
+    pub noise_scale: f32,
+
+    #[serde(default)]
+    pub noise_speed: Vec3,
+
+    #[serde(default)]
+    pub noise_speed_random: f32,
+
+    #[serde(default = "default_turbulence_influence")]
+    pub influence: Range,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub influence_curve: Option<SplineCurve>,
+}
+
+impl Default for ParticleProcessTurbulence {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            noise_strength: default_turbulence_noise_strength(),
+            noise_scale: default_turbulence_noise_scale(),
+            noise_speed: Vec3::ZERO,
+            noise_speed_random: 0.0,
+            influence: default_turbulence_influence(),
+            influence_curve: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
     pub spawn: ParticleProcessSpawn,
     #[serde(default)]
     pub display: ParticleProcessDisplay,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turbulence: Option<ParticleProcessTurbulence>,
 }
 
 impl Default for ParticleProcessConfig {
@@ -977,6 +1029,7 @@ impl Default for ParticleProcessConfig {
         Self {
             spawn: ParticleProcessSpawn::default(),
             display: ParticleProcessDisplay::default(),
+            turbulence: None,
         }
     }
 }
