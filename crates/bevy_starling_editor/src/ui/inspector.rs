@@ -464,6 +464,7 @@ fn inspect_particle_mesh(
         ParticleMesh::Quad => "Quad",
         ParticleMesh::Sphere { .. } => "Sphere",
         ParticleMesh::Cuboid { .. } => "Cuboid",
+        ParticleMesh::Cylinder { .. } => "Cylinder",
     };
 
     changed |= instantiable_row(ui, label, indent_level, current_variant, |ui| {
@@ -491,6 +492,21 @@ fn inspect_particle_mesh(
             };
             inner_changed = true;
         }
+        if ui
+            .selectable_label(matches!(value, ParticleMesh::Cylinder { .. }), "Cylinder")
+            .clicked()
+        {
+            *value = ParticleMesh::Cylinder {
+                top_radius: 0.5,
+                bottom_radius: 0.5,
+                height: 2.0,
+                radial_segments: 64,
+                rings: 4,
+                cap_top: true,
+                cap_bottom: true,
+            };
+            inner_changed = true;
+        }
         inner_changed
     });
 
@@ -507,6 +523,38 @@ fn inspect_particle_mesh(
             ParticleMesh::Cuboid { half_size } => {
                 changed |=
                     inspect_vec3(ui, &field_label("half_size"), half_size, inner_indent);
+            }
+            ParticleMesh::Cylinder {
+                top_radius,
+                bottom_radius,
+                height,
+                radial_segments,
+                rings,
+                cap_top,
+                cap_bottom,
+            } => {
+                changed |= inspect_f32_positive(
+                    ui,
+                    &field_label("top_radius"),
+                    top_radius,
+                    inner_indent,
+                );
+                changed |= inspect_f32_positive(
+                    ui,
+                    &field_label("bottom_radius"),
+                    bottom_radius,
+                    inner_indent,
+                );
+                changed |=
+                    inspect_f32_positive(ui, &field_label("height"), height, inner_indent);
+                changed |=
+                    inspect_u32(ui, &field_label("radial_segments"), radial_segments, inner_indent);
+                changed |=
+                    inspect_u32(ui, &field_label("rings"), rings, inner_indent);
+                changed |=
+                    inspect_bool(ui, &field_label("cap_top"), cap_top, inner_indent);
+                changed |=
+                    inspect_bool(ui, &field_label("cap_bottom"), cap_bottom, inner_indent);
             }
         });
     }

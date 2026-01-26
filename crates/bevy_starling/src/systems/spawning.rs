@@ -9,6 +9,7 @@ use bevy::{
 use crate::{
     asset::{ParticleMesh, ParticleSystemAsset},
     core::{ParticleData, ParticleSystem3D},
+    meshes::create_cylinder_mesh,
     render::material::ParticleMaterialExtension,
     runtime::{
         CurrentMeshConfig, EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle,
@@ -24,6 +25,23 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
         ParticleMesh::Cuboid { half_size } => {
             Mesh::from(Cuboid::new(half_size.x * 2.0, half_size.y * 2.0, half_size.z * 2.0))
         }
+        ParticleMesh::Cylinder {
+            top_radius,
+            bottom_radius,
+            height,
+            radial_segments,
+            rings,
+            cap_top,
+            cap_bottom,
+        } => create_cylinder_mesh(
+            *top_radius,
+            *bottom_radius,
+            *height,
+            *radial_segments,
+            *rings,
+            *cap_top,
+            *cap_bottom,
+        ),
     }
 }
 

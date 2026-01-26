@@ -140,6 +140,15 @@ pub enum ParticleMesh {
     Cuboid {
         half_size: Vec3,
     },
+    Cylinder {
+        top_radius: f32,
+        bottom_radius: f32,
+        height: f32,
+        radial_segments: u32,
+        rings: u32,
+        cap_top: bool,
+        cap_bottom: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

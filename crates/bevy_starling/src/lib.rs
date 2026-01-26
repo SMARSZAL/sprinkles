@@ -1,5 +1,6 @@
 pub mod asset;
 pub mod core;
+pub mod meshes;
 pub mod render;
 pub mod runtime;
 pub mod systems;
