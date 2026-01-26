@@ -5,7 +5,7 @@ use egui_remixicon::icons;
 use inflector::Inflector;
 
 use crate::state::{EditorState, InspectorState};
-use crate::ui::color_picker::{color_picker, gradient_picker};
+use crate::ui::color_picker::{color_picker, color_picker_with_id, gradient_picker};
 use crate::ui::curve_picker::spline_curve_picker;
 use crate::ui::modals::ConfirmDeleteModal;
 use crate::ui::styles::{
@@ -455,7 +455,7 @@ fn inspect_particle_mesh(
     let mut changed = false;
 
     let current_variant = match value {
-        ParticleMesh::Quad => "Quad",
+        ParticleMesh::Quad { .. } => "Quad",
         ParticleMesh::Sphere { .. } => "Sphere",
         ParticleMesh::Cuboid { .. } => "Cuboid",
         ParticleMesh::Cylinder { .. } => "Cylinder",
@@ -464,10 +464,12 @@ fn inspect_particle_mesh(
     changed |= instantiable_row(ui, label, indent_level, current_variant, |ui| {
         let mut inner_changed = false;
         if ui
-            .selectable_label(matches!(value, ParticleMesh::Quad), "Quad")
+            .selectable_label(matches!(value, ParticleMesh::Quad { .. }), "Quad")
             .clicked()
         {
-            *value = ParticleMesh::Quad;
+            *value = ParticleMesh::Quad {
+                orientation: QuadOrientation::default(),
+            };
             inner_changed = true;
         }
         if ui
@@ -504,54 +506,90 @@ fn inspect_particle_mesh(
         inner_changed
     });
 
-    let has_extra_settings = !matches!(value, ParticleMesh::Quad);
-    if has_extra_settings {
-        let inner_indent = indent_level + 1;
-        ui.spacing_mut().indent = INDENT_WIDTH;
-        ui.indent(label, |ui| match value {
-            ParticleMesh::Quad => {}
-            ParticleMesh::Sphere { radius } => {
-                changed |=
-                    inspect_f32_positive(ui, &field_label("radius"), radius, inner_indent);
-            }
-            ParticleMesh::Cuboid { half_size } => {
-                changed |=
-                    inspect_vec3(ui, &field_label("half_size"), half_size, inner_indent);
-            }
-            ParticleMesh::Cylinder {
+    let inner_indent = indent_level + 1;
+    ui.spacing_mut().indent = INDENT_WIDTH;
+    ui.indent(label, |ui| match value {
+        ParticleMesh::Quad { orientation } => {
+            changed |= inspect_quad_orientation(ui, "Orientation", orientation, inner_indent);
+        }
+        ParticleMesh::Sphere { radius } => {
+            changed |= inspect_f32_positive(ui, &field_label("radius"), radius, inner_indent);
+        }
+        ParticleMesh::Cuboid { half_size } => {
+            changed |= inspect_vec3(ui, &field_label("half_size"), half_size, inner_indent);
+        }
+        ParticleMesh::Cylinder {
+            top_radius,
+            bottom_radius,
+            height,
+            radial_segments,
+            rings,
+            cap_top,
+            cap_bottom,
+        } => {
+            changed |= inspect_f32_positive(
+                ui,
+                &field_label("top_radius"),
                 top_radius,
+                inner_indent,
+            );
+            changed |= inspect_f32_positive(
+                ui,
+                &field_label("bottom_radius"),
                 bottom_radius,
-                height,
-                radial_segments,
-                rings,
-                cap_top,
-                cap_bottom,
-            } => {
-                changed |= inspect_f32_positive(
-                    ui,
-                    &field_label("top_radius"),
-                    top_radius,
-                    inner_indent,
-                );
-                changed |= inspect_f32_positive(
-                    ui,
-                    &field_label("bottom_radius"),
-                    bottom_radius,
-                    inner_indent,
-                );
-                changed |=
-                    inspect_f32_positive(ui, &field_label("height"), height, inner_indent);
-                changed |=
-                    inspect_u32(ui, &field_label("radial_segments"), radial_segments, inner_indent);
-                changed |=
-                    inspect_u32(ui, &field_label("rings"), rings, inner_indent);
-                changed |=
-                    inspect_bool(ui, &field_label("cap_top"), cap_top, inner_indent);
-                changed |=
-                    inspect_bool(ui, &field_label("cap_bottom"), cap_bottom, inner_indent);
-            }
-        });
-    }
+                inner_indent,
+            );
+            changed |= inspect_f32_positive(ui, &field_label("height"), height, inner_indent);
+            changed |=
+                inspect_u32(ui, &field_label("radial_segments"), radial_segments, inner_indent);
+            changed |= inspect_u32(ui, &field_label("rings"), rings, inner_indent);
+            changed |= inspect_bool(ui, &field_label("cap_top"), cap_top, inner_indent);
+            changed |= inspect_bool(ui, &field_label("cap_bottom"), cap_bottom, inner_indent);
+        }
+    });
+
+    changed
+}
+
+fn inspect_quad_orientation(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut QuadOrientation,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    let current_text = match value {
+        QuadOrientation::FaceX => "Face X",
+        QuadOrientation::FaceY => "Face Y",
+        QuadOrientation::FaceZ => "Face Z",
+    };
+
+    inspector_row(ui, label, indent_level, |ui, width| {
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(current_text)
+            .width(width)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_value(value, QuadOrientation::FaceX, "Face X")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, QuadOrientation::FaceY, "Face Y")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, QuadOrientation::FaceZ, "Face Z")
+                    .changed()
+                {
+                    changed = true;
+                }
+            });
+    });
 
     changed
 }
@@ -617,11 +655,327 @@ struct DrawPassesActions {
     changed: bool,
 }
 
+fn inspect_alpha_mode(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut SerializableAlphaMode,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    let current_text = match value {
+        SerializableAlphaMode::Opaque => "Opaque",
+        SerializableAlphaMode::Mask { .. } => "Mask",
+        SerializableAlphaMode::Blend => "Blend",
+        SerializableAlphaMode::Premultiplied => "Premultiplied",
+        SerializableAlphaMode::Add => "Add",
+        SerializableAlphaMode::Multiply => "Multiply",
+        SerializableAlphaMode::AlphaToCoverage => "Alpha to coverage",
+    };
+
+    inspector_row(ui, label, indent_level, |ui, width| {
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(current_text)
+            .width(width)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_value(value, SerializableAlphaMode::Opaque, "Opaque")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        value,
+                        SerializableAlphaMode::Mask { cutoff: 0.5 },
+                        "Mask",
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, SerializableAlphaMode::Blend, "Blend")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, SerializableAlphaMode::Premultiplied, "Premultiplied")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, SerializableAlphaMode::Add, "Add")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(value, SerializableAlphaMode::Multiply, "Multiply")
+                    .changed()
+                {
+                    changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        value,
+                        SerializableAlphaMode::AlphaToCoverage,
+                        "Alpha to coverage",
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+            });
+    });
+
+    if let SerializableAlphaMode::Mask { cutoff } = value {
+        let inner_indent = indent_level + 1;
+        ui.spacing_mut().indent = INDENT_WIDTH;
+        ui.indent(label, |ui| {
+            changed |= inspect_f32_clamped(ui, "Cutoff", cutoff, 0.0, 1.0, inner_indent);
+        });
+    }
+
+    changed
+}
+
+fn inspect_standard_material(
+    ui: &mut egui::Ui,
+    id: &str,
+    mat: &mut StandardParticleMaterial,
+    indent_level: u8,
+    panel_right_edge: Option<f32>,
+) -> bool {
+    let mut changed = false;
+
+    inspector_row(ui, "Base color", indent_level, |ui, width| {
+        if color_picker_with_id(
+            ui,
+            format!("{}_base_color", id),
+            &mut mat.base_color,
+            width,
+            panel_right_edge,
+        )
+        .changed()
+        {
+            changed = true;
+        }
+    });
+
+    inspector_row(ui, "Base color texture", indent_level, |ui, width| {
+        let mut texture_path = mat.base_color_texture.clone().unwrap_or_default();
+        let response = ui.add_sized(
+            egui::vec2(width, ROW_HEIGHT),
+            egui::TextEdit::singleline(&mut texture_path).hint_text(
+                egui::RichText::new("Path to texture...").color(colors::placeholder_text()),
+            ),
+        );
+        if response.changed() {
+            mat.base_color_texture = if texture_path.is_empty() {
+                None
+            } else {
+                Some(texture_path)
+            };
+            changed = true;
+        }
+    });
+
+    inspector_row(ui, "Emissive", indent_level, |ui, width| {
+        if color_picker_with_id(
+            ui,
+            format!("{}_emissive", id),
+            &mut mat.emissive,
+            width,
+            panel_right_edge,
+        )
+        .changed()
+        {
+            changed = true;
+        }
+    });
+
+    inspector_row(ui, "Emissive texture", indent_level, |ui, width| {
+        let mut texture_path = mat.emissive_texture.clone().unwrap_or_default();
+        let response = ui.add_sized(
+            egui::vec2(width, ROW_HEIGHT),
+            egui::TextEdit::singleline(&mut texture_path).hint_text(
+                egui::RichText::new("Path to texture...").color(colors::placeholder_text()),
+            ),
+        );
+        if response.changed() {
+            mat.emissive_texture = if texture_path.is_empty() {
+                None
+            } else {
+                Some(texture_path)
+            };
+            changed = true;
+        }
+    });
+
+    const MIN_ROUGHNESS: f32 = 0.089;
+    changed |= inspect_f32_clamped(
+        ui,
+        "Perceptual roughness",
+        &mut mat.perceptual_roughness,
+        MIN_ROUGHNESS,
+        1.0,
+        indent_level,
+    );
+    changed |= inspect_f32_clamped(ui, "Metallic", &mut mat.metallic, 0.0, 1.0, indent_level);
+
+    inspector_row(ui, "Metallic roughness texture", indent_level, |ui, width| {
+        let mut texture_path = mat.metallic_roughness_texture.clone().unwrap_or_default();
+        let response = ui.add_sized(
+            egui::vec2(width, ROW_HEIGHT),
+            egui::TextEdit::singleline(&mut texture_path).hint_text(
+                egui::RichText::new("Path to texture...").color(colors::placeholder_text()),
+            ),
+        );
+        if response.changed() {
+            mat.metallic_roughness_texture = if texture_path.is_empty() {
+                None
+            } else {
+                Some(texture_path)
+            };
+            changed = true;
+        }
+    });
+
+    inspector_row(ui, "Normal map texture", indent_level, |ui, width| {
+        let mut texture_path = mat.normal_map_texture.clone().unwrap_or_default();
+        let response = ui.add_sized(
+            egui::vec2(width, ROW_HEIGHT),
+            egui::TextEdit::singleline(&mut texture_path).hint_text(
+                egui::RichText::new("Path to texture...").color(colors::placeholder_text()),
+            ),
+        );
+        if response.changed() {
+            mat.normal_map_texture = if texture_path.is_empty() {
+                None
+            } else {
+                Some(texture_path)
+            };
+            changed = true;
+        }
+    });
+
+    changed |= inspect_alpha_mode(ui, "Alpha mode", &mut mat.alpha_mode, indent_level);
+    changed |= inspect_f32_clamped(
+        ui,
+        "Reflectance",
+        &mut mat.reflectance,
+        0.0,
+        1.0,
+        indent_level,
+    );
+    changed |= inspect_bool(ui, "Unlit", &mut mat.unlit, indent_level);
+    changed |= inspect_bool(ui, "Double sided", &mut mat.double_sided, indent_level);
+    changed |= inspect_bool(ui, "Fog enabled", &mut mat.fog_enabled, indent_level);
+
+    changed
+}
+
+fn inspect_draw_pass_material(
+    ui: &mut egui::Ui,
+    id: &str,
+    material: &mut DrawPassMaterial,
+    indent_level: u8,
+    panel_right_edge: Option<f32>,
+) -> bool {
+    let mut changed = false;
+
+    let current_variant = match material {
+        DrawPassMaterial::Standard(_) => "Standard",
+        DrawPassMaterial::CustomShader { .. } => "Custom shader",
+    };
+
+    changed |= instantiable_row(ui, "Material", indent_level, current_variant, |ui| {
+        let mut inner_changed = false;
+        if ui
+            .selectable_label(
+                matches!(material, DrawPassMaterial::Standard(_)),
+                "Standard",
+            )
+            .clicked()
+        {
+            *material = DrawPassMaterial::Standard(StandardParticleMaterial::default());
+            inner_changed = true;
+        }
+        if ui
+            .selectable_label(
+                matches!(material, DrawPassMaterial::CustomShader { .. }),
+                "Custom shader",
+            )
+            .clicked()
+        {
+            *material = DrawPassMaterial::CustomShader {
+                vertex_shader: None,
+                fragment_shader: None,
+            };
+            inner_changed = true;
+        }
+        inner_changed
+    });
+
+    let inner_indent = indent_level + 1;
+    ui.spacing_mut().indent = INDENT_WIDTH;
+    ui.indent(id, |ui| match material {
+        DrawPassMaterial::Standard(mat) => {
+            changed |= inspect_standard_material(
+                ui,
+                &format!("{}_standard", id),
+                mat,
+                inner_indent,
+                panel_right_edge,
+            );
+        }
+        DrawPassMaterial::CustomShader {
+            vertex_shader,
+            fragment_shader,
+        } => {
+            ui.label(
+                egui::RichText::new("Custom shaders coming soon")
+                    .color(colors::TEXT_MUTED)
+                    .italics(),
+            );
+
+            ui.add_enabled_ui(false, |ui| {
+                inspector_row(ui, "Vertex shader", inner_indent, |ui, width| {
+                    let mut path = vertex_shader.clone().unwrap_or_default();
+                    ui.add_sized(
+                        egui::vec2(width, ROW_HEIGHT),
+                        egui::TextEdit::singleline(&mut path).hint_text(
+                            egui::RichText::new("Path to shader...")
+                                .color(colors::placeholder_text()),
+                        ),
+                    );
+                });
+                inspector_row(ui, "Fragment shader", inner_indent, |ui, width| {
+                    let mut path = fragment_shader.clone().unwrap_or_default();
+                    ui.add_sized(
+                        egui::vec2(width, ROW_HEIGHT),
+                        egui::TextEdit::singleline(&mut path).hint_text(
+                            egui::RichText::new("Path to shader...")
+                                .color(colors::placeholder_text()),
+                        ),
+                    );
+                });
+            });
+        }
+    });
+
+    changed
+}
+
 fn inspect_draw_passes(
     ui: &mut egui::Ui,
     id: &str,
     passes: &mut Vec<EmitterDrawPass>,
     indent_level: u8,
+    panel_right_edge: Option<f32>,
 ) -> DrawPassesActions {
     let mut actions = DrawPassesActions {
         add_pass: false,
@@ -643,7 +997,15 @@ fn inspect_draw_passes(
                     });
                 });
                 ui.indent(pass_idx, |ui| {
-                    actions.changed |= inspect_particle_mesh(ui, &field_label("mesh"), &mut pass.mesh, indent + 1);
+                    actions.changed |=
+                        inspect_particle_mesh(ui, &field_label("mesh"), &mut pass.mesh, indent + 1);
+                    actions.changed |= inspect_draw_pass_material(
+                        ui,
+                        &format!("{}_material_{}", id, pass_idx),
+                        &mut pass.material,
+                        indent + 1,
+                        panel_right_edge,
+                    );
                 });
             });
         }
@@ -1376,6 +1738,7 @@ pub fn draw_inspector(
                                     &format!("{}_passes", emitter_id),
                                     &mut emitter.draw_passes,
                                     base_indent,
+                                    panel_right_edge,
                                 );
 
                                 any_changed |= pass_actions.changed;

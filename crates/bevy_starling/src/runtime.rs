@@ -4,7 +4,7 @@ use bevy::render::render_resource::{Buffer, ShaderType};
 use bevy::render::storage::ShaderStorageBuffer;
 use bytemuck::{Pod, Zeroable};
 
-use crate::asset::{ParticleMesh, ParticleSystemAsset};
+use crate::asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset};
 use crate::material::ParticleMaterialExtension;
 
 #[derive(Component)]
@@ -209,6 +209,10 @@ pub struct EmitterMeshEntity {
 /// stores the current mesh configuration for change detection
 #[derive(Component)]
 pub struct CurrentMeshConfig(pub ParticleMesh);
+
+/// stores the current material configuration for change detection
+#[derive(Component)]
+pub struct CurrentMaterialConfig(pub DrawPassMaterial);
 
 /// stores the mesh handle for particle entities
 #[derive(Component)]

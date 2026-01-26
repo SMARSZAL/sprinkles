@@ -21,7 +21,7 @@ use extract::extract_particle_systems;
 use sort::ParticleSortPlugin;
 use spawning::{
     cleanup_particle_entities, clear_particle_clear_requests, setup_particle_systems,
-    sync_particle_mesh, update_particle_time,
+    sync_particle_material, sync_particle_mesh, update_particle_time,
 };
 use textures::{
     create_fallback_curve_texture, create_fallback_gradient_texture, prepare_curve_textures,
@@ -56,6 +56,7 @@ impl Plugin for StarlingPlugin {
             (
                 setup_particle_systems,
                 sync_particle_mesh,
+                sync_particle_material,
                 update_particle_time,
                 cleanup_particle_entities,
             ),
@@ -78,8 +79,9 @@ impl Plugin for StarlingPlugin {
 
 // re-exports
 pub use asset::{
-    DrawOrder, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime, ParticleFlags,
-    ParticleMesh, ParticleProcessConfig, ParticleSystemDimension,
+    DrawOrder, DrawPassMaterial, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
+    ParticleFlags, ParticleMesh, ParticleProcessConfig, ParticleSystemDimension,
+    QuadOrientation, SerializableAlphaMode, StandardParticleMaterial,
 };
 pub use material::ParticleMaterialExtension;
 pub use runtime::{

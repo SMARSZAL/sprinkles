@@ -638,7 +638,13 @@ fn draw_color_preview_button(ui: &mut egui::Ui, rect: Rect, color: Color32) {
     );
 }
 
-pub fn color_picker(ui: &mut egui::Ui, rgba: &mut [f32; 4], width: f32, panel_right_edge: Option<f32>) -> Response {
+pub fn color_picker_with_id(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    rgba: &mut [f32; 4],
+    width: f32,
+    panel_right_edge: Option<f32>,
+) -> Response {
     let color = rgba_to_color32(*rgba);
 
     let button_height = 24.0;
@@ -648,7 +654,7 @@ pub fn color_picker(ui: &mut egui::Ui, rgba: &mut [f32; 4], width: f32, panel_ri
         draw_color_preview_button(ui, button_rect, color);
     }
 
-    let popup_id = ui.make_persistent_id("color_picker_popup");
+    let popup_id = ui.make_persistent_id(id);
     let initial_color_id = popup_id.with("initial_color");
     let mut is_open = ui.data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
 
@@ -709,6 +715,15 @@ pub fn color_picker(ui: &mut egui::Ui, rgba: &mut [f32; 4], width: f32, panel_ri
     }
 
     button_response
+}
+
+pub fn color_picker(
+    ui: &mut egui::Ui,
+    rgba: &mut [f32; 4],
+    width: f32,
+    panel_right_edge: Option<f32>,
+) -> Response {
+    color_picker_with_id(ui, "color_picker_popup", rgba, width, panel_right_edge)
 }
 
 /// A gradient picker widget that shows a gradient bar with editable stops.

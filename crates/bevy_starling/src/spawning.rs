@@ -7,12 +7,12 @@ use bevy::{
 };
 
 use crate::{
-    asset::{ParticleMesh, ParticleSystemAsset},
+    asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset, QuadOrientation},
     material::ParticleMaterialExtension,
     runtime::{
-        CurrentMeshConfig, EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle,
-        ParticleData, ParticleMaterial, ParticleMaterialHandle, ParticleMeshHandle,
-        ParticleSystem3D, ParticleSystemRuntime,
+        CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterMeshEntity, EmitterRuntime,
+        ParticleBufferHandle, ParticleData, ParticleMaterial, ParticleMaterialHandle,
+        ParticleMeshHandle, ParticleSystem3D, ParticleSystemRuntime,
     },
 };
 
@@ -218,7 +218,36 @@ fn create_cylinder_mesh(
 
 fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     match config {
-        ParticleMesh::Quad => Mesh::from(Rectangle::new(1.0, 1.0)),
+        ParticleMesh::Quad { orientation } => {
+            let mut mesh = Mesh::from(Rectangle::new(1.0, 1.0));
+
+            let rotation = match orientation {
+                QuadOrientation::FaceZ => None,
+                QuadOrientation::FaceX => Some(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)),
+                QuadOrientation::FaceY => Some(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            };
+
+            if let Some(rot) = rotation {
+                if let Some(VertexAttributeValues::Float32x3(positions)) =
+                    mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+                {
+                    for pos in positions.iter_mut() {
+                        let v = rot * Vec3::from_array(*pos);
+                        *pos = v.to_array();
+                    }
+                }
+                if let Some(VertexAttributeValues::Float32x3(normals)) =
+                    mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+                {
+                    for normal in normals.iter_mut() {
+                        let v = rot * Vec3::from_array(*normal);
+                        *normal = v.to_array();
+                    }
+                }
+            }
+
+            mesh
+        }
         ParticleMesh::Sphere { radius } => Mesh::from(Sphere::new(*radius)),
         ParticleMesh::Cuboid { half_size } => {
             Mesh::from(Cuboid::new(half_size.x * 2.0, half_size.y * 2.0, half_size.z * 2.0))
@@ -317,12 +346,39 @@ fn create_particle_mesh(
     meshes.add(mesh)
 }
 
+// material creation
+
+fn create_particle_material_from_config(
+    config: &DrawPassMaterial,
+    sorted_particles_buffer: Handle<ShaderStorageBuffer>,
+    max_particles: u32,
+    particle_flags: u32,
+    asset_server: &AssetServer,
+) -> ParticleMaterial {
+    let base = match config {
+        DrawPassMaterial::Standard(mat) => mat.to_standard_material(asset_server),
+        DrawPassMaterial::CustomShader { .. } => {
+            todo!("custom shader support not yet implemented")
+        }
+    };
+
+    ExtendedMaterial {
+        base,
+        extension: ParticleMaterialExtension {
+            sorted_particles: sorted_particles_buffer,
+            max_particles,
+            particle_flags,
+        },
+    }
+}
+
 // spawning systems
 
 pub fn setup_particle_systems(
     mut commands: Commands,
     query: Query<(Entity, &ParticleSystem3D), Without<ParticleSystemRuntime>>,
     assets: Res<Assets<ParticleSystemAsset>>,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut materials: ResMut<Assets<ParticleMaterial>>,
@@ -355,26 +411,23 @@ pub fn setup_particle_systems(
 
             let sorted_particles_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles));
 
-            let current_mesh = if let Some(draw_pass) = emitter.draw_passes.first() {
-                draw_pass.mesh.clone()
+            let (current_mesh, current_material) = if let Some(draw_pass) =
+                emitter.draw_passes.first()
+            {
+                (draw_pass.mesh.clone(), draw_pass.material.clone())
             } else {
-                ParticleMesh::Quad
+                (ParticleMesh::default(), DrawPassMaterial::default())
             };
 
             let particle_mesh_handle = create_particle_mesh(&current_mesh, amount, &mut meshes);
 
-            let material_handle = materials.add(ExtendedMaterial {
-                base: StandardMaterial {
-                    base_color: Color::WHITE,
-                    alpha_mode: AlphaMode::Blend,
-                    ..default()
-                },
-                extension: ParticleMaterialExtension {
-                    sorted_particles: sorted_particles_buffer_handle.clone(),
-                    max_particles: amount,
-                    particle_flags: emitter.process.particle_flags.bits(),
-                },
-            });
+            let material_handle = materials.add(create_particle_material_from_config(
+                &current_material,
+                sorted_particles_buffer_handle.clone(),
+                amount,
+                emitter.process.particle_flags.bits(),
+                &asset_server,
+            ));
 
             let fixed_seed = if emitter.time.use_fixed_seed {
                 Some(emitter.time.seed)
@@ -394,6 +447,7 @@ pub fn setup_particle_systems(
                         max_particles: amount,
                     },
                     CurrentMeshConfig(current_mesh),
+                    CurrentMaterialConfig(current_material),
                     ParticleMeshHandle(particle_mesh_handle.clone()),
                     ParticleMaterialHandle(material_handle.clone()),
                     Transform::default(),
@@ -481,7 +535,7 @@ pub fn sync_particle_mesh(
         let new_mesh = if let Some(draw_pass) = emitter_data.draw_passes.first() {
             draw_pass.mesh.clone()
         } else {
-            ParticleMesh::Quad
+            ParticleMesh::default()
         };
 
         if current_config.0 != new_mesh {
@@ -496,6 +550,76 @@ pub fn sync_particle_mesh(
 
             current_config.0 = new_mesh;
             mesh_handle.0 = new_mesh_handle;
+        }
+    }
+}
+
+pub fn sync_particle_material(
+    particle_systems: Query<&ParticleSystem3D>,
+    mut emitter_query: Query<(
+        Entity,
+        &EmitterEntity,
+        &EmitterRuntime,
+        &ParticleBufferHandle,
+        &mut CurrentMaterialConfig,
+        &mut ParticleMaterialHandle,
+    )>,
+    mut mesh_entities: Query<(&EmitterMeshEntity, &mut MeshMaterial3d<ParticleMaterial>)>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<ParticleMaterial>>,
+) {
+    for (
+        emitter_entity,
+        emitter,
+        runtime,
+        buffer_handle,
+        mut current_config,
+        mut material_handle,
+    ) in emitter_query.iter_mut()
+    {
+        let Ok(particle_system) = particle_systems.get(emitter.parent_system) else {
+            continue;
+        };
+
+        let Some(asset) = assets.get(&particle_system.handle) else {
+            continue;
+        };
+
+        let Some(emitter_data) = asset.emitters.get(runtime.emitter_index) else {
+            continue;
+        };
+
+        let new_material = if let Some(draw_pass) = emitter_data.draw_passes.first() {
+            draw_pass.material.clone()
+        } else {
+            DrawPassMaterial::default()
+        };
+
+        if current_config.0.cache_key() != new_material.cache_key() {
+            let sorted_particles_handle = {
+                let Some(existing_material) = materials.get(&material_handle.0) else {
+                    continue;
+                };
+                existing_material.extension.sorted_particles.clone()
+            };
+
+            let new_material_handle = materials.add(create_particle_material_from_config(
+                &new_material,
+                sorted_particles_handle,
+                buffer_handle.max_particles,
+                emitter_data.process.particle_flags.bits(),
+                &asset_server,
+            ));
+
+            for (emitter_mesh, mut material3d) in mesh_entities.iter_mut() {
+                if emitter_mesh.emitter_entity == emitter_entity {
+                    material3d.0 = new_material_handle.clone();
+                }
+            }
+
+            current_config.0 = new_material;
+            material_handle.0 = new_material_handle;
         }
     }
 }

@@ -14,6 +14,9 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 const EMITTER_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1u;
 const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
 
+// standard material flags (from bevy_pbr::pbr_types)
+const STANDARD_MATERIAL_FLAGS_UNLIT_BIT: u32 = 1u << 5u;
+
 #import bevy_pbr::{
     mesh_functions,
     view_transformations::position_world_to_clip,
@@ -175,8 +178,16 @@ fn fragment(
 
     var out: FragmentOutput;
 
-    // apply PBR lighting
-    out.color = apply_pbr_lighting(pbr_input);
+    // check if material is unlit
+    let is_unlit = (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) != 0u;
+
+    if is_unlit {
+        // for unlit materials, use base color + emissive directly
+        out.color = pbr_input.material.base_color + pbr_input.material.emissive;
+    } else {
+        // apply PBR lighting for lit materials
+        out.color = apply_pbr_lighting(pbr_input);
+    }
 
     // apply post-processing (fog, tonemapping, etc.)
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
