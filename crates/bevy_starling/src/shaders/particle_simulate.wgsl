@@ -76,10 +76,14 @@ struct EmitterParams {
     turbulence_influence_max: f32,
 
     use_turbulence_influence_curve: u32,
-    _pad8: u32,
+    particle_flags: u32,
     _pad9: u32,
     _pad10: u32,
 }
+
+// particle flags (emitter-level flags that affect all particles)
+const PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1u;
+const PARTICLE_FLAG_DISABLE_Z: u32 = 4u;
 
 const EMISSION_SHAPE_POINT: u32 = 0u;
 const EMISSION_SHAPE_SPHERE: u32 = 1u;
@@ -218,7 +222,14 @@ fn get_emission_position(seed: u32) -> vec3<f32> {
     }
 
     // apply offset and scale
-    return pos * params.emission_shape_scale + params.emission_shape_offset;
+    var result = pos * params.emission_shape_scale + params.emission_shape_offset;
+
+    // disable Z for 2D mode
+    if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+        result.z = 0.0;
+    }
+
+    return result;
 }
 
 fn rotate_to_axis(v: vec3<f32>, axis: vec3<f32>) -> vec3<f32> {
@@ -287,7 +298,14 @@ fn get_emission_velocity(seed: u32) -> vec3<f32> {
     let vel_t = hash_to_float(seed + 2u);
     let speed = mix(params.initial_velocity_min, params.initial_velocity_max, vel_t);
 
-    return dir * speed;
+    var result = dir * speed;
+
+    // disable Z for 2D mode
+    if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+        result.z = 0.0;
+    }
+
+    return result;
 }
 
 fn get_initial_scale(seed: u32) -> f32 {
@@ -496,8 +514,12 @@ fn update_particle(p_in: Particle) -> Particle {
 
     let seed = bitcast<u32>(p.custom.z);
 
-    // apply gravity and update velocity
-    var velocity = p.velocity.xyz + params.gravity * dt;
+    // apply gravity (respect DISABLE_Z flag for 2D mode)
+    var gravity = params.gravity;
+    if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+        gravity.z = 0.0;
+    }
+    var velocity = p.velocity.xyz + gravity * dt;
 
     // apply turbulence
     if (params.turbulence_enabled != 0u) {
@@ -511,10 +533,20 @@ fn update_particle(p_in: Particle) -> Particle {
         }
     }
 
+    // disable Z for 2D mode before storing velocity and updating position
+    if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+        velocity.z = 0.0;
+    }
+
     p.velocity = vec4(velocity, lifetime);
 
     // update position
-    let new_position = p.position.xyz + velocity * dt;
+    var new_position = p.position.xyz + velocity * dt;
+
+    // force Z to 0 for 2D mode
+    if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+        new_position.z = 0.0;
+    }
 
     // update scale based on lifetime progress
     let initial_scale = get_initial_scale(seed + 20u);

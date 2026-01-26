@@ -59,12 +59,31 @@ struct EmitterParams {
     scale_min: f32,
     scale_max: f32,
 
-    scale_curve: u32,
+    use_scale_curve: u32,
     use_initial_color_gradient: u32,
-    _pad7_a: u32,
-    _pad7_b: u32,
+    use_alpha_curve: u32,
+    turbulence_enabled: u32,
 
     initial_color: vec4<f32>,
+
+    // turbulence
+    turbulence_noise_strength: f32,
+    turbulence_noise_scale: f32,
+    turbulence_noise_speed_random: f32,
+    turbulence_influence_min: f32,
+
+    turbulence_noise_speed: vec3<f32>,
+    turbulence_influence_max: f32,
+
+    use_turbulence_influence_curve: u32,
+    particle_flags: u32,
+    _pad9: u32,
+    _pad10: u32,
 }
 
+// per-particle flags (stored in particle.custom.w)
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
+
+// emitter-level particle flags (from EmitterParams.particle_flags)
+const EMITTER_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1u;
+const EMITTER_FLAG_DISABLE_Z: u32 = 4u;

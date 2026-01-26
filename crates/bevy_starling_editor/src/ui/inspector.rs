@@ -2,10 +2,11 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_starling::asset::{
     DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
-    Gradient, GradientInterpolation, GradientStop, ParticleMesh, ParticleProcessConfig,
-    ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
-    ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity,
-    ParticleProcessTurbulence, ParticleSystemAsset, Range, SolidOrGradientColor, SplineCurve,
+    Gradient, GradientInterpolation, GradientStop, ParticleFlags, ParticleMesh,
+    ParticleProcessConfig, ParticleProcessDisplay, ParticleProcessDisplayColor,
+    ParticleProcessDisplayScale, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
+    ParticleProcessSpawnVelocity, ParticleProcessTurbulence, ParticleSystemAsset, Range,
+    SolidOrGradientColor, SplineCurve,
 };
 use egui_remixicon::icons;
 use inflector::Inflector;
@@ -1193,6 +1194,31 @@ fn inspect_turbulence(
     changed
 }
 
+fn inspect_particle_flags(
+    ui: &mut egui::Ui,
+    id: &str,
+    flags: &mut ParticleFlags,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    inspector_category(ui, id, "Particle flags", indent_level, |ui, indent| {
+        let mut align_y = flags.contains(ParticleFlags::ALIGN_Y_TO_VELOCITY);
+        if inspect_bool(ui, "Align Y to velocity", &mut align_y, indent) {
+            flags.set(ParticleFlags::ALIGN_Y_TO_VELOCITY, align_y);
+            changed = true;
+        }
+
+        let mut disable_z = flags.contains(ParticleFlags::DISABLE_Z);
+        if inspect_bool(ui, "Disable Z movement", &mut disable_z, indent) {
+            flags.set(ParticleFlags::DISABLE_Z, disable_z);
+            changed = true;
+        }
+    });
+
+    changed
+}
+
 fn inspect_process_config(
     ui: &mut egui::Ui,
     id: &str,
@@ -1202,6 +1228,12 @@ fn inspect_process_config(
 ) -> bool {
     let mut changed = false;
     inspector_category(ui, id, "Process", indent_level, |ui, indent| {
+        changed |= inspect_particle_flags(
+            ui,
+            &format!("{}_flags", id),
+            &mut config.particle_flags,
+            indent,
+        );
         changed |= inspect_spawn_position(
             ui,
             &format!("{}_position", id),

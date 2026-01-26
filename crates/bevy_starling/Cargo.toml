@@ -12,3 +12,4 @@ serde = { workspace = true }
 ron = { workspace = true }
 thiserror = { workspace = true }
 bytemuck = { workspace = true }
+bitflags = { workspace = true }

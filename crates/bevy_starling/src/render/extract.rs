@@ -247,7 +247,7 @@ pub fn extract_particle_systems(
                 },
                 None => 0,
             },
-            _pad8: 0,
+            particle_flags: emitter.process.particle_flags.bits(),
             _pad9: 0,
             _pad10: 0,
         };

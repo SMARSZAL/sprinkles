@@ -3,7 +3,7 @@ mod loader;
 
 pub use format::{
     DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime, Gradient,
-    GradientInterpolation, GradientStop, Knot, ParticleMesh, ParticleProcessConfig,
+    GradientInterpolation, GradientStop, Knot, ParticleFlags, ParticleMesh, ParticleProcessConfig,
     ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
     ParticleProcessSpawn, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
     ParticleProcessSpawnVelocity, ParticleProcessTurbulence, ParticleSystemAsset,

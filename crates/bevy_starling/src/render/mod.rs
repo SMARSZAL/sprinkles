@@ -14,6 +14,10 @@ pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
 pub const EMISSION_SHAPE_BOX: u32 = 3;
 pub const EMISSION_SHAPE_RING: u32 = 4;
 
+// particle flags (bitfield values matching ParticleFlags in format.rs)
+pub const PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1 << 0;
+pub const PARTICLE_FLAG_DISABLE_Z: u32 = 1 << 2;
+
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
 pub struct EmitterUniforms {
@@ -86,7 +90,7 @@ pub struct EmitterUniforms {
     pub turbulence_influence_max: f32,
 
     pub use_turbulence_influence_curve: u32,
-    pub _pad8: u32,
+    pub particle_flags: u32,
     pub _pad9: u32,
     pub _pad10: u32,
 }

@@ -7,7 +7,12 @@ struct Particle {
 }
 
 
+// per-particle flags (stored in particle.custom.w)
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
+
+// emitter-level particle flags (from particle_flags uniform)
+const EMITTER_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1u;
+const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
 
 #import bevy_pbr::{
     mesh_functions,
@@ -31,6 +36,24 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 // instance 0 contains the first particle to render (back-most), instance N is the last (front-most)
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<storage, read> sorted_particles: array<Particle>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> max_particles: u32;
+@group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> particle_flags: u32;
+
+// helper function to compute a rotation matrix that aligns Y axis to a direction
+fn align_y_to_direction(dir: vec3<f32>) -> mat3x3<f32> {
+    let y_axis = normalize(dir);
+
+    // find a perpendicular axis for X
+    var up = vec3(0.0, 1.0, 0.0);
+    // if Y is nearly parallel to world up, use a different reference
+    if abs(dot(y_axis, up)) > 0.999 {
+        up = vec3(0.0, 0.0, 1.0);
+    }
+
+    let x_axis = normalize(cross(y_axis, up));
+    let z_axis = cross(x_axis, y_axis);
+
+    return mat3x3<f32>(x_axis, y_axis, z_axis);
+}
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
@@ -49,8 +72,24 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let particle_position = particle.position.xyz;
     let particle_scale = select(0.0, particle.position.w, is_active);
 
+    // get velocity for ALIGN_Y_TO_VELOCITY
+    let velocity = particle.velocity.xyz;
+
+    // compute particle rotation based on flags
+    var rotated_position = vertex.position;
+    var rotated_normal = vertex.normal;
+
+    if (particle_flags & EMITTER_FLAG_ALIGN_Y_TO_VELOCITY) != 0u {
+        let vel_length = length(velocity);
+        if vel_length > 0.0001 {
+            let rotation_matrix = align_y_to_direction(velocity);
+            rotated_position = rotation_matrix * vertex.position;
+            rotated_normal = rotation_matrix * vertex.normal;
+        }
+    }
+
     // scale vertex position by particle scale
-    let scaled_position = vertex.position * particle_scale;
+    let scaled_position = rotated_position * particle_scale;
 
     // translate to particle position
     let local_position = scaled_position + particle_position;
@@ -64,9 +103,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // compute clip position
     out.position = position_world_to_clip(out.world_position.xyz);
 
-    // transform normal to world space
+    // transform normal to world space (use rotated normal if ALIGN_Y_TO_VELOCITY)
 #ifdef VERTEX_NORMALS
-    out.world_normal = mesh_functions::mesh_normal_local_to_world(vertex.normal, 0u);
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(rotated_normal, 0u);
 #endif
 
 #ifdef VERTEX_UVS_A

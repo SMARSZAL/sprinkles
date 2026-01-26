@@ -1,5 +1,22 @@
 use bevy::prelude::*;
+use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+    #[serde(transparent)]
+    pub struct ParticleFlags: u32 {
+        const ALIGN_Y_TO_VELOCITY = 1 << 0;
+
+        // TODO: requires implementing angular velocity
+        // const ROTATE_Y = 1 << 1;
+        
+        const DISABLE_Z = 1 << 2;
+
+        // TODO: requires implementing damping
+        // const DAMPING_AS_FRICTION = 1 << 3;
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ParticleSystemDimension {
@@ -1032,6 +1049,8 @@ impl Default for ParticleProcessTurbulence {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
+    pub particle_flags: ParticleFlags,
+    #[serde(default)]
     pub spawn: ParticleProcessSpawn,
     #[serde(default)]
     pub display: ParticleProcessDisplay,
@@ -1042,6 +1061,7 @@ pub struct ParticleProcessConfig {
 impl Default for ParticleProcessConfig {
     fn default() -> Self {
         Self {
+            particle_flags: ParticleFlags::empty(),
             spawn: ParticleProcessSpawn::default(),
             display: ParticleProcessDisplay::default(),
             turbulence: None,

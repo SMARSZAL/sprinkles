@@ -22,6 +22,9 @@ pub struct ParticleMaterialExtension {
     /// maximum number of particles
     #[uniform(101)]
     pub max_particles: u32,
+    /// particle flags (emitter-level flags that affect all particles)
+    #[uniform(102)]
+    pub particle_flags: u32,
 }
 
 impl MaterialExtension for ParticleMaterialExtension {

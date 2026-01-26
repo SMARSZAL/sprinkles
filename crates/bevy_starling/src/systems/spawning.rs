@@ -187,6 +187,7 @@ pub fn setup_particle_systems(
                 extension: ParticleMaterialExtension {
                     sorted_particles: sorted_particles_buffer_handle.clone(),
                     max_particles: amount,
+                    particle_flags: emitter.process.particle_flags.bits(),
                 },
             });
 

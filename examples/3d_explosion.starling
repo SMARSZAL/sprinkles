@@ -28,6 +28,7 @@
                 ),
             ],
             process: (
+                particle_flags: "",
                 spawn: (
                     position: (
                         emission_shape: Sphere(
@@ -116,6 +117,7 @@
                 ),
             ],
             process: (
+                particle_flags: "",
                 spawn: (
                     position: (
                         emission_shape: Sphere(
@@ -212,6 +214,7 @@
                 ),
             ],
             process: (
+                particle_flags: "ALIGN_Y_TO_VELOCITY",
                 spawn: (
                     position: (
                         emission_shape: Sphere(

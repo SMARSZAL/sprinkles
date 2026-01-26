@@ -1523,6 +1523,7 @@ name = "bevy_starling"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bitflags 2.10.0",
  "bytemuck",
  "ron 0.10.1",
  "serde",
