@@ -1388,6 +1388,8 @@ pub fn draw_inspector(
 
             if any_changed {
                 editor_state.mark_unsaved();
+                editor_state.should_reset = true;
+                editor_state.is_playing = true;
             }
 
             if let Some(idx) = toggle_emitter {
@@ -1457,6 +1459,8 @@ pub fn on_add_emitter(
     new_emitter.name = name;
     asset.emitters.push(new_emitter);
     editor_state.mark_unsaved();
+    editor_state.should_reset = true;
+    editor_state.is_playing = true;
 }
 
 pub fn on_remove_emitter(
@@ -1492,6 +1496,8 @@ pub fn on_remove_emitter(
         inspector_state.collapsed_emitters = updated_collapsed;
 
         editor_state.mark_unsaved();
+        editor_state.should_reset = true;
+        editor_state.is_playing = true;
     }
 }
 
@@ -1513,6 +1519,8 @@ pub fn on_add_draw_pass(
     if let Some(emitter) = asset.emitters.get_mut(event.emitter_index) {
         emitter.draw_passes.push(EmitterDrawPass::default());
         editor_state.mark_unsaved();
+        editor_state.should_reset = true;
+        editor_state.is_playing = true;
     }
 }
 
@@ -1535,6 +1543,8 @@ pub fn on_remove_draw_pass(
         if event.pass_index < emitter.draw_passes.len() && emitter.draw_passes.len() > 1 {
             emitter.draw_passes.remove(event.pass_index);
             editor_state.mark_unsaved();
+            editor_state.should_reset = true;
+            editor_state.is_playing = true;
         }
     }
 }
