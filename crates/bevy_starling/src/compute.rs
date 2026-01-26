@@ -18,11 +18,9 @@ use bevy::{
 };
 use std::borrow::Cow;
 
-use super::curve_texture::FallbackCurveTexture;
-use super::extract::ExtractedParticleSystem;
-use super::gradient_texture::FallbackGradientTexture;
-use super::EmitterUniforms;
-use crate::core::ParticleData;
+use crate::extract::{EmitterUniforms, ExtractedParticleSystem};
+use crate::runtime::ParticleData;
+use crate::textures::{FallbackCurveTexture, FallbackGradientTexture};
 
 const SHADER_ASSET_PATH: &str = "embedded://bevy_starling/shaders/particle_simulate.wgsl";
 const WORKGROUP_SIZE: u32 = 64;

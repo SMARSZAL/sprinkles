@@ -16,8 +16,9 @@ use bevy::{
 };
 use std::borrow::Cow;
 
-use super::compute::ParticleComputeLabel;
-use super::extract::ExtractedParticleSystem;
+use crate::compute::ParticleComputeLabel;
+use crate::extract::ExtractedParticleSystem;
+use crate::runtime::ParticleData;
 
 const SHADER_ASSET_PATH: &str = "embedded://bevy_starling/shaders/particle_sort.wgsl";
 const WORKGROUP_SIZE: u32 = 256;
@@ -57,10 +58,9 @@ pub fn init_particle_sort_pipeline(
             ShaderStages::COMPUTE,
             (
                 uniform_buffer::<SortParams>(false),
-                storage_buffer::<crate::core::ParticleData>(false),
+                storage_buffer::<ParticleData>(false),
                 storage_buffer::<u32>(false),
-                // sorted particles output buffer
-                storage_buffer::<crate::core::ParticleData>(false),
+                storage_buffer::<ParticleData>(false),
             ),
         ),
     );
@@ -223,7 +223,6 @@ impl render_graph::Node for ParticleSortNode {
         for data in &sort_data.emitters {
             let workgroups = (data.amount + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 
-            // initialize indices to identity mapping
             {
                 let sort_params = SortParams {
                     amount: data.amount,
@@ -263,7 +262,6 @@ impl render_graph::Node for ParticleSortNode {
                 pass.dispatch_workgroups(workgroups, 1, 1);
             }
 
-            // perform bitonic sort (skip for Index draw order - identity mapping is sufficient)
             if data.draw_order != 0 {
                 let n = data.amount.next_power_of_two();
                 let num_stages = (n as f32).log2().ceil() as u32;
@@ -277,8 +275,8 @@ impl render_graph::Node for ParticleSortNode {
                             step,
                             camera_position: data.camera_position,
                             _pad1: 0.0,
-                    camera_forward: data.camera_forward,
-                    _pad2: 0.0,
+                            camera_forward: data.camera_forward,
+                            _pad2: 0.0,
                             emitter_transform: data.emitter_transform,
                         };
 
@@ -310,7 +308,6 @@ impl render_graph::Node for ParticleSortNode {
                 }
             }
 
-            // copy particle data to sorted output buffer
             {
                 let sort_params = SortParams {
                     amount: data.amount,
@@ -373,7 +370,6 @@ impl Plugin for ParticleSortPlugin {
 
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(ParticleSortLabel, ParticleSortNode::default());
-        // sort runs after particle simulation
         render_graph.add_node_edge(ParticleComputeLabel, ParticleSortLabel);
         render_graph.add_node_edge(ParticleSortLabel, bevy::render::graph::CameraDriverLabel);
     }

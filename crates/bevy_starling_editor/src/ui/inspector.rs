@@ -1,13 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use bevy_starling::asset::{
-    DrawOrder, EmissionShape, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime,
-    Gradient, GradientInterpolation, GradientStop, ParticleFlags, ParticleMesh,
-    ParticleProcessConfig, ParticleProcessDisplay, ParticleProcessDisplayColor,
-    ParticleProcessDisplayScale, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
-    ParticleProcessSpawnVelocity, ParticleProcessTurbulence, ParticleSystemAsset, Range,
-    SolidOrGradientColor, SplineCurve,
-};
+use bevy_starling::prelude::*;
 use egui_remixicon::icons;
 use inflector::Inflector;
 
@@ -670,7 +663,7 @@ fn inspect_draw_passes(
     actions
 }
 
-fn inspect_range(ui: &mut egui::Ui, label: &str, value: &mut Range, indent_level: u8) -> bool {
+fn inspect_range(ui: &mut egui::Ui, label: &str, value: &mut ParticleRange, indent_level: u8) -> bool {
     let mut values = [value.min, value.max];
     let changed = inspect_vector_fields(ui, label, &mut values, &["min", "max"], indent_level);
     if changed {
@@ -972,7 +965,7 @@ fn inspect_solid_or_gradient_color(
                 };
                 let inverted_color = [1.0 - color[0], 1.0 - color[1], 1.0 - color[2], color[3]];
                 *value = SolidOrGradientColor::Gradient {
-                    gradient: Gradient {
+                    gradient: ParticleGradient {
                         stops: vec![
                             GradientStop {
                                 color,

@@ -1,10 +1,39 @@
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
-use bevy::render::render_resource::Buffer;
+use bevy::render::render_resource::{Buffer, ShaderType};
 use bevy::render::storage::ShaderStorageBuffer;
+use bytemuck::{Pod, Zeroable};
 
-use crate::asset::ParticleMesh;
-use crate::render::material::ParticleMaterialExtension;
+use crate::asset::{ParticleMesh, ParticleSystemAsset};
+use crate::material::ParticleMaterialExtension;
+
+#[derive(Component)]
+pub struct ParticleSystem2D {
+    pub handle: Handle<ParticleSystemAsset>,
+}
+
+#[derive(Component)]
+pub struct ParticleSystem3D {
+    pub handle: Handle<ParticleSystemAsset>,
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct ParticleData {
+    pub position: [f32; 4], // xyz + scale
+    pub velocity: [f32; 4], // xyz + lifetime_remaining
+    pub color: [f32; 4],    // rgba
+    pub custom: [f32; 4],   // age, phase, seed, flags
+}
+
+impl ParticleData {
+    pub const FLAG_ACTIVE: u32 = 1;
+
+    pub fn is_active(&self) -> bool {
+        let flags = self.custom[3].to_bits();
+        (flags & Self::FLAG_ACTIVE) != 0
+    }
+}
 
 /// system-wide runtime state for a particle system
 #[derive(Component)]

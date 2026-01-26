@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use bevy::prelude::*;
-use bevy_starling::asset::ParticleSystemAsset;
+use bevy_starling::prelude::*;
 
 #[derive(Resource)]
 pub struct EditorState {

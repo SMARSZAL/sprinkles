@@ -1,19 +1,102 @@
 use bevy::{
     prelude::*,
-    render::{Extract, storage::ShaderStorageBuffer},
+    render::{render_resource::ShaderType, storage::ShaderStorageBuffer, Extract},
 };
+use bytemuck::{Pod, Zeroable};
 
 use crate::{
     asset::{DrawOrder, EmissionShape, ParticleSystemAsset, SolidOrGradientColor},
-    core::ParticleSystem3D,
-    render::{curve_texture::CurveTextureCache, gradient_texture::GradientTextureCache},
-    runtime::{EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystemRuntime},
+    runtime::{
+        EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D, ParticleSystemRuntime,
+    },
+    textures::{CurveTextureCache, GradientTextureCache},
 };
 
-use super::{
-    EmitterUniforms, EMISSION_SHAPE_BOX, EMISSION_SHAPE_POINT, EMISSION_SHAPE_RING,
-    EMISSION_SHAPE_SPHERE, EMISSION_SHAPE_SPHERE_SURFACE,
-};
+// emission shape constants
+pub const EMISSION_SHAPE_POINT: u32 = 0;
+pub const EMISSION_SHAPE_SPHERE: u32 = 1;
+pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
+pub const EMISSION_SHAPE_BOX: u32 = 3;
+pub const EMISSION_SHAPE_RING: u32 = 4;
+
+// particle flags (bitfield values matching ParticleFlags in asset.rs)
+pub const PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1 << 0;
+pub const PARTICLE_FLAG_DISABLE_Z: u32 = 1 << 2;
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct EmitterUniforms {
+    pub delta_time: f32,
+    pub system_phase: f32,
+    pub prev_system_phase: f32,
+    pub cycle: u32,
+
+    pub amount: u32,
+    pub lifetime: f32,
+    pub lifetime_randomness: f32,
+    pub emitting: u32,
+
+    pub gravity: [f32; 3],
+    pub random_seed: u32,
+
+    pub emission_shape: u32,
+    pub emission_sphere_radius: f32,
+    pub emission_ring_height: f32,
+    pub emission_ring_radius: f32,
+
+    pub emission_ring_inner_radius: f32,
+    pub spread: f32,
+    pub flatness: f32,
+    pub initial_velocity_min: f32,
+
+    pub initial_velocity_max: f32,
+    pub inherit_velocity_ratio: f32,
+    pub explosiveness: f32,
+    pub randomness: f32,
+
+    pub emission_shape_offset: [f32; 3],
+    pub _pad1: f32,
+
+    pub emission_shape_scale: [f32; 3],
+    pub _pad2: f32,
+
+    pub emission_box_extents: [f32; 3],
+    pub _pad3: f32,
+
+    pub emission_ring_axis: [f32; 3],
+    pub _pad4: f32,
+
+    pub direction: [f32; 3],
+    pub _pad5: f32,
+
+    pub velocity_pivot: [f32; 3],
+    pub _pad6: f32,
+
+    pub draw_order: u32,
+    pub clear_particles: u32,
+    pub scale_min: f32,
+    pub scale_max: f32,
+
+    pub use_scale_curve: u32,
+    pub use_initial_color_gradient: u32,
+    pub use_alpha_curve: u32,
+    pub turbulence_enabled: u32,
+
+    pub initial_color: [f32; 4],
+
+    pub turbulence_noise_strength: f32,
+    pub turbulence_noise_scale: f32,
+    pub turbulence_noise_speed_random: f32,
+    pub turbulence_influence_min: f32,
+
+    pub turbulence_noise_speed: [f32; 3],
+    pub turbulence_influence_max: f32,
+
+    pub use_turbulence_influence_curve: u32,
+    pub particle_flags: u32,
+    pub _pad9: u32,
+    pub _pad10: u32,
+}
 
 #[derive(Resource, Default)]
 pub struct ExtractedParticleSystem {
@@ -56,7 +139,6 @@ pub fn extract_particle_systems(
 ) {
     let mut extracted = ExtractedParticleSystem::default();
 
-    // get camera position and forward direction for view depth sorting
     let (camera_position, camera_forward) = camera_query
         .iter()
         .next()
@@ -83,15 +165,12 @@ pub fn extract_particle_systems(
 
         let lifetime = emitter.time.lifetime;
         let delay = emitter.time.delay;
-        // use actual frame delta for physics simulation, but freeze when paused
-        // fixed_fps only affects emission timing via system_phase
         let delta_time = if system_runtime.paused {
             0.0
         } else {
             time.delta_secs()
         };
 
-        // only emit when past the delay period
         let should_emit = runtime.emitting && runtime.is_past_delay(lifetime, delay);
 
         let draw_order = match emitter.drawing.draw_order {
@@ -107,7 +186,6 @@ pub fn extract_particle_systems(
         let accelerations = &spawn.accelerations;
         let display = &emitter.process.display;
 
-        // convert emission shape to u32 discriminant and extract shape-specific parameters
         let (emission_shape, emission_sphere_radius, emission_box_extents, emission_ring_axis, emission_ring_height, emission_ring_radius, emission_ring_inner_radius) =
             match position.emission_shape {
                 EmissionShape::Point => {
@@ -201,7 +279,6 @@ pub fn extract_particle_systems(
                 SolidOrGradientColor::Gradient { .. } => [1.0, 1.0, 1.0, 1.0],
             },
 
-            // turbulence
             turbulence_noise_strength: emitter
                 .process
                 .turbulence

@@ -8,16 +8,214 @@ use bevy::{
 
 use crate::{
     asset::{ParticleMesh, ParticleSystemAsset},
-    core::{ParticleData, ParticleSystem3D},
-    meshes::create_cylinder_mesh,
-    render::material::ParticleMaterialExtension,
+    material::ParticleMaterialExtension,
     runtime::{
         CurrentMeshConfig, EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle,
-        ParticleMaterial, ParticleMaterialHandle, ParticleMeshHandle, ParticleSystemRuntime,
+        ParticleData, ParticleMaterial, ParticleMaterialHandle, ParticleMeshHandle,
+        ParticleSystem3D, ParticleSystemRuntime,
     },
 };
 
-/// creates a base mesh from the particle mesh configuration
+// time systems
+
+pub fn clear_particle_clear_requests(mut query: Query<&mut EmitterRuntime>) {
+    for mut runtime in query.iter_mut() {
+        if runtime.clear_requested {
+            runtime.clear_requested = false;
+        }
+    }
+}
+
+pub fn update_particle_time(
+    time: Res<Time>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    system_query: Query<(&ParticleSystem3D, &ParticleSystemRuntime)>,
+    mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,
+) {
+    for (emitter, mut runtime) in emitter_query.iter_mut() {
+        let Ok((particle_system, system_runtime)) = system_query.get(emitter.parent_system) else {
+            continue;
+        };
+
+        if system_runtime.paused {
+            continue;
+        }
+
+        let Some(asset) = assets.get(&particle_system.handle) else {
+            continue;
+        };
+
+        let Some(emitter_data) = asset.emitters.get(runtime.emitter_index) else {
+            continue;
+        };
+
+        let lifetime = emitter_data.time.lifetime;
+        let delay = emitter_data.time.delay;
+        let fixed_fps = emitter_data.time.fixed_fps;
+        let total_duration = delay + lifetime;
+
+        runtime.prev_system_time = runtime.system_time;
+
+        if fixed_fps > 0 {
+            let fixed_delta = 1.0 / fixed_fps as f32;
+            runtime.accumulated_delta += time.delta_secs();
+
+            while runtime.accumulated_delta >= fixed_delta {
+                runtime.accumulated_delta -= fixed_delta;
+                runtime.system_time += fixed_delta;
+
+                if runtime.system_time >= total_duration && total_duration > 0.0 {
+                    runtime.system_time = runtime.system_time % total_duration;
+                    runtime.cycle += 1;
+                }
+            }
+        } else {
+            runtime.system_time += time.delta_secs();
+
+            if runtime.system_time >= total_duration && total_duration > 0.0 {
+                runtime.system_time = runtime.system_time % total_duration;
+                runtime.cycle += 1;
+            }
+        }
+
+        if emitter_data.time.one_shot && runtime.cycle > 0 && !runtime.one_shot_completed {
+            runtime.emitting = false;
+            runtime.one_shot_completed = true;
+        }
+    }
+}
+
+// mesh generation
+
+fn create_cylinder_mesh(
+    top_radius: f32,
+    bottom_radius: f32,
+    height: f32,
+    radial_segments: u32,
+    rings: u32,
+    cap_top: bool,
+    cap_bottom: bool,
+) -> Mesh {
+    let radial_segments = radial_segments.max(3);
+    let rings = rings.max(1);
+    let half_height = height / 2.0;
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut uvs: Vec<[f32; 2]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    let side_normal_y = (bottom_radius - top_radius) / height;
+    let side_normal_scale = 1.0 / (1.0 + side_normal_y * side_normal_y).sqrt();
+
+    for ring in 0..=rings {
+        let v = ring as f32 / rings as f32;
+        let y = half_height - height * v;
+        let radius = top_radius + (bottom_radius - top_radius) * v;
+
+        for segment in 0..=radial_segments {
+            let u = segment as f32 / radial_segments as f32;
+            let theta = u * std::f32::consts::TAU;
+            let (sin_theta, cos_theta) = theta.sin_cos();
+
+            let x = cos_theta * radius;
+            let z = sin_theta * radius;
+
+            positions.push([x, y, z]);
+
+            let nx = cos_theta * side_normal_scale;
+            let ny = side_normal_y * side_normal_scale;
+            let nz = sin_theta * side_normal_scale;
+            normals.push([nx, ny, nz]);
+
+            uvs.push([u, v]);
+        }
+    }
+
+    let verts_per_ring = radial_segments + 1;
+    for ring in 0..rings {
+        for segment in 0..radial_segments {
+            let top_left = ring * verts_per_ring + segment;
+            let top_right = ring * verts_per_ring + segment + 1;
+            let bottom_left = (ring + 1) * verts_per_ring + segment;
+            let bottom_right = (ring + 1) * verts_per_ring + segment + 1;
+
+            indices.push(top_left);
+            indices.push(top_right);
+            indices.push(bottom_left);
+
+            indices.push(top_right);
+            indices.push(bottom_right);
+            indices.push(bottom_left);
+        }
+    }
+
+    if cap_top && top_radius > 0.0 {
+        let center_index = positions.len() as u32;
+
+        positions.push([0.0, half_height, 0.0]);
+        normals.push([0.0, 1.0, 0.0]);
+        uvs.push([0.5, 0.5]);
+
+        for segment in 0..=radial_segments {
+            let u = segment as f32 / radial_segments as f32;
+            let theta = u * std::f32::consts::TAU;
+            let (sin_theta, cos_theta) = theta.sin_cos();
+
+            let x = cos_theta * top_radius;
+            let z = sin_theta * top_radius;
+
+            positions.push([x, half_height, z]);
+            normals.push([0.0, 1.0, 0.0]);
+            uvs.push([cos_theta * 0.5 + 0.5, sin_theta * 0.5 + 0.5]);
+        }
+
+        for segment in 0..radial_segments {
+            let first = center_index + 1 + segment;
+            let second = center_index + 1 + segment + 1;
+            indices.push(center_index);
+            indices.push(second);
+            indices.push(first);
+        }
+    }
+
+    if cap_bottom && bottom_radius > 0.0 {
+        let center_index = positions.len() as u32;
+
+        positions.push([0.0, -half_height, 0.0]);
+        normals.push([0.0, -1.0, 0.0]);
+        uvs.push([0.5, 0.5]);
+
+        for segment in 0..=radial_segments {
+            let u = segment as f32 / radial_segments as f32;
+            let theta = u * std::f32::consts::TAU;
+            let (sin_theta, cos_theta) = theta.sin_cos();
+
+            let x = cos_theta * bottom_radius;
+            let z = sin_theta * bottom_radius;
+
+            positions.push([x, -half_height, z]);
+            normals.push([0.0, -1.0, 0.0]);
+            uvs.push([cos_theta * 0.5 + 0.5, sin_theta * 0.5 + 0.5]);
+        }
+
+        for segment in 0..radial_segments {
+            let first = center_index + 1 + segment;
+            let second = center_index + 1 + segment + 1;
+            indices.push(center_index);
+            indices.push(first);
+            indices.push(second);
+        }
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
 fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     match config {
         ParticleMesh::Quad => Mesh::from(Rectangle::new(1.0, 1.0)),
@@ -45,9 +243,6 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     }
 }
 
-/// creates a merged mesh containing `particle_count` copies of the base mesh,
-/// each with its particle index encoded in the UV_1 (uv_b) attribute.
-/// this eliminates reliance on instance_index.
 fn create_particle_mesh(
     config: &ParticleMesh,
     particle_count: u32,
@@ -55,7 +250,6 @@ fn create_particle_mesh(
 ) -> Handle<Mesh> {
     let base_mesh = create_base_mesh(config);
 
-    // extract base mesh data
     let base_positions: Vec<[f32; 3]> = base_mesh
         .attribute(Mesh::ATTRIBUTE_POSITION)
         .and_then(|attr| match attr {
@@ -101,15 +295,13 @@ fn create_particle_mesh(
         let base_vertex = (particle_idx as usize * vertices_per_mesh) as u32;
         let particle_index_f32 = particle_idx as f32;
 
-        // copy all vertices from base mesh
         for i in 0..vertices_per_mesh {
             positions.push(base_positions[i]);
             normals.push(base_normals[i]);
             uvs.push(base_uvs[i]);
-            uv_bs.push([particle_index_f32, 0.0]); // particle index in uv_b.x
+            uv_bs.push([particle_index_f32, 0.0]);
         }
 
-        // copy indices with offset
         for &idx in &base_indices {
             indices.push(base_vertex + idx);
         }
@@ -124,6 +316,8 @@ fn create_particle_mesh(
 
     meshes.add(mesh)
 }
+
+// spawning systems
 
 pub fn setup_particle_systems(
     mut commands: Commands,
@@ -142,42 +336,33 @@ pub fn setup_particle_systems(
             continue;
         }
 
-        // add system-wide runtime to the particle system entity
         commands.entity(system_entity).insert((
             ParticleSystemRuntime::default(),
             Transform::default(),
             Visibility::default(),
         ));
 
-        // spawn an emitter entity for each emitter in the asset
         for (emitter_index, emitter) in asset.emitters.iter().enumerate() {
             let amount = emitter.amount;
 
-            // initialize particle data buffer (all particles start inactive)
             let particles: Vec<ParticleData> =
                 (0..amount).map(|_| ParticleData::default()).collect();
 
-            // create ShaderStorageBuffer asset for the particle data
             let particle_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles.clone()));
 
-            // initialize particle indices buffer (identity mapping)
             let indices: Vec<u32> = (0..amount).collect();
             let indices_buffer_handle = buffers.add(ShaderStorageBuffer::from(indices));
 
-            // create sorted particles buffer (same size, written in sorted order for rendering)
             let sorted_particles_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles));
 
-            // create mesh based on draw pass configuration
             let current_mesh = if let Some(draw_pass) = emitter.draw_passes.first() {
                 draw_pass.mesh.clone()
             } else {
                 ParticleMesh::Quad
             };
 
-            // create merged particle mesh with particle indices encoded in UV_1
             let particle_mesh_handle = create_particle_mesh(&current_mesh, amount, &mut meshes);
 
-            // create a single shared material for all particles in this emitter
             let material_handle = materials.add(ExtendedMaterial {
                 base: StandardMaterial {
                     base_color: Color::WHITE,
@@ -191,7 +376,6 @@ pub fn setup_particle_systems(
                 },
             });
 
-            // spawn emitter entity as child of particle system
             let fixed_seed = if emitter.time.use_fixed_seed {
                 Some(emitter.time.seed)
             } else {
@@ -219,7 +403,6 @@ pub fn setup_particle_systems(
 
             commands.entity(system_entity).add_child(emitter_entity);
 
-            // spawn single mesh entity for this emitter (contains all particles in one mesh)
             commands.spawn((
                 Mesh3d(particle_mesh_handle),
                 MeshMaterial3d(material_handle),
@@ -231,7 +414,6 @@ pub fn setup_particle_systems(
     }
 }
 
-/// cleanup mesh entities when their parent emitter or particle system is despawned
 pub fn cleanup_particle_entities(
     mut commands: Commands,
     mut removed_systems: RemovedComponents<ParticleSystem3D>,
@@ -240,9 +422,7 @@ pub fn cleanup_particle_entities(
     emitter_entities: Query<Entity, With<EmitterEntity>>,
     emitter_parent_query: Query<&EmitterEntity>,
 ) {
-    // cleanup when particle system is removed
     for removed_system in removed_systems.read() {
-        // despawn all emitter entities that belong to this system
         for emitter_entity in emitter_entities.iter() {
             if let Ok(emitter) = emitter_parent_query.get(emitter_entity) {
                 if emitter.parent_system == removed_system {
@@ -251,7 +431,6 @@ pub fn cleanup_particle_entities(
             }
         }
 
-        // despawn all mesh entities that belong to emitters of this system
         for (mesh_entity, emitter_mesh) in mesh_entities.iter() {
             if let Ok(emitter) = emitter_parent_query.get(emitter_mesh.emitter_entity) {
                 if emitter.parent_system == removed_system {
@@ -261,7 +440,6 @@ pub fn cleanup_particle_entities(
         }
     }
 
-    // cleanup when emitter is removed
     for removed_emitter in removed_emitters.read() {
         for (mesh_entity, emitter_mesh) in mesh_entities.iter() {
             if emitter_mesh.emitter_entity == removed_emitter {
@@ -271,7 +449,6 @@ pub fn cleanup_particle_entities(
     }
 }
 
-/// sync particle mesh when asset configuration changes
 pub fn sync_particle_mesh(
     particle_systems: Query<&ParticleSystem3D>,
     mut emitter_query: Query<(
@@ -308,11 +485,9 @@ pub fn sync_particle_mesh(
         };
 
         if current_config.0 != new_mesh {
-            // regenerate particle mesh with updated configuration
             let new_mesh_handle =
                 create_particle_mesh(&new_mesh, buffer_handle.max_particles, &mut meshes);
 
-            // update the mesh entity for this emitter
             for (emitter_mesh, mut mesh3d) in mesh_entities.iter_mut() {
                 if emitter_mesh.emitter_entity == emitter_entity {
                     mesh3d.0 = new_mesh_handle.clone();

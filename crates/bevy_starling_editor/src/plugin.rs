@@ -2,8 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::{
     egui, input::egui_wants_any_pointer_input, EguiContexts, EguiPlugin, EguiPrimaryContextPass,
 };
-use bevy_starling::asset::ParticleSystemAsset;
-use bevy_starling::StarlingPlugin;
+use bevy_starling::prelude::*;
 
 use crate::state::{load_editor_data, load_project_from_path, project_path, save_editor_data, EditorData, EditorState, InspectorState};
 use crate::ui::modals::{

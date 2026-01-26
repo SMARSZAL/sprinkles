@@ -1,6 +1,48 @@
-use bevy::prelude::*;
+use bevy::{
+    asset::{io::Reader, AssetLoader, LoadContext},
+    prelude::*,
+};
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+// asset loader
+
+#[derive(Default, TypePath)]
+pub struct ParticleSystemAssetLoader;
+
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum ParticleSystemAssetLoaderError {
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Could not parse RON: {0}")]
+    Ron(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for ParticleSystemAssetLoader {
+    type Asset = ParticleSystemAsset;
+    type Settings = ();
+    type Error = ParticleSystemAssetLoaderError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &(),
+        _load_context: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let asset = ron::de::from_bytes::<ParticleSystemAsset>(&bytes)?;
+        Ok(asset)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["starling"]
+    }
+}
+
+// asset format
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -10,7 +52,7 @@ bitflags! {
 
         // TODO: requires implementing angular velocity
         // const ROTATE_Y = 1 << 1;
-        
+
         const DISABLE_Z = 1 << 2;
 
         // TODO: requires implementing damping
@@ -308,12 +350,9 @@ impl Default for ParticleProcessSpawn {
     }
 }
 
-/// A knot point on a spline curve.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Knot {
-    /// Position along the curve (0.0 to 1.0)
     pub position: f32,
-    /// Value at this position
     pub value: f32,
 }
 
@@ -323,18 +362,14 @@ impl Knot {
     }
 }
 
-/// Spline curve for animating particle properties over lifetime.
-/// Custom curves use knots, presets are converted to knots for texture baking.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum SplineCurve {
-    /// Custom curve defined by knot points
     Custom(Vec<Knot>),
 
-    /// Constant value (always 1.0)
     #[default]
     Constant,
 
-    // Increase curves (0 -> 1)
+    // increase curves (0 -> 1)
     LinearIn,
     SineIn,
     SineOut,
@@ -367,7 +402,7 @@ pub enum SplineCurve {
     BounceOut,
     BounceInOut,
 
-    // Decrease curves (1 -> 0)
+    // decrease curves (1 -> 0)
     LinearReverse,
     SineInReverse,
     SineOutReverse,
@@ -402,21 +437,18 @@ pub enum SplineCurve {
 }
 
 impl SplineCurve {
-    /// Returns a unique cache key for this curve.
-    /// For presets, uses the discriminant. For custom curves, hashes the knots.
     pub fn cache_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         match self {
             Self::Custom(knots) => {
-                0u8.hash(&mut hasher); // marker for custom
+                0u8.hash(&mut hasher);
                 for knot in knots {
                     knot.position.to_bits().hash(&mut hasher);
                     knot.value.to_bits().hash(&mut hasher);
                 }
             }
-            // for presets, use the discriminant
             _ => {
                 std::mem::discriminant(self).hash(&mut hasher);
             }
@@ -424,19 +456,15 @@ impl SplineCurve {
         hasher.finish()
     }
 
-    /// Returns true if this is a constant curve (no animation).
     pub fn is_constant(&self) -> bool {
         matches!(self, Self::Constant)
     }
 
-    /// Converts this curve to its knot representation for texture baking.
-    /// Presets generate knots by sampling the easing function.
     pub fn to_knots(&self) -> Vec<Knot> {
         match self {
             Self::Custom(knots) => knots.clone(),
             Self::Constant => vec![Knot::new(0.0, 1.0), Knot::new(1.0, 1.0)],
             _ => {
-                // for presets, sample the easing function to generate knots
                 const KNOT_COUNT: usize = 32;
                 let mut knots = Vec::with_capacity(KNOT_COUNT);
                 for i in 0..KNOT_COUNT {
@@ -449,30 +477,24 @@ impl SplineCurve {
         }
     }
 
-    /// Samples a preset curve at the given t value.
-    /// Only valid for preset variants, not Custom.
     fn sample_preset(&self, t: f32) -> f32 {
         use std::f32::consts::{FRAC_PI_2, PI};
 
         match self {
-            Self::Custom(_) => 1.0, // should not be called for Custom
+            Self::Custom(_) => 1.0,
             Self::Constant => 1.0,
 
-            // linear
             Self::LinearIn => t,
             Self::LinearReverse => 1.0 - t,
 
-            // sine increase
             Self::SineIn => 1.0 - (t * FRAC_PI_2).cos(),
             Self::SineOut => (t * FRAC_PI_2).sin(),
             Self::SineInOut => -(PI * t).cos() * 0.5 + 0.5,
 
-            // sine decrease
             Self::SineInReverse => 1.0 - (1.0 - (t * FRAC_PI_2).cos()),
             Self::SineOutReverse => 1.0 - (t * FRAC_PI_2).sin(),
             Self::SineInOutReverse => 1.0 - (-(PI * t).cos() * 0.5 + 0.5),
 
-            // quad increase
             Self::QuadIn => t * t,
             Self::QuadOut => -t * (t - 2.0),
             Self::QuadInOut => {
@@ -484,7 +506,6 @@ impl SplineCurve {
                 }
             }
 
-            // quad decrease
             Self::QuadInReverse => 1.0 - t * t,
             Self::QuadOutReverse => 1.0 - (-t * (t - 2.0)),
             Self::QuadInOutReverse => {
@@ -496,7 +517,6 @@ impl SplineCurve {
                 }
             }
 
-            // cubic increase
             Self::CubicIn => t * t * t,
             Self::CubicOut => {
                 let t1 = t - 1.0;
@@ -512,7 +532,6 @@ impl SplineCurve {
                 }
             }
 
-            // cubic decrease
             Self::CubicInReverse => 1.0 - t * t * t,
             Self::CubicOutReverse => {
                 let t1 = t - 1.0;
@@ -528,7 +547,6 @@ impl SplineCurve {
                 }
             }
 
-            // quart increase
             Self::QuartIn => t * t * t * t,
             Self::QuartOut => {
                 let t1 = t - 1.0;
@@ -544,7 +562,6 @@ impl SplineCurve {
                 }
             }
 
-            // quart decrease
             Self::QuartInReverse => 1.0 - t * t * t * t,
             Self::QuartOutReverse => {
                 let t1 = t - 1.0;
@@ -560,7 +577,6 @@ impl SplineCurve {
                 }
             }
 
-            // quint increase
             Self::QuintIn => t * t * t * t * t,
             Self::QuintOut => {
                 let t1 = t - 1.0;
@@ -576,7 +592,6 @@ impl SplineCurve {
                 }
             }
 
-            // quint decrease
             Self::QuintInReverse => 1.0 - t * t * t * t * t,
             Self::QuintOutReverse => {
                 let t1 = t - 1.0;
@@ -592,7 +607,6 @@ impl SplineCurve {
                 }
             }
 
-            // expo increase
             Self::ExpoIn => {
                 if t == 0.0 {
                     0.0
@@ -622,7 +636,6 @@ impl SplineCurve {
                 }
             }
 
-            // expo decrease
             Self::ExpoInReverse => {
                 1.0 - if t == 0.0 {
                     0.0
@@ -652,7 +665,6 @@ impl SplineCurve {
                 }
             }
 
-            // circ increase
             Self::CircIn => -(1.0 - t * t).sqrt() + 1.0,
             Self::CircOut => {
                 let t1 = t - 1.0;
@@ -668,7 +680,6 @@ impl SplineCurve {
                 }
             }
 
-            // circ decrease
             Self::CircInReverse => 1.0 - (-(1.0 - t * t).sqrt() + 1.0),
             Self::CircOutReverse => {
                 let t1 = t - 1.0;
@@ -684,7 +695,6 @@ impl SplineCurve {
                 }
             }
 
-            // back increase
             Self::BackIn => {
                 const S: f32 = 1.70158;
                 t * t * ((S + 1.0) * t - S)
@@ -705,7 +715,6 @@ impl SplineCurve {
                 }
             }
 
-            // back decrease
             Self::BackInReverse => {
                 const S: f32 = 1.70158;
                 1.0 - t * t * ((S + 1.0) * t - S)
@@ -726,7 +735,6 @@ impl SplineCurve {
                 }
             }
 
-            // elastic increase
             Self::ElasticIn => {
                 if t == 0.0 {
                     return 0.0;
@@ -772,7 +780,6 @@ impl SplineCurve {
                 }
             }
 
-            // elastic decrease
             Self::ElasticInReverse => {
                 if t == 0.0 {
                     return 1.0;
@@ -818,7 +825,6 @@ impl SplineCurve {
                 }
             }
 
-            // bounce increase
             Self::BounceIn => 1.0 - Self::bounce_out_value(1.0 - t),
             Self::BounceOut => Self::bounce_out_value(t),
             Self::BounceInOut => {
@@ -829,7 +835,6 @@ impl SplineCurve {
                 }
             }
 
-            // bounce decrease
             Self::BounceInReverse => Self::bounce_out_value(1.0 - t),
             Self::BounceOutReverse => 1.0 - Self::bounce_out_value(t),
             Self::BounceInOutReverse => {

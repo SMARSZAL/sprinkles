@@ -6,11 +6,7 @@ use bevy::color::palettes::tailwind;
 use bevy::core_pipeline::oit::OrderIndependentTransparencySettings;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
-use bevy_starling::{
-    asset::ParticleSystemAsset,
-    core::ParticleSystem3D,
-    runtime::{EmitterEntity, EmitterRuntime, ParticleSystemRuntime},
-};
+use bevy_starling::prelude::*;
 
 use crate::state::EditorState;
 

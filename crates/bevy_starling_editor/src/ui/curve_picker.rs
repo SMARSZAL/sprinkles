@@ -1,5 +1,5 @@
 use bevy_egui::egui;
-use bevy_starling::asset::SplineCurve;
+use bevy_starling::prelude::*;
 
 const MENU_WIDTH: f32 = 140.0;
 

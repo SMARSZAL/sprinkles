@@ -1,9 +1,12 @@
 pub mod asset;
-pub mod core;
-pub mod meshes;
-pub mod render;
+mod compute;
+mod extract;
+pub mod material;
+pub mod prelude;
 pub mod runtime;
-pub mod systems;
+mod sort;
+mod spawning;
+pub mod textures;
 
 use bevy::{
     asset::embedded_asset,
@@ -13,52 +16,41 @@ use bevy::{
 };
 
 use asset::{ParticleSystemAsset, ParticleSystemAssetLoader};
-use render::{
-    compute::ParticleComputePlugin,
-    curve_texture::{
-        create_fallback_curve_texture, prepare_curve_textures, CurveTextureCache,
-        FallbackCurveTexture,
-    },
-    extract::extract_particle_systems,
-    gradient_texture::{
-        create_fallback_gradient_texture, prepare_gradient_textures, FallbackGradientTexture,
-        GradientTextureCache,
-    },
-    sort::ParticleSortPlugin,
-};
-use systems::{
+use compute::ParticleComputePlugin;
+use extract::extract_particle_systems;
+use sort::ParticleSortPlugin;
+use spawning::{
     cleanup_particle_entities, clear_particle_clear_requests, setup_particle_systems,
     sync_particle_mesh, update_particle_time,
+};
+use textures::{
+    create_fallback_curve_texture, create_fallback_gradient_texture, prepare_curve_textures,
+    prepare_gradient_textures, CurveTextureCache, FallbackCurveTexture, FallbackGradientTexture,
+    GradientTextureCache,
 };
 
 pub struct StarlingPlugin;
 
 impl Plugin for StarlingPlugin {
     fn build(&self, app: &mut App) {
-        // embed shaders
         embedded_asset!(app, "shaders/particle_types.wgsl");
         embedded_asset!(app, "shaders/particle_simulate.wgsl");
         embedded_asset!(app, "shaders/particle_material.wgsl");
         embedded_asset!(app, "shaders/particle_sort.wgsl");
 
-        // asset loading
         app.init_asset::<ParticleSystemAsset>()
             .init_asset_loader::<ParticleSystemAssetLoader>();
 
-        // gradient texture caching
         app.init_resource::<GradientTextureCache>()
             .add_systems(Startup, create_fallback_gradient_texture)
             .add_systems(PostUpdate, prepare_gradient_textures);
 
-        // curve texture caching
         app.init_resource::<CurveTextureCache>()
             .add_systems(Startup, create_fallback_curve_texture)
             .add_systems(PostUpdate, prepare_curve_textures);
 
-        // register the extended material for particle rendering
         app.add_plugins(MaterialPlugin::<runtime::ParticleMaterial>::default());
 
-        // main world systems
         app.add_systems(
             Update,
             (
@@ -69,11 +61,8 @@ impl Plugin for StarlingPlugin {
             ),
         );
 
-        // clear the clear_requested flag at the start of each frame
-        // flags set in the previous frame will have been extracted by the render app
         app.add_systems(First, clear_particle_clear_requests);
 
-        // render plugins
         app.add_plugins((
             ParticleComputePlugin,
             ParticleSortPlugin,
@@ -81,21 +70,20 @@ impl Plugin for StarlingPlugin {
             ExtractResourcePlugin::<FallbackCurveTexture>::default(),
         ));
 
-        // extract systems
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_systems(ExtractSchedule, extract_particle_systems);
         }
     }
 }
 
-// re-exports for convenience
+// re-exports
 pub use asset::{
     DrawOrder, EmitterData, EmitterDrawPass, EmitterDrawing, EmitterTime, ParticleFlags,
     ParticleMesh, ParticleProcessConfig, ParticleSystemDimension,
 };
-pub use core::{ParticleData, ParticleSystem2D, ParticleSystem3D};
-pub use render::material::ParticleMaterialExtension;
+pub use material::ParticleMaterialExtension;
 pub use runtime::{
-    EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle, ParticleMaterial,
-    ParticleMaterialHandle, ParticleSystemRuntime,
+    EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle, ParticleData,
+    ParticleMaterial, ParticleMaterialHandle, ParticleSystem2D, ParticleSystem3D,
+    ParticleSystemRuntime,
 };

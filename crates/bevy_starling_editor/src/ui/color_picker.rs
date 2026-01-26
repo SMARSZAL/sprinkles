@@ -1,5 +1,5 @@
 use bevy_egui::egui::{self, Color32, CornerRadius, FontId, Pos2, Rect, Response, Sense, Stroke, Vec2};
-use bevy_starling::asset::{Gradient, GradientInterpolation, GradientStop};
+use bevy_starling::prelude::*;
 use egui_remixicon::icons;
 
 use super::styles::{colors, TEXT_BASE, TEXT_SM};
@@ -715,7 +715,7 @@ pub fn color_picker(ui: &mut egui::Ui, rgba: &mut [f32; 4], width: f32, panel_ri
 /// Handles all popup interactions internally.
 pub fn gradient_picker(
     ui: &mut egui::Ui,
-    gradient: &mut Gradient,
+    gradient: &mut ParticleGradient,
     width: f32,
     panel_right_edge: Option<f32>,
 ) -> Response {
@@ -910,7 +910,7 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
-fn sample_gradient_at(gradient: &Gradient, position: f32) -> [f32; 4] {
+fn sample_gradient_at(gradient: &ParticleGradient, position: f32) -> [f32; 4] {
     if gradient.stops.is_empty() {
         return [1.0, 1.0, 1.0, 1.0];
     }
@@ -950,7 +950,7 @@ fn sample_gradient_at(gradient: &Gradient, position: f32) -> [f32; 4] {
     }
 }
 
-fn draw_gradient_bar(ui: &mut egui::Ui, rect: Rect, gradient: &Gradient) {
+fn draw_gradient_bar(ui: &mut egui::Ui, rect: Rect, gradient: &ParticleGradient) {
     let corner_radius = CornerRadius::same(CORNER_RADIUS as u8);
     let bg = colors::PANEL_BG;
     let mask_r = CORNER_RADIUS + 1.0;
@@ -1113,7 +1113,7 @@ struct GradientPickerResult {
 
 fn gradient_picker_internal(
     ui: &mut egui::Ui,
-    gradient: &mut Gradient,
+    gradient: &mut ParticleGradient,
     width: f32,
     base_id: egui::Id,
 ) -> GradientPickerResult {
