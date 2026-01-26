@@ -19,9 +19,34 @@ pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
 pub const EMISSION_SHAPE_BOX: u32 = 3;
 pub const EMISSION_SHAPE_RING: u32 = 4;
 
-// particle flags (bitfield values matching ParticleFlags in asset.rs)
-pub const PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1 << 0;
-pub const PARTICLE_FLAG_DISABLE_Z: u32 = 1 << 2;
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct SplineCurveUniform {
+    pub enabled: u32,
+    pub min_value: f32,
+    pub max_value: f32,
+    pub _pad: u32,
+}
+
+impl SplineCurveUniform {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: 0,
+            min_value: 0.0,
+            max_value: 1.0,
+            _pad: 0,
+        }
+    }
+
+    pub fn enabled(min_value: f32, max_value: f32) -> Self {
+        Self {
+            enabled: 1,
+            min_value,
+            max_value,
+            _pad: 0,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
@@ -77,12 +102,17 @@ pub struct EmitterUniforms {
     pub scale_min: f32,
     pub scale_max: f32,
 
-    pub use_scale_curve: u32,
+    pub scale_curve: SplineCurveUniform,
+
     pub use_initial_color_gradient: u32,
-    pub use_alpha_curve: u32,
     pub turbulence_enabled: u32,
+    pub particle_flags: u32,
+    pub _pad7: u32,
 
     pub initial_color: [f32; 4],
+
+    pub alpha_curve: SplineCurveUniform,
+    pub emission_curve: SplineCurveUniform,
 
     pub turbulence_noise_strength: f32,
     pub turbulence_noise_scale: f32,
@@ -92,10 +122,7 @@ pub struct EmitterUniforms {
     pub turbulence_noise_speed: [f32; 3],
     pub turbulence_influence_max: f32,
 
-    pub use_turbulence_influence_curve: u32,
-    pub particle_flags: u32,
-    pub _pad9: u32,
-    pub _pad10: u32,
+    pub turbulence_influence_curve: SplineCurveUniform,
 }
 
 #[derive(Resource, Default)]
@@ -116,6 +143,7 @@ pub struct ExtractedEmitterData {
     pub gradient_texture_handle: Option<Handle<Image>>,
     pub curve_texture_handle: Option<Handle<Image>>,
     pub alpha_curve_texture_handle: Option<Handle<Image>>,
+    pub emission_curve_texture_handle: Option<Handle<Image>>,
     pub turbulence_influence_curve_texture_handle: Option<Handle<Image>>,
 }
 
@@ -257,26 +285,40 @@ pub fn extract_particle_systems(
             scale_min: display.scale.range.min,
             scale_max: display.scale.range.max,
 
-            use_scale_curve: match &display.scale.curve {
-                Some(c) if !c.is_constant() => 1,
-                _ => 0,
+            scale_curve: match &display.scale.curve {
+                Some(c) if !c.is_constant() => {
+                    SplineCurveUniform::enabled(c.min_value, c.max_value)
+                }
+                _ => SplineCurveUniform::disabled(),
             },
+
             use_initial_color_gradient: match &display.color_curves.initial_color {
                 SolidOrGradientColor::Solid { .. } => 0,
                 SolidOrGradientColor::Gradient { .. } => 1,
-            },
-            use_alpha_curve: match &display.color_curves.alpha_curve {
-                Some(c) if !c.is_constant() => 1,
-                _ => 0,
             },
             turbulence_enabled: match &emitter.process.turbulence {
                 Some(t) if t.enabled => 1,
                 _ => 0,
             },
+            particle_flags: emitter.process.particle_flags.bits(),
+            _pad7: 0,
 
             initial_color: match &display.color_curves.initial_color {
                 SolidOrGradientColor::Solid { color } => *color,
                 SolidOrGradientColor::Gradient { .. } => [1.0, 1.0, 1.0, 1.0],
+            },
+
+            alpha_curve: match &display.color_curves.alpha_curve {
+                Some(c) if !c.is_constant() => {
+                    SplineCurveUniform::enabled(c.min_value, c.max_value)
+                }
+                _ => SplineCurveUniform::disabled(),
+            },
+            emission_curve: match &display.color_curves.emission_curve {
+                Some(c) if !c.is_constant() => {
+                    SplineCurveUniform::enabled(c.min_value, c.max_value)
+                }
+                _ => SplineCurveUniform::disabled(),
             },
 
             turbulence_noise_strength: emitter
@@ -317,16 +359,15 @@ pub fn extract_particle_systems(
                 .map(|t| t.influence.max)
                 .unwrap_or(0.1),
 
-            use_turbulence_influence_curve: match &emitter.process.turbulence {
+            turbulence_influence_curve: match &emitter.process.turbulence {
                 Some(t) => match &t.influence_curve {
-                    Some(c) if !c.is_constant() => 1,
-                    _ => 0,
+                    Some(c) if !c.is_constant() => {
+                        SplineCurveUniform::enabled(c.min_value, c.max_value)
+                    }
+                    _ => SplineCurveUniform::disabled(),
                 },
-                None => 0,
+                None => SplineCurveUniform::disabled(),
             },
-            particle_flags: emitter.process.particle_flags.bits(),
-            _pad9: 0,
-            _pad10: 0,
         };
 
         let gradient_texture_handle = match &display.color_curves.initial_color {
@@ -339,14 +380,21 @@ pub fn extract_particle_systems(
             .curve
             .as_ref()
             .filter(|c| !c.is_constant())
-            .and_then(|c| curve_cache.get(c));
+            .and_then(|c| curve_cache.get(&c.curve));
 
         let alpha_curve_texture_handle = display
             .color_curves
             .alpha_curve
             .as_ref()
             .filter(|c| !c.is_constant())
-            .and_then(|c| curve_cache.get(c));
+            .and_then(|c| curve_cache.get(&c.curve));
+
+        let emission_curve_texture_handle = display
+            .color_curves
+            .emission_curve
+            .as_ref()
+            .filter(|c| !c.is_constant())
+            .and_then(|c| curve_cache.get(&c.curve));
 
         let turbulence_influence_curve_texture_handle = emitter
             .process
@@ -354,7 +402,7 @@ pub fn extract_particle_systems(
             .as_ref()
             .and_then(|t| t.influence_curve.as_ref())
             .filter(|c| !c.is_constant())
-            .and_then(|c| curve_cache.get(c));
+            .and_then(|c| curve_cache.get(&c.curve));
 
         extracted.emitters.push((
             entity,
@@ -371,6 +419,7 @@ pub fn extract_particle_systems(
                 gradient_texture_handle,
                 curve_texture_handle,
                 alpha_curve_texture_handle,
+                emission_curve_texture_handle,
                 turbulence_influence_curve_texture_handle,
             },
         ));

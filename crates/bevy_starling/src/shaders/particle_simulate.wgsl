@@ -7,6 +7,13 @@ struct Particle {
     custom: vec4<f32>,    // age, phase, seed, flags
 }
 
+struct SplineCurve {
+    enabled: u32,
+    min_value: f32,
+    max_value: f32,
+    _pad: u32,
+}
+
 struct EmitterParams {
     delta_time: f32,
     system_phase: f32,
@@ -59,12 +66,17 @@ struct EmitterParams {
     scale_min: f32,
     scale_max: f32,
 
-    use_scale_curve: u32,
+    scale_curve: SplineCurve,
+
     use_initial_color_gradient: u32,
-    use_alpha_curve: u32,
     turbulence_enabled: u32,
+    particle_flags: u32,
+    _pad7: u32,
 
     initial_color: vec4<f32>,
+
+    alpha_curve: SplineCurve,
+    emission_curve: SplineCurve,
 
     // turbulence
     turbulence_noise_strength: f32,
@@ -75,10 +87,7 @@ struct EmitterParams {
     turbulence_noise_speed: vec3<f32>,
     turbulence_influence_max: f32,
 
-    use_turbulence_influence_curve: u32,
-    particle_flags: u32,
-    _pad9: u32,
-    _pad10: u32,
+    turbulence_influence_curve: SplineCurve,
 }
 
 // particle flags (emitter-level flags that affect all particles)
@@ -104,8 +113,10 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 @group(0) @binding(5) var curve_sampler: sampler;
 @group(0) @binding(6) var alpha_curve_texture: texture_2d<f32>;
 @group(0) @binding(7) var alpha_curve_sampler: sampler;
-@group(0) @binding(8) var turbulence_influence_curve_texture: texture_2d<f32>;
-@group(0) @binding(9) var turbulence_influence_curve_sampler: sampler;
+@group(0) @binding(8) var emission_curve_texture: texture_2d<f32>;
+@group(0) @binding(9) var emission_curve_sampler: sampler;
+@group(0) @binding(10) var turbulence_influence_curve_texture: texture_2d<f32>;
+@group(0) @binding(11) var turbulence_influence_curve_sampler: sampler;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -422,21 +433,41 @@ fn get_turbulence_influence(seed: u32) -> f32 {
     return mix(params.turbulence_influence_min, params.turbulence_influence_max, t);
 }
 
+fn sample_spline_curve(
+    tex: texture_2d<f32>,
+    samp: sampler,
+    curve: SplineCurve,
+    t: f32
+) -> f32 {
+    let raw = textureSampleLevel(tex, samp, vec2(t, 0.5), 0.0).r;
+    return mix(curve.min_value, curve.max_value, raw);
+}
+
 fn get_turbulence_influence_at_lifetime(base_influence: f32, age: f32, lifetime: f32) -> f32 {
-    if (params.use_turbulence_influence_curve == 0u) {
+    if (params.turbulence_influence_curve.enabled == 0u) {
         return base_influence;
     }
     let t = clamp(age / lifetime, 0.0, 1.0);
-    let curve_value = textureSampleLevel(turbulence_influence_curve_texture, turbulence_influence_curve_sampler, vec2(t, 0.5), 0.0).r;
+    let curve_value = sample_spline_curve(
+        turbulence_influence_curve_texture,
+        turbulence_influence_curve_sampler,
+        params.turbulence_influence_curve,
+        t
+    );
     return base_influence * curve_value;
 }
 
 fn get_scale_at_lifetime(initial_scale: f32, age: f32, lifetime: f32) -> f32 {
-    if (params.use_scale_curve == 0u) {
+    if (params.scale_curve.enabled == 0u) {
         return initial_scale;
     }
     let t = clamp(age / lifetime, 0.0, 1.0);
-    let curve_value = textureSampleLevel(curve_texture, curve_sampler, vec2(t, 0.5), 0.0).r;
+    let curve_value = sample_spline_curve(
+        curve_texture,
+        curve_sampler,
+        params.scale_curve,
+        t
+    );
     return initial_scale * curve_value;
 }
 
@@ -449,13 +480,41 @@ fn get_initial_alpha(seed: u32) -> f32 {
     }
 }
 
+fn get_initial_color_rgb(seed: u32) -> vec3<f32> {
+    if (params.use_initial_color_gradient == 0u) {
+        return params.initial_color.rgb;
+    } else {
+        let t = hash_to_float(seed + 30u);
+        return textureSampleLevel(gradient_texture, gradient_sampler, vec2(t, 0.5), 0.0).rgb;
+    }
+}
+
 fn get_alpha_at_lifetime(initial_alpha: f32, age: f32, lifetime: f32) -> f32 {
-    if (params.use_alpha_curve == 0u) {
+    if (params.alpha_curve.enabled == 0u) {
         return initial_alpha;
     }
     let t = clamp(age / lifetime, 0.0, 1.0);
-    let curve_value = textureSampleLevel(alpha_curve_texture, alpha_curve_sampler, vec2(t, 0.5), 0.0).r;
+    let curve_value = sample_spline_curve(
+        alpha_curve_texture,
+        alpha_curve_sampler,
+        params.alpha_curve,
+        t
+    );
     return initial_alpha * curve_value;
+}
+
+fn get_emission_at_lifetime(age: f32, lifetime: f32) -> f32 {
+    if (params.emission_curve.enabled == 0u) {
+        return 1.0;
+    }
+    let t = clamp(age / lifetime, 0.0, 1.0);
+    let curve_value = sample_spline_curve(
+        emission_curve_texture,
+        emission_curve_sampler,
+        params.emission_curve,
+        t
+    );
+    return 1.0 + curve_value;
 }
 
 fn spawn_particle(idx: u32) -> Particle {
@@ -484,6 +543,10 @@ fn spawn_particle(idx: u32) -> Particle {
     // apply alpha curve at spawn (t=0)
     let initial_alpha = p.color.a;
     p.color.a = get_alpha_at_lifetime(initial_alpha, 0.0, 1.0);
+
+    // apply emission curve at spawn (t=0)
+    let emission = get_emission_at_lifetime(0.0, 1.0);
+    p.color = vec4(p.color.rgb * emission, p.color.a);
 
     // spawn_index tracks total spawns across all cycles for depth ordering
     // only set when draw_order is Index, otherwise use 0
@@ -557,6 +620,11 @@ fn update_particle(p_in: Particle) -> Particle {
     // update alpha based on lifetime progress
     let initial_alpha = get_initial_alpha(seed);
     p.color.a = get_alpha_at_lifetime(initial_alpha, age, lifetime);
+
+    // update color based on emission curve
+    let initial_rgb = get_initial_color_rgb(seed);
+    let emission = get_emission_at_lifetime(age, lifetime);
+    p.color = vec4(initial_rgb * emission, p.color.a);
 
     return p;
 }

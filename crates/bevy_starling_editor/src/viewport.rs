@@ -3,7 +3,8 @@ use std::ops::Range;
 
 use bevy::camera::SubCameraView;
 use bevy::color::palettes::tailwind;
-use bevy::core_pipeline::oit::OrderIndependentTransparencySettings;
+use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::post_process::bloom::Bloom;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
 use bevy_starling::prelude::*;
@@ -54,6 +55,8 @@ pub fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
             specular_map: asset_server.load("pisa_specular_rgb9e5_zstd.ktx2"),
             ..default()
         },
+        // Tonemapping::TonyMcMapface,
+        Bloom::NATURAL,
     ));
 
     commands.spawn((

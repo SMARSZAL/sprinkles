@@ -184,132 +184,142 @@ impl EasingMode {
     }
 }
 
-pub fn spline_curve_label(curve: &Option<SplineCurve>) -> &'static str {
-    match curve {
+pub fn spline_curve_config_label(config: &Option<SplineCurveConfig>) -> &'static str {
+    match config {
         None => "Constant",
-        Some(c) => match c {
-            SplineCurve::Constant => "Constant",
+        Some(c) => spline_curve_label(&c.curve),
+    }
+}
 
-            // increase - linear
-            SplineCurve::LinearIn => "Linear (Increase)",
-            SplineCurve::LinearReverse => "Linear (Decrease)",
+pub fn spline_curve_label(curve: &SplineCurve) -> &'static str {
+    match curve {
+        SplineCurve::Constant => "Constant",
 
-            // increase - sine
-            SplineCurve::SineIn => "Sine In (Increase)",
-            SplineCurve::SineOut => "Sine Out (Increase)",
-            SplineCurve::SineInOut => "Sine In-Out (Increase)",
+        // increase - linear
+        SplineCurve::LinearIn => "Linear (Increase)",
+        SplineCurve::LinearReverse => "Linear (Decrease)",
 
-            // increase - quad
-            SplineCurve::QuadIn => "Quad In (Increase)",
-            SplineCurve::QuadOut => "Quad Out (Increase)",
-            SplineCurve::QuadInOut => "Quad In-Out (Increase)",
+        // increase - sine
+        SplineCurve::SineIn => "Sine In (Increase)",
+        SplineCurve::SineOut => "Sine Out (Increase)",
+        SplineCurve::SineInOut => "Sine In-Out (Increase)",
 
-            // increase - cubic
-            SplineCurve::CubicIn => "Cubic In (Increase)",
-            SplineCurve::CubicOut => "Cubic Out (Increase)",
-            SplineCurve::CubicInOut => "Cubic In-Out (Increase)",
+        // increase - quad
+        SplineCurve::QuadIn => "Quad In (Increase)",
+        SplineCurve::QuadOut => "Quad Out (Increase)",
+        SplineCurve::QuadInOut => "Quad In-Out (Increase)",
 
-            // increase - quart
-            SplineCurve::QuartIn => "Quart In (Increase)",
-            SplineCurve::QuartOut => "Quart Out (Increase)",
-            SplineCurve::QuartInOut => "Quart In-Out (Increase)",
+        // increase - cubic
+        SplineCurve::CubicIn => "Cubic In (Increase)",
+        SplineCurve::CubicOut => "Cubic Out (Increase)",
+        SplineCurve::CubicInOut => "Cubic In-Out (Increase)",
 
-            // increase - quint
-            SplineCurve::QuintIn => "Quint In (Increase)",
-            SplineCurve::QuintOut => "Quint Out (Increase)",
-            SplineCurve::QuintInOut => "Quint In-Out (Increase)",
+        // increase - quart
+        SplineCurve::QuartIn => "Quart In (Increase)",
+        SplineCurve::QuartOut => "Quart Out (Increase)",
+        SplineCurve::QuartInOut => "Quart In-Out (Increase)",
 
-            // increase - expo
-            SplineCurve::ExpoIn => "Expo In (Increase)",
-            SplineCurve::ExpoOut => "Expo Out (Increase)",
-            SplineCurve::ExpoInOut => "Expo In-Out (Increase)",
+        // increase - quint
+        SplineCurve::QuintIn => "Quint In (Increase)",
+        SplineCurve::QuintOut => "Quint Out (Increase)",
+        SplineCurve::QuintInOut => "Quint In-Out (Increase)",
 
-            // increase - circ
-            SplineCurve::CircIn => "Circ In (Increase)",
-            SplineCurve::CircOut => "Circ Out (Increase)",
-            SplineCurve::CircInOut => "Circ In-Out (Increase)",
+        // increase - expo
+        SplineCurve::ExpoIn => "Expo In (Increase)",
+        SplineCurve::ExpoOut => "Expo Out (Increase)",
+        SplineCurve::ExpoInOut => "Expo In-Out (Increase)",
 
-            // increase - back
-            SplineCurve::BackIn => "Back In (Increase)",
-            SplineCurve::BackOut => "Back Out (Increase)",
-            SplineCurve::BackInOut => "Back In-Out (Increase)",
+        // increase - circ
+        SplineCurve::CircIn => "Circ In (Increase)",
+        SplineCurve::CircOut => "Circ Out (Increase)",
+        SplineCurve::CircInOut => "Circ In-Out (Increase)",
 
-            // increase - elastic
-            SplineCurve::ElasticIn => "Elastic In (Increase)",
-            SplineCurve::ElasticOut => "Elastic Out (Increase)",
-            SplineCurve::ElasticInOut => "Elastic In-Out (Increase)",
+        // increase - back
+        SplineCurve::BackIn => "Back In (Increase)",
+        SplineCurve::BackOut => "Back Out (Increase)",
+        SplineCurve::BackInOut => "Back In-Out (Increase)",
 
-            // increase - bounce
-            SplineCurve::BounceIn => "Bounce In (Increase)",
-            SplineCurve::BounceOut => "Bounce Out (Increase)",
-            SplineCurve::BounceInOut => "Bounce In-Out (Increase)",
+        // increase - elastic
+        SplineCurve::ElasticIn => "Elastic In (Increase)",
+        SplineCurve::ElasticOut => "Elastic Out (Increase)",
+        SplineCurve::ElasticInOut => "Elastic In-Out (Increase)",
 
-            // decrease - sine
-            SplineCurve::SineInReverse => "Sine In (Decrease)",
-            SplineCurve::SineOutReverse => "Sine Out (Decrease)",
-            SplineCurve::SineInOutReverse => "Sine In-Out (Decrease)",
+        // increase - bounce
+        SplineCurve::BounceIn => "Bounce In (Increase)",
+        SplineCurve::BounceOut => "Bounce Out (Increase)",
+        SplineCurve::BounceInOut => "Bounce In-Out (Increase)",
 
-            // decrease - quad
-            SplineCurve::QuadInReverse => "Quad In (Decrease)",
-            SplineCurve::QuadOutReverse => "Quad Out (Decrease)",
-            SplineCurve::QuadInOutReverse => "Quad In-Out (Decrease)",
+        // decrease - sine
+        SplineCurve::SineInReverse => "Sine In (Decrease)",
+        SplineCurve::SineOutReverse => "Sine Out (Decrease)",
+        SplineCurve::SineInOutReverse => "Sine In-Out (Decrease)",
 
-            // decrease - cubic
-            SplineCurve::CubicInReverse => "Cubic In (Decrease)",
-            SplineCurve::CubicOutReverse => "Cubic Out (Decrease)",
-            SplineCurve::CubicInOutReverse => "Cubic In-Out (Decrease)",
+        // decrease - quad
+        SplineCurve::QuadInReverse => "Quad In (Decrease)",
+        SplineCurve::QuadOutReverse => "Quad Out (Decrease)",
+        SplineCurve::QuadInOutReverse => "Quad In-Out (Decrease)",
 
-            // decrease - quart
-            SplineCurve::QuartInReverse => "Quart In (Decrease)",
-            SplineCurve::QuartOutReverse => "Quart Out (Decrease)",
-            SplineCurve::QuartInOutReverse => "Quart In-Out (Decrease)",
+        // decrease - cubic
+        SplineCurve::CubicInReverse => "Cubic In (Decrease)",
+        SplineCurve::CubicOutReverse => "Cubic Out (Decrease)",
+        SplineCurve::CubicInOutReverse => "Cubic In-Out (Decrease)",
 
-            // decrease - quint
-            SplineCurve::QuintInReverse => "Quint In (Decrease)",
-            SplineCurve::QuintOutReverse => "Quint Out (Decrease)",
-            SplineCurve::QuintInOutReverse => "Quint In-Out (Decrease)",
+        // decrease - quart
+        SplineCurve::QuartInReverse => "Quart In (Decrease)",
+        SplineCurve::QuartOutReverse => "Quart Out (Decrease)",
+        SplineCurve::QuartInOutReverse => "Quart In-Out (Decrease)",
 
-            // decrease - expo
-            SplineCurve::ExpoInReverse => "Expo In (Decrease)",
-            SplineCurve::ExpoOutReverse => "Expo Out (Decrease)",
-            SplineCurve::ExpoInOutReverse => "Expo In-Out (Decrease)",
+        // decrease - quint
+        SplineCurve::QuintInReverse => "Quint In (Decrease)",
+        SplineCurve::QuintOutReverse => "Quint Out (Decrease)",
+        SplineCurve::QuintInOutReverse => "Quint In-Out (Decrease)",
 
-            // decrease - circ
-            SplineCurve::CircInReverse => "Circ In (Decrease)",
-            SplineCurve::CircOutReverse => "Circ Out (Decrease)",
-            SplineCurve::CircInOutReverse => "Circ In-Out (Decrease)",
+        // decrease - expo
+        SplineCurve::ExpoInReverse => "Expo In (Decrease)",
+        SplineCurve::ExpoOutReverse => "Expo Out (Decrease)",
+        SplineCurve::ExpoInOutReverse => "Expo In-Out (Decrease)",
 
-            // decrease - back
-            SplineCurve::BackInReverse => "Back In (Decrease)",
-            SplineCurve::BackOutReverse => "Back Out (Decrease)",
-            SplineCurve::BackInOutReverse => "Back In-Out (Decrease)",
+        // decrease - circ
+        SplineCurve::CircInReverse => "Circ In (Decrease)",
+        SplineCurve::CircOutReverse => "Circ Out (Decrease)",
+        SplineCurve::CircInOutReverse => "Circ In-Out (Decrease)",
 
-            // decrease - elastic
-            SplineCurve::ElasticInReverse => "Elastic In (Decrease)",
-            SplineCurve::ElasticOutReverse => "Elastic Out (Decrease)",
-            SplineCurve::ElasticInOutReverse => "Elastic In-Out (Decrease)",
+        // decrease - back
+        SplineCurve::BackInReverse => "Back In (Decrease)",
+        SplineCurve::BackOutReverse => "Back Out (Decrease)",
+        SplineCurve::BackInOutReverse => "Back In-Out (Decrease)",
 
-            // decrease - bounce
-            SplineCurve::BounceInReverse => "Bounce In (Decrease)",
-            SplineCurve::BounceOutReverse => "Bounce Out (Decrease)",
-            SplineCurve::BounceInOutReverse => "Bounce In-Out (Decrease)",
+        // decrease - elastic
+        SplineCurve::ElasticInReverse => "Elastic In (Decrease)",
+        SplineCurve::ElasticOutReverse => "Elastic Out (Decrease)",
+        SplineCurve::ElasticInOutReverse => "Elastic In-Out (Decrease)",
 
-            // custom (not shown in editor picker)
-            SplineCurve::Custom(_) => "Custom",
-        },
+        // decrease - bounce
+        SplineCurve::BounceInReverse => "Bounce In (Decrease)",
+        SplineCurve::BounceOutReverse => "Bounce Out (Decrease)",
+        SplineCurve::BounceInOutReverse => "Bounce In-Out (Decrease)",
+
+        // custom (not shown in editor picker)
+        SplineCurve::Custom(_) => "Custom",
     }
 }
 
 /// Shows a ComboBox with nested submenus for selecting spline curve presets.
 /// Returns true if the value changed.
-pub fn spline_curve_picker(
+pub fn spline_curve_config_picker(
     ui: &mut egui::Ui,
     id: &str,
-    value: &mut Option<SplineCurve>,
+    value: &mut Option<SplineCurveConfig>,
     width: f32,
 ) -> bool {
     let mut changed = false;
-    let current_text = spline_curve_label(value);
+    let current_text = spline_curve_config_label(value);
+
+    // preserve min/max when changing curves
+    let (current_min, current_max) = value
+        .as_ref()
+        .map(|c| (c.min_value, c.max_value))
+        .unwrap_or((0.0, 1.0));
 
     egui::ComboBox::from_id_salt(id)
         .selected_text(current_text)
@@ -321,12 +331,12 @@ pub fn spline_curve_picker(
             // constant option
             if ui
                 .selectable_label(
-                    matches!(value, None | Some(SplineCurve::Constant)),
+                    matches!(value, None) || matches!(value, Some(c) if c.curve == SplineCurve::Constant),
                     "Constant",
                 )
                 .clicked()
             {
-                *value = Some(SplineCurve::Constant);
+                *value = None;
                 changed = true;
             }
 
@@ -337,10 +347,17 @@ pub fn spline_curve_picker(
 
                 // linear option
                 if ui
-                    .selectable_label(matches!(value, Some(SplineCurve::LinearIn)), "Linear")
+                    .selectable_label(
+                        matches!(value, Some(c) if c.curve == SplineCurve::LinearIn),
+                        "Linear",
+                    )
                     .clicked()
                 {
-                    *value = Some(SplineCurve::LinearIn);
+                    *value = Some(SplineCurveConfig {
+                        curve: SplineCurve::LinearIn,
+                        min_value: current_min,
+                        max_value: current_max,
+                    });
                     changed = true;
                     ui.close();
                 }
@@ -350,16 +367,19 @@ pub fn spline_curve_picker(
                         ui.set_min_width(MENU_WIDTH);
                         remove_button_borders(ui);
                         for easing_type in EasingType::all() {
-                            let curve =
-                                easing_type.to_curve(EasingDirection::Increase, *mode);
+                            let curve = easing_type.to_curve(EasingDirection::Increase, *mode);
                             if ui
                                 .selectable_label(
-                                    matches!(value, Some(c) if *c == curve),
+                                    matches!(value, Some(c) if c.curve == curve),
                                     easing_type.label(),
                                 )
                                 .clicked()
                             {
-                                *value = Some(curve);
+                                *value = Some(SplineCurveConfig {
+                                    curve,
+                                    min_value: current_min,
+                                    max_value: current_max,
+                                });
                                 changed = true;
                                 ui.close();
                             }
@@ -375,10 +395,17 @@ pub fn spline_curve_picker(
 
                 // linear option
                 if ui
-                    .selectable_label(matches!(value, Some(SplineCurve::LinearReverse)), "Linear")
+                    .selectable_label(
+                        matches!(value, Some(c) if c.curve == SplineCurve::LinearReverse),
+                        "Linear",
+                    )
                     .clicked()
                 {
-                    *value = Some(SplineCurve::LinearReverse);
+                    *value = Some(SplineCurveConfig {
+                        curve: SplineCurve::LinearReverse,
+                        min_value: current_min,
+                        max_value: current_max,
+                    });
                     changed = true;
                     ui.close();
                 }
@@ -388,16 +415,19 @@ pub fn spline_curve_picker(
                         ui.set_min_width(MENU_WIDTH);
                         remove_button_borders(ui);
                         for easing_type in EasingType::all() {
-                            let curve =
-                                easing_type.to_curve(EasingDirection::Decrease, *mode);
+                            let curve = easing_type.to_curve(EasingDirection::Decrease, *mode);
                             if ui
                                 .selectable_label(
-                                    matches!(value, Some(c) if *c == curve),
+                                    matches!(value, Some(c) if c.curve == curve),
                                     easing_type.label(),
                                 )
                                 .clicked()
                             {
-                                *value = Some(curve);
+                                *value = Some(SplineCurveConfig {
+                                    curve,
+                                    min_value: current_min,
+                                    max_value: current_max,
+                                });
                                 changed = true;
                                 ui.close();
                             }

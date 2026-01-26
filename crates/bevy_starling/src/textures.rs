@@ -250,14 +250,26 @@ pub fn prepare_curve_textures(
             continue;
         };
         for emitter in &asset.emitters {
-            if let Some(curve) = &emitter.process.display.scale.curve {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
+            if let Some(config) = &emitter.process.display.scale.curve {
+                if !config.is_constant() {
+                    cache.get_or_create(&config.curve, &mut images);
                 }
             }
-            if let Some(curve) = &emitter.process.display.color_curves.alpha_curve {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
+            if let Some(config) = &emitter.process.display.color_curves.alpha_curve {
+                if !config.is_constant() {
+                    cache.get_or_create(&config.curve, &mut images);
+                }
+            }
+            if let Some(config) = &emitter.process.display.color_curves.emission_curve {
+                if !config.is_constant() {
+                    cache.get_or_create(&config.curve, &mut images);
+                }
+            }
+            if let Some(turb) = &emitter.process.turbulence {
+                if let Some(config) = &turb.influence_curve {
+                    if !config.is_constant() {
+                        cache.get_or_create(&config.curve, &mut images);
+                    }
                 }
             }
         }

@@ -7,6 +7,13 @@ struct Particle {
     custom: vec4<f32>,    // age, spawn_index, seed, flags
 }
 
+struct SplineCurve {
+    enabled: u32,
+    min_value: f32,
+    max_value: f32,
+    _pad: u32,
+}
+
 struct EmitterParams {
     delta_time: f32,
     system_phase: f32,
@@ -59,12 +66,17 @@ struct EmitterParams {
     scale_min: f32,
     scale_max: f32,
 
-    use_scale_curve: u32,
+    scale_curve: SplineCurve,
+
     use_initial_color_gradient: u32,
-    use_alpha_curve: u32,
     turbulence_enabled: u32,
+    particle_flags: u32,
+    _pad7: u32,
 
     initial_color: vec4<f32>,
+
+    alpha_curve: SplineCurve,
+    emission_curve: SplineCurve,
 
     // turbulence
     turbulence_noise_strength: f32,
@@ -75,10 +87,7 @@ struct EmitterParams {
     turbulence_noise_speed: vec3<f32>,
     turbulence_influence_max: f32,
 
-    use_turbulence_influence_curve: u32,
-    particle_flags: u32,
-    _pad9: u32,
-    _pad10: u32,
+    turbulence_influence_curve: SplineCurve,
 }
 
 // per-particle flags (stored in particle.custom.w)

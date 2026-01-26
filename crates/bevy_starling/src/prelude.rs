@@ -15,7 +15,7 @@ pub use crate::asset::{
     ParticleProcessDisplayScale, ParticleProcessSpawnAccelerations, ParticleProcessSpawnPosition,
     ParticleProcessSpawnVelocity, ParticleProcessTurbulence, ParticleSystemAsset,
     ParticleSystemDimension, QuadOrientation, Range as ParticleRange, SerializableAlphaMode,
-    SolidOrGradientColor, SplineCurve, StandardParticleMaterial,
+    SolidOrGradientColor, SplineCurve, SplineCurveConfig, StandardParticleMaterial,
 };
 
 // runtime types

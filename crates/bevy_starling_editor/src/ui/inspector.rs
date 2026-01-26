@@ -6,7 +6,7 @@ use inflector::Inflector;
 
 use crate::state::{EditorState, InspectorState};
 use crate::ui::color_picker::{color_picker, color_picker_with_id, gradient_picker};
-use crate::ui::curve_picker::spline_curve_picker;
+use crate::ui::curve_picker::spline_curve_config_picker;
 use crate::ui::modals::ConfirmDeleteModal;
 use crate::ui::styles::{
     colors, icon_button, styled_checkbox, styled_f32_input, styled_labeled_f32_input,
@@ -1232,7 +1232,7 @@ fn inspect_spawn_accelerations(
 fn inspect_spline_curve(
     ui: &mut egui::Ui,
     label: &str,
-    value: &mut Option<SplineCurve>,
+    value: &mut Option<SplineCurveConfig>,
     indent_level: u8,
 ) -> bool {
     let mut changed = false;
@@ -1260,7 +1260,7 @@ fn inspect_spline_curve(
 
                 // the spline curve picker uses its own combobox with submenus,
                 // so we pass the reduced width to it
-                if spline_curve_picker(ui, label, value, combobox_width) {
+                if spline_curve_config_picker(ui, label, value, combobox_width) {
                     changed = true;
                 }
 
@@ -1270,6 +1270,20 @@ fn inspect_spline_curve(
 
             ui.end_row();
         });
+
+    // show min/max fields when a curve is selected
+    if let Some(config) = value {
+        let inner_indent = indent_level + 1;
+        ui.spacing_mut().indent = INDENT_WIDTH;
+        ui.indent(format!("{}_range", label), |ui| {
+            let mut values = [config.min_value, config.max_value];
+            if inspect_vector_fields(ui, "Range", &mut values, &["min", "max"], inner_indent) {
+                config.min_value = values[0];
+                config.max_value = values[1];
+                changed = true;
+            }
+        });
+    }
 
     changed
 }
@@ -1439,6 +1453,12 @@ fn inspect_display_color(
             ui,
             &field_label("alpha over lifetime"),
             &mut color_curves.alpha_curve,
+            indent,
+        );
+        changed |= inspect_spline_curve(
+            ui,
+            &field_label("emission over lifetime"),
+            &mut color_curves.emission_curve,
             indent,
         );
     });

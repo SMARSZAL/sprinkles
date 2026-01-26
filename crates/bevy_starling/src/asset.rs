@@ -733,7 +733,50 @@ impl SplineCurve {
     pub fn is_constant(&self) -> bool {
         matches!(self, Self::Constant)
     }
+}
 
+fn default_curve_min() -> f32 {
+    0.0
+}
+
+fn default_curve_max() -> f32 {
+    1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplineCurveConfig {
+    pub curve: SplineCurve,
+    #[serde(default = "default_curve_min")]
+    pub min_value: f32,
+    #[serde(default = "default_curve_max")]
+    pub max_value: f32,
+}
+
+impl Default for SplineCurveConfig {
+    fn default() -> Self {
+        Self {
+            curve: SplineCurve::default(),
+            min_value: 0.0,
+            max_value: 1.0,
+        }
+    }
+}
+
+impl SplineCurveConfig {
+    pub fn is_constant(&self) -> bool {
+        self.curve.is_constant()
+    }
+
+    pub fn cache_key(&self) -> u64 {
+        self.curve.cache_key()
+    }
+
+    pub fn to_knots(&self) -> Vec<Knot> {
+        self.curve.to_knots()
+    }
+}
+
+impl SplineCurve {
     pub fn to_knots(&self) -> Vec<Knot> {
         match self {
             Self::Custom(knots) => knots.clone(),
@@ -1234,7 +1277,7 @@ pub struct ParticleProcessDisplayScale {
     #[serde(default = "default_scale_range")]
     pub range: Range,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub curve: Option<SplineCurve>,
+    pub curve: Option<SplineCurveConfig>,
 }
 
 fn default_scale_range() -> Range {
@@ -1255,7 +1298,9 @@ pub struct ParticleProcessDisplayColor {
     #[serde(default)]
     pub initial_color: SolidOrGradientColor,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub alpha_curve: Option<SplineCurve>,
+    pub alpha_curve: Option<SplineCurveConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emission_curve: Option<SplineCurveConfig>,
 }
 
 impl Default for ParticleProcessDisplayColor {
@@ -1263,6 +1308,7 @@ impl Default for ParticleProcessDisplayColor {
         Self {
             initial_color: SolidOrGradientColor::default(),
             alpha_curve: None,
+            emission_curve: None,
         }
     }
 }
@@ -1308,7 +1354,7 @@ pub struct ParticleProcessTurbulence {
     pub influence: Range,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub influence_curve: Option<SplineCurve>,
+    pub influence_curve: Option<SplineCurveConfig>,
 }
 
 impl Default for ParticleProcessTurbulence {

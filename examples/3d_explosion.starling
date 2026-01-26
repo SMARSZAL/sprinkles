@@ -69,7 +69,11 @@
                             min: 0.2,
                             max: 0.3,
                         ),
-                        curve: Some(LinearReverse),
+                        curve: Some((
+                            curve: LinearReverse,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                     color_curves: (
                         initial_color: Gradient(
@@ -87,7 +91,11 @@
                                 interpolation: Linear,
                             ),
                         ),
-                        alpha_curve: Some(SineOutReverse),
+                        alpha_curve: Some((
+                            curve: SineOutReverse,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                 ),
                 turbulence: Some((
@@ -100,7 +108,11 @@
                         min: 0.01,
                         max: 0.04,
                     ),
-                    influence_curve: Some(SineInOut),
+                    influence_curve: Some((
+                        curve: SineInOut,
+                        min_value: 0.0,
+                        max_value: 1.0,
+                    )),
                 )),
             ),
         ),
@@ -171,14 +183,18 @@
                             min: 0.2,
                             max: 0.4,
                         ),
-                        curve: Some(SineInOutReverse),
+                        curve: Some((
+                            curve: SineInOutReverse,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                     color_curves: (
                         initial_color: Gradient(
                             gradient: (
                                 stops: [
                                     (
-                                        color: (0.8627451, 0.14901961, 0.14901961, 1.0),
+                                        color: (0.9607843, 0.61960787, 0.043137256, 1.0),
                                         position: 0.0,
                                     ),
                                     (
@@ -189,6 +205,11 @@
                                 interpolation: Linear,
                             ),
                         ),
+                        emission_curve: Some((
+                            curve: SineOutReverse,
+                            min_value: 0.0,
+                            max_value: 10.0,
+                        )),
                     ),
                 ),
                 turbulence: Some((
@@ -277,14 +298,18 @@
                             min: 0.2,
                             max: 0.4,
                         ),
-                        curve: Some(SineInOutReverse),
+                        curve: Some((
+                            curve: SineInOutReverse,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                     color_curves: (
                         initial_color: Gradient(
                             gradient: (
                                 stops: [
                                     (
-                                        color: (0.8627451, 0.14901961, 0.14901961, 1.0),
+                                        color: (0.9607843, 0.61960787, 0.043137256, 1.0),
                                         position: 0.0,
                                     ),
                                     (
@@ -295,6 +320,11 @@
                                 interpolation: Linear,
                             ),
                         ),
+                        emission_curve: Some((
+                            curve: SineOutReverse,
+                            min_value: 0.0,
+                            max_value: 10.0,
+                        )),
                     ),
                 ),
                 turbulence: Some((
@@ -376,13 +406,21 @@
                             min: 6.0,
                             max: 6.0,
                         ),
-                        curve: Some(SineOut),
+                        curve: Some((
+                            curve: SineOut,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                     color_curves: (
                         initial_color: Solid(
                             color: (1.0, 1.0, 1.0, 1.0),
                         ),
-                        alpha_curve: Some(SineOutReverse),
+                        alpha_curve: Some((
+                            curve: SineOutReverse,
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
                     ),
                 ),
             ),
