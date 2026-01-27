@@ -583,5 +583,131 @@
                 ),
             ),
         ),
+        (
+            name: "Debris",
+            enabled: true,
+            position: (0.0, 0.0, 0.0),
+            amount: 16,
+            time: (
+                lifetime: 3.0,
+                lifetime_randomness: 0.3,
+                delay: 0.3,
+                one_shot: true,
+                explosiveness: 0.95,
+                randomness: 0.0,
+                fixed_fps: 30,
+                seed: 0,
+                use_fixed_seed: false,
+            ),
+            drawing: (
+                draw_order: Index,
+            ),
+            draw_passes: [
+                (
+                    mesh: Prism(
+                        left_to_right: 0.5,
+                        size: (1.0, 1.0, 1.0),
+                        subdivide_width: 0,
+                        subdivide_height: 0,
+                        subdivide_depth: 0,
+                    ),
+                    material: Standard((
+                        base_color: (1.0, 1.0, 1.0, 1.0),
+                        emissive: (0.0, 0.0, 0.0, 1.0),
+                        perceptual_roughness: 0.5,
+                        metallic: 0.0,
+                        alpha_mode: Opaque,
+                        double_sided: false,
+                        unlit: false,
+                        fog_enabled: true,
+                        reflectance: 0.5,
+                    )),
+                    shadow_caster: true,
+                ),
+            ],
+            process: (
+                particle_flags: "ALIGN_Y_TO_VELOCITY",
+                spawn: (
+                    position: (
+                        emission_shape: Sphere(
+                            radius: 0.2,
+                        ),
+                        emission_shape_offset: (0.0, 0.0, 0.0),
+                        emission_shape_scale: (1.0, 1.0, 1.0),
+                    ),
+                    velocity: (
+                        inherit_velocity_ratio: 0.0,
+                        velocity_pivot: (0.0, 0.0, 0.0),
+                        direction: (1.0, 0.0, 0.0),
+                        spread: 180.0,
+                        flatness: 0.0,
+                        initial_velocity: (
+                            min: 0.0,
+                            max: 5.0,
+                        ),
+                    ),
+                ),
+                animated_velocity: (
+                    radial_velocity: (
+                        value: (
+                            min: 0.0,
+                            max: 0.0,
+                        ),
+                    ),
+                ),
+                accelerations: (
+                    gravity: (0.0, -9.8, 0.0),
+                ),
+                display: (
+                    scale: (
+                        range: (
+                            min: 0.04,
+                            max: 0.1,
+                        ),
+                        curve: Some((
+                            curve: Custom([
+                                (position: 0.0, value: 1.0),
+                                (position: 0.8, value: 1.0),
+                                (position: 0.825, value: 0.962),
+                                (position: 0.85, value: 0.854),
+                                (position: 0.875, value: 0.691),
+                                (position: 0.9, value: 0.5),
+                                (position: 0.925, value: 0.309),
+                                (position: 0.95, value: 0.146),
+                                (position: 0.975, value: 0.038),
+                                (position: 1.0, value: 0.0),
+                            ]),
+                            min_value: 0.0,
+                            max_value: 1.0,
+                        )),
+                    ),
+                    color_curves: (
+                        initial_color: Gradient(
+                            gradient: (
+                                stops: [
+                                    (
+                                        color: (0.15294118, 0.15294118, 0.16470589, 1.0),
+                                        position: 0.0,
+                                    ),
+                                    (
+                                        color: (0.03529412, 0.03529412, 0.043137256, 1.0),
+                                        position: 1.0,
+                                    ),
+                                ],
+                                interpolation: Linear,
+                            ),
+                        ),
+                    ),
+                ),
+                collision: Some((
+                    mode: Rigid(
+                        friction: 0.1,
+                        bounce: 0.15,
+                    ),
+                    base_size: 0.01,
+                    use_scale: true,
+                )),
+            ),
+        ),
     ],
 )

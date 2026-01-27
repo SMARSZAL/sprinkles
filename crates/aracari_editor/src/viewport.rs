@@ -105,6 +105,18 @@ pub fn setup_floor(
         Transform::from_xyz(0.0, -2.0, 0.0),
         Visibility::default(),
     ));
+
+    // particle collision box
+    commands.spawn((
+        ParticlesCollider3D {
+            shape: ParticlesColliderShape3D::Box {
+                size: Vec3::new(10.0, 0.1, 10.0),
+            },
+            position: Vec3::ZERO,
+        },
+        Transform::from_xyz(0.0, -2.01, 0.0),
+        Name::new("Particle Collider"),
+    ));
 }
 
 pub fn configure_floor_texture(

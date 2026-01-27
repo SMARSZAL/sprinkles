@@ -4,7 +4,7 @@ use bevy::render::render_resource::{Buffer, ShaderType};
 use bevy::render::storage::ShaderStorageBuffer;
 use bytemuck::{Pod, Zeroable};
 
-use crate::asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset};
+use crate::asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset, ParticlesColliderShape3D};
 use crate::material::ParticleMaterialExtension;
 
 #[derive(Component)]
@@ -20,10 +20,11 @@ pub struct ParticleSystem3D {
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
 pub struct ParticleData {
-    pub position: [f32; 4], // xyz + scale
-    pub velocity: [f32; 4], // xyz + lifetime_remaining
-    pub color: [f32; 4],    // rgba
-    pub custom: [f32; 4],   // age, phase, seed, flags
+    pub position: [f32; 4],      // xyz + scale
+    pub velocity: [f32; 4],      // xyz + lifetime_remaining
+    pub color: [f32; 4],         // rgba
+    pub custom: [f32; 4],        // age, phase, seed, flags
+    pub alignment_dir: [f32; 4], // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
 }
 
 impl ParticleData {
@@ -223,3 +224,19 @@ pub type ParticleMaterial = ExtendedMaterial<StandardMaterial, ParticleMaterialE
 /// stores the shared material handle for all particle entities in a system
 #[derive(Component)]
 pub struct ParticleMaterialHandle(pub Handle<ParticleMaterial>);
+
+/// collider component for particle collision detection
+#[derive(Component, Debug, Clone)]
+pub struct ParticlesCollider3D {
+    pub shape: ParticlesColliderShape3D,
+    pub position: Vec3,
+}
+
+impl Default for ParticlesCollider3D {
+    fn default() -> Self {
+        Self {
+            shape: ParticlesColliderShape3D::default(),
+            position: Vec3::ZERO,
+        }
+    }
+}

@@ -4,7 +4,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::{
-            binding_types::{sampler, storage_buffer, texture_2d, uniform_buffer},
+            binding_types::{sampler, storage_buffer, storage_buffer_read_only, texture_2d, uniform_buffer},
             BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
             BufferUsages, CachedComputePipelineId, CachedPipelineState, ComputePassDescriptor,
             ComputePipelineDescriptor, PipelineCache, SamplerBindingType, SamplerDescriptor,
@@ -18,9 +18,17 @@ use bevy::{
 };
 use std::borrow::Cow;
 
-use crate::extract::{EmitterUniforms, ExtractedParticleSystem};
+use bevy::render::render_resource::ShaderType;
+
+use crate::extract::{ColliderUniform, EmitterUniforms, ExtractedColliders, ExtractedParticleSystem, MAX_COLLIDERS};
 use crate::runtime::ParticleData;
 use crate::textures::{FallbackCurveTexture, FallbackGradientTexture};
+
+#[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable, ShaderType)]
+#[repr(C)]
+pub struct ColliderArray {
+    pub colliders: [ColliderUniform; MAX_COLLIDERS],
+}
 
 const SHADER_ASSET_PATH: &str = "embedded://aracari/shaders/particle_simulate.wgsl";
 const WORKGROUP_SIZE: u32 = 64;
@@ -59,6 +67,8 @@ pub fn init_particle_compute_pipeline(
                 sampler(SamplerBindingType::Filtering),
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
+                // colliders storage buffer (read-only)
+                storage_buffer_read_only::<ColliderArray>(false),
             ),
         ),
     );
@@ -116,6 +126,7 @@ pub fn prepare_particle_compute_bind_groups(
     render_device: Res<RenderDevice>,
     _render_queue: Res<RenderQueue>,
     extracted_systems: Res<ExtractedParticleSystem>,
+    extracted_colliders: Option<Res<ExtractedColliders>>,
     gpu_storage_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
     gpu_images: Res<RenderAssets<GpuImage>>,
     fallback_gradient_texture: Option<Res<FallbackGradientTexture>>,
@@ -132,6 +143,28 @@ pub fn prepare_particle_compute_bind_groups(
     let fallback_curve_gpu_image = fallback_curve_texture
         .as_ref()
         .and_then(|ft| gpu_images.get(&ft.handle));
+
+    // prepare colliders array
+    let mut collider_array = ColliderArray::default();
+    let collider_count = if let Some(ref colliders) = extracted_colliders {
+        for (i, collider) in colliders.colliders.iter().enumerate() {
+            if i >= MAX_COLLIDERS {
+                break;
+            }
+            collider_array.colliders[i] = *collider;
+        }
+        colliders.colliders.len().min(MAX_COLLIDERS) as u32
+    } else {
+        0
+    };
+
+    let colliders_buffer = render_device.create_buffer_with_data(
+        &bevy::render::render_resource::BufferInitDescriptor {
+            label: Some("colliders_buffer"),
+            contents: bytemuck::bytes_of(&collider_array),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        },
+    );
 
     for (entity, emitter_data) in &extracted_systems.emitters {
         let Some(gpu_buffer) = gpu_storage_buffers.get(&emitter_data.particle_buffer_handle) else {
@@ -198,10 +231,14 @@ pub fn prepare_particle_compute_bind_groups(
             continue;
         };
 
+        // update collider_count in uniforms
+        let mut uniforms = emitter_data.uniforms;
+        uniforms.collider_count = collider_count;
+
         let uniform_buffer = render_device.create_buffer_with_data(
             &bevy::render::render_resource::BufferInitDescriptor {
                 label: Some("emitter_uniform_buffer"),
-                contents: bytemuck::bytes_of(&emitter_data.uniforms),
+                contents: bytemuck::bytes_of(&uniforms),
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             },
         );
@@ -224,6 +261,7 @@ pub fn prepare_particle_compute_bind_groups(
                 &curve_sampler.0,
                 &radial_velocity_curve_image.texture_view,
                 &curve_sampler.0,
+                colliders_buffer.as_entire_binding(),
             )),
         );
 

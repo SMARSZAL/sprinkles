@@ -1,9 +1,10 @@
 // particle data structure matching ParticleData in Rust
 struct Particle {
-    position: vec4<f32>,  // xyz + scale
-    velocity: vec4<f32>,  // xyz + lifetime_remaining
-    color: vec4<f32>,     // rgba
-    custom: vec4<f32>,    // age, spawn_index, seed, flags
+    position: vec4<f32>,       // xyz + scale
+    velocity: vec4<f32>,       // xyz + lifetime_remaining
+    color: vec4<f32>,          // rgba
+    custom: vec4<f32>,         // age, spawn_index, seed, flags
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
 }
 
 
@@ -46,17 +47,25 @@ const STANDARD_MATERIAL_FLAGS_UNLIT_BIT: u32 = 1u << 5u;
 @group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> particle_flags: u32;
 
 // helper function to compute a rotation matrix that aligns Y axis to a direction
+// based on godot's TRANSFORM_ALIGN_Y_TO_VELOCITY implementation
 fn align_y_to_direction(dir: vec3<f32>) -> mat3x3<f32> {
     let y_axis = normalize(dir);
 
-    // find a perpendicular axis for X
-    var up = vec3(0.0, 1.0, 0.0);
-    // if Y is nearly parallel to world up, use a different reference
-    if abs(dot(y_axis, up)) > 0.999 {
-        up = vec3(0.0, 0.0, 1.0);
+    // use world Z as reference (like godot does)
+    var z_ref = vec3(0.0, 0.0, 1.0);
+
+    // compute X axis from Y cross Z
+    var x_axis = cross(y_axis, z_ref);
+    let x_len = length(x_axis);
+
+    // if Y is nearly parallel to Z, use world X as reference instead
+    if x_len < 0.001 {
+        x_axis = normalize(cross(y_axis, vec3(1.0, 0.0, 0.0)));
+    } else {
+        x_axis = x_axis / x_len;
     }
 
-    let x_axis = normalize(cross(y_axis, up));
+    // compute Z axis from X cross Y to ensure orthonormal basis
     let z_axis = cross(x_axis, y_axis);
 
     return mat3x3<f32>(x_axis, y_axis, z_axis);
@@ -79,19 +88,19 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let particle_position = particle.position.xyz;
     let particle_scale = select(0.0, particle.position.w, is_active);
 
-    // get velocity for ALIGN_Y_TO_VELOCITY
-    let velocity = particle.velocity.xyz;
-
     // compute particle rotation based on flags
     var rotated_position = vertex.position;
 #ifdef VERTEX_NORMALS
     var rotated_normal = vertex.normal;
 #endif
 
+    // use alignment_dir for ALIGN_Y_TO_VELOCITY (like godot)
+    // alignment_dir is updated only when velocity > 0, preserving direction when stopped
     if (particle_flags & EMITTER_FLAG_ALIGN_Y_TO_VELOCITY) != 0u {
-        let vel_length = length(velocity);
-        if vel_length > 0.0001 {
-            let rotation_matrix = align_y_to_direction(velocity);
+        let alignment_dir = particle.alignment_dir.xyz;
+        let dir_length = length(alignment_dir);
+        if dir_length > 0.0 {
+            let rotation_matrix = align_y_to_direction(alignment_dir);
             rotated_position = rotation_matrix * vertex.position;
 #ifdef VERTEX_NORMALS
             rotated_normal = rotation_matrix * vertex.normal;

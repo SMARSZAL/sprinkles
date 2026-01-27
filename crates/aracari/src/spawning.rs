@@ -217,6 +217,207 @@ fn create_cylinder_mesh(
     mesh
 }
 
+fn create_prism_mesh(
+    left_to_right: f32,
+    size: Vec3,
+    subdivide_width: u32,
+    subdivide_height: u32,
+    subdivide_depth: u32,
+) -> Mesh {
+    // a prism/wedge shape: wide at bottom, narrows to a single edge at top
+    // 5 faces: front, back, left (slanted), right (slanted), bottom (no top - it's an edge)
+
+    let start_pos = size * -0.5;
+    let subdivide_w = subdivide_width as usize;
+    let subdivide_h = subdivide_height as usize;
+    let subdivide_d = subdivide_depth as usize;
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut uvs: Vec<[f32; 2]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    // front and back faces
+    // these are trapezoidal faces that narrow from full width at bottom to a line at top
+    {
+        let mut y = start_pos.y;
+        let mut thisrow: u32 = 0;
+        let mut prevrow: u32 = 0;
+
+        for j in 0..=(subdivide_h + 1) {
+            // scale goes from 0 (top edge) to 1 (bottom full width)
+            let scale = j as f32 / (subdivide_h + 1) as f32;
+            let scaled_size_x = size.x * scale;
+            let start_x = start_pos.x + (1.0 - scale) * size.x * left_to_right;
+
+            let v = j as f32 / (2.0 * (subdivide_h + 1) as f32);
+
+            let mut x = 0.0_f32;
+            for i in 0..=(subdivide_w + 1) {
+                let u = (i as f32 / (subdivide_w + 1) as f32) * scale;
+
+                // front face (z = +half)
+                positions.push([start_x + x, -y, -start_pos.z]);
+                normals.push([0.0, 0.0, 1.0]);
+                uvs.push([u, v]);
+
+                // back face (z = -half)
+                positions.push([start_x + scaled_size_x - x, -y, start_pos.z]);
+                normals.push([0.0, 0.0, -1.0]);
+                uvs.push([u, v]);
+
+                // indices - first row is special (triangles to apex)
+                if i > 0 && j == 1 {
+                    let i2 = (i * 2) as u32;
+
+                    // front triangle (reverse winding)
+                    indices.extend_from_slice(&[thisrow + i2 - 2, thisrow + i2, prevrow + i2]);
+                    // back triangle (reverse winding)
+                    indices.extend_from_slice(&[thisrow + i2 - 1, thisrow + i2 + 1, prevrow + i2 + 1]);
+                } else if i > 0 && j > 0 {
+                    let i2 = (i * 2) as u32;
+
+                    // front quad (two triangles, reverse winding)
+                    indices.extend_from_slice(&[
+                        thisrow + i2 - 2,
+                        prevrow + i2,
+                        prevrow + i2 - 2,
+                        thisrow + i2 - 2,
+                        thisrow + i2,
+                        prevrow + i2,
+                    ]);
+                    // back quad (two triangles, reverse winding)
+                    indices.extend_from_slice(&[
+                        thisrow + i2 - 1,
+                        prevrow + i2 + 1,
+                        prevrow + i2 - 1,
+                        thisrow + i2 - 1,
+                        thisrow + i2 + 1,
+                        prevrow + i2 + 1,
+                    ]);
+                }
+
+                x += scale * size.x / (subdivide_w + 1) as f32;
+            }
+
+            y += size.y / (subdivide_h + 1) as f32;
+            prevrow = thisrow;
+            thisrow = positions.len() as u32;
+        }
+    }
+
+    // left and right faces (slanted sides)
+    {
+        // normals for slanted faces
+        let normal_left = Vec3::new(-size.y, size.x * left_to_right, 0.0).normalize();
+        let normal_right = Vec3::new(size.y, size.x * (1.0 - left_to_right), 0.0).normalize();
+
+        let mut y = start_pos.y;
+        let mut thisrow = positions.len() as u32;
+        let mut prevrow: u32 = 0;
+
+        for j in 0..=(subdivide_h + 1) {
+            let scale = j as f32 / (subdivide_h + 1) as f32;
+            let left = start_pos.x + (size.x * (1.0 - scale) * left_to_right);
+            let right = left + (size.x * scale);
+
+            let v = j as f32 / (2.0 * (subdivide_h + 1) as f32);
+
+            let mut z = start_pos.z;
+            for i in 0..=(subdivide_d + 1) {
+                let u = i as f32 / (subdivide_d + 1) as f32;
+
+                // right face
+                positions.push([right, -y, -z]);
+                normals.push(normal_right.to_array());
+                uvs.push([u, v]);
+
+                // left face
+                positions.push([left, -y, z]);
+                normals.push(normal_left.to_array());
+                uvs.push([u, v]);
+
+                if i > 0 && j > 0 {
+                    let i2 = (i * 2) as u32;
+
+                    // right quad (reverse winding)
+                    indices.extend_from_slice(&[
+                        thisrow + i2 - 2,
+                        prevrow + i2,
+                        prevrow + i2 - 2,
+                        thisrow + i2 - 2,
+                        thisrow + i2,
+                        prevrow + i2,
+                    ]);
+                    // left quad (reverse winding)
+                    indices.extend_from_slice(&[
+                        thisrow + i2 - 1,
+                        prevrow + i2 + 1,
+                        prevrow + i2 - 1,
+                        thisrow + i2 - 1,
+                        thisrow + i2 + 1,
+                        prevrow + i2 + 1,
+                    ]);
+                }
+
+                z += size.z / (subdivide_d + 1) as f32;
+            }
+
+            y += size.y / (subdivide_h + 1) as f32;
+            prevrow = thisrow;
+            thisrow = positions.len() as u32;
+        }
+    }
+
+    // bottom face (rectangular, at y = -half)
+    {
+        let mut z = start_pos.z;
+        let mut thisrow = positions.len() as u32;
+        let mut prevrow: u32 = 0;
+
+        for j in 0..=(subdivide_d + 1) {
+            let v = j as f32 / (2.0 * (subdivide_d + 1) as f32);
+
+            let mut x = start_pos.x;
+            for i in 0..=(subdivide_w + 1) {
+                let u = i as f32 / (subdivide_w + 1) as f32;
+
+                positions.push([x, start_pos.y, -z]);
+                normals.push([0.0, -1.0, 0.0]);
+                uvs.push([u, v]);
+
+                if i > 0 && j > 0 {
+                    let curr = thisrow + i as u32;
+                    let prev_curr = prevrow + i as u32;
+
+                    // reverse winding for bottom face
+                    indices.extend_from_slice(&[
+                        curr - 1,
+                        prev_curr,
+                        prev_curr - 1,
+                        curr - 1,
+                        curr,
+                        prev_curr,
+                    ]);
+                }
+
+                x += size.x / (subdivide_w + 1) as f32;
+            }
+
+            z += size.z / (subdivide_d + 1) as f32;
+            prevrow = thisrow;
+            thisrow = positions.len() as u32;
+        }
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
 fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     match config {
         ParticleMesh::Quad { orientation } => {
@@ -269,6 +470,19 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
             *rings,
             *cap_top,
             *cap_bottom,
+        ),
+        ParticleMesh::Prism {
+            left_to_right,
+            size,
+            subdivide_width,
+            subdivide_height,
+            subdivide_depth,
+        } => create_prism_mesh(
+            *left_to_right,
+            *size,
+            *subdivide_width,
+            *subdivide_height,
+            *subdivide_depth,
         ),
     }
 }

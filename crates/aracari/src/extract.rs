@@ -5,9 +5,13 @@ use bevy::{
 use bytemuck::{Pod, Zeroable};
 
 use crate::{
-    asset::{DrawOrder, EmissionShape, ParticleSystemAsset, SolidOrGradientColor},
+    asset::{
+        DrawOrder, EmissionShape, ParticleProcessCollisionMode, ParticleSystemAsset,
+        ParticlesColliderShape3D, SolidOrGradientColor,
+    },
     runtime::{
-        EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D, ParticleSystemRuntime,
+        EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D,
+        ParticleSystemRuntime, ParticlesCollider3D,
     },
     textures::{CurveTextureCache, GradientTextureCache},
 };
@@ -18,6 +22,15 @@ pub const EMISSION_SHAPE_SPHERE: u32 = 1;
 pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
 pub const EMISSION_SHAPE_BOX: u32 = 3;
 pub const EMISSION_SHAPE_RING: u32 = 4;
+
+// collision constants
+pub const COLLIDER_TYPE_SPHERE: u32 = 0;
+pub const COLLIDER_TYPE_BOX: u32 = 1;
+pub const MAX_COLLIDERS: usize = 32;
+
+pub const COLLISION_MODE_DISABLED: u32 = 0;
+pub const COLLISION_MODE_RIGID: u32 = 1;
+pub const COLLISION_MODE_HIDE_ON_CONTACT: u32 = 2;
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
@@ -46,6 +59,15 @@ impl SplineCurveUniform {
             _pad: 0,
         }
     }
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct ColliderUniform {
+    pub transform: [f32; 16],
+    pub inverse_transform: [f32; 16],
+    pub extents: [f32; 3],
+    pub collider_type: u32,
 }
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
@@ -130,6 +152,22 @@ pub struct EmitterUniforms {
     pub _pad9: f32,
 
     pub radial_velocity_curve: SplineCurveUniform,
+
+    // collision
+    pub collision_mode: u32,
+    pub collision_base_size: f32,
+    pub collision_use_scale: u32,
+    pub collision_friction: f32,
+
+    pub collision_bounce: f32,
+    pub collider_count: u32,
+    pub _collision_pad0: f32,
+    pub _collision_pad1: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct ExtractedColliders {
+    pub colliders: Vec<ColliderUniform>,
 }
 
 #[derive(Resource, Default)]
@@ -388,6 +426,43 @@ pub fn extract_particle_systems(
                 }
                 _ => SplineCurveUniform::disabled(),
             },
+
+            collision_mode: match &emitter.process.collision {
+                Some(c) => match &c.mode {
+                    ParticleProcessCollisionMode::Rigid { .. } => COLLISION_MODE_RIGID,
+                    ParticleProcessCollisionMode::HideOnContact => COLLISION_MODE_HIDE_ON_CONTACT,
+                },
+                None => COLLISION_MODE_DISABLED,
+            },
+            collision_base_size: emitter
+                .process
+                .collision
+                .as_ref()
+                .map(|c| c.base_size)
+                .unwrap_or(0.01),
+            collision_use_scale: emitter
+                .process
+                .collision
+                .as_ref()
+                .map(|c| c.use_scale as u32)
+                .unwrap_or(0),
+            collision_friction: match &emitter.process.collision {
+                Some(c) => match &c.mode {
+                    ParticleProcessCollisionMode::Rigid { friction, .. } => *friction,
+                    ParticleProcessCollisionMode::HideOnContact => 0.0,
+                },
+                None => 0.0,
+            },
+            collision_bounce: match &emitter.process.collision {
+                Some(c) => match &c.mode {
+                    ParticleProcessCollisionMode::Rigid { bounce, .. } => *bounce,
+                    ParticleProcessCollisionMode::HideOnContact => 0.0,
+                },
+                None => 0.0,
+            },
+            collider_count: 0, // will be set from ExtractedColliders
+            _collision_pad0: 0.0,
+            _collision_pad1: 0.0,
         };
 
         let gradient_texture_handle = match &display.color_curves.initial_color {
@@ -456,4 +531,39 @@ pub fn extract_particle_systems(
     }
 
     commands.insert_resource(extracted);
+}
+
+pub fn extract_colliders(
+    mut commands: Commands,
+    colliders_query: Extract<Query<(&GlobalTransform, &ParticlesCollider3D)>>,
+) {
+    let mut colliders = Vec::new();
+
+    for (global_transform, collider) in colliders_query.iter() {
+        let transform = global_transform.to_matrix();
+        let offset_transform = transform * Mat4::from_translation(collider.position);
+        let inverse = offset_transform.inverse();
+
+        let (extents, collider_type) = match &collider.shape {
+            ParticlesColliderShape3D::Sphere { radius } => {
+                ([*radius, 0.0, 0.0], COLLIDER_TYPE_SPHERE)
+            }
+            ParticlesColliderShape3D::Box { size } => {
+                ((*size * 0.5).to_array(), COLLIDER_TYPE_BOX)
+            }
+        };
+
+        colliders.push(ColliderUniform {
+            transform: offset_transform.to_cols_array(),
+            inverse_transform: inverse.to_cols_array(),
+            extents,
+            collider_type,
+        });
+
+        if colliders.len() >= MAX_COLLIDERS {
+            break;
+        }
+    }
+
+    commands.insert_resource(ExtractedColliders { colliders });
 }

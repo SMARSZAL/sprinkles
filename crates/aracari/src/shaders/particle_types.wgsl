@@ -1,10 +1,11 @@
 #define_import_path aracari::particle_types
 
 struct Particle {
-    position: vec4<f32>,  // xyz, scale
-    velocity: vec4<f32>,  // xyz, lifetime
+    position: vec4<f32>,       // xyz, scale
+    velocity: vec4<f32>,       // xyz, lifetime
     color: vec4<f32>,
-    custom: vec4<f32>,    // age, spawn_index, seed, flags
+    custom: vec4<f32>,         // age, spawn_index, seed, flags
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
 }
 
 struct SplineCurve {

@@ -1,10 +1,11 @@
 // particle types are inlined here since shader imports from embedded assets can be tricky
 
 struct Particle {
-    position: vec4<f32>,  // xyz, scale
-    velocity: vec4<f32>,  // xyz, lifetime
+    position: vec4<f32>,       // xyz, scale
+    velocity: vec4<f32>,       // xyz, lifetime
     color: vec4<f32>,
-    custom: vec4<f32>,    // age, phase, seed, flags
+    custom: vec4<f32>,         // age, phase, seed, flags
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
 }
 
 struct SplineCurve {
@@ -95,6 +96,28 @@ struct EmitterParams {
     _pad9: f32,
 
     radial_velocity_curve: SplineCurve,
+
+    // collision
+    collision_mode: u32,
+    collision_base_size: f32,
+    collision_use_scale: u32,
+    collision_friction: f32,
+
+    collision_bounce: f32,
+    collider_count: u32,
+    _collision_pad0: f32,
+    _collision_pad1: f32,
+}
+
+struct Collider {
+    transform: mat4x4<f32>,
+    inverse_transform: mat4x4<f32>,
+    extents: vec3<f32>,
+    collider_type: u32,
+}
+
+struct ColliderArray {
+    colliders: array<Collider, 32>,
 }
 
 // particle flags (emitter-level flags that affect all particles)
@@ -112,6 +135,14 @@ const PI: f32 = 3.14159265359;
 
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 
+// collision constants
+const COLLIDER_TYPE_SPHERE: u32 = 0u;
+const COLLIDER_TYPE_BOX: u32 = 1u;
+const COLLISION_MODE_DISABLED: u32 = 0u;
+const COLLISION_MODE_RIGID: u32 = 1u;
+const COLLISION_MODE_HIDE_ON_CONTACT: u32 = 2u;
+const COLLISION_EPSILON: f32 = 0.001;
+
 @group(0) @binding(0) var<uniform> params: EmitterParams;
 @group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(2) var gradient_texture: texture_2d<f32>;
@@ -126,6 +157,7 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 @group(0) @binding(11) var turbulence_influence_curve_sampler: sampler;
 @group(0) @binding(12) var radial_velocity_curve_texture: texture_2d<f32>;
 @group(0) @binding(13) var radial_velocity_curve_sampler: sampler;
+@group(0) @binding(14) var<storage, read> colliders: ColliderArray;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -606,6 +638,160 @@ fn get_radial_displacement(
     return radial_displacement;
 }
 
+// collision detection
+
+struct CollisionResult {
+    collided: bool,
+    normal: vec3<f32>,
+    depth: f32,
+}
+
+fn get_particle_collision_size(scale: f32) -> f32 {
+    var size = params.collision_base_size;
+    if (params.collision_use_scale != 0u) {
+        size *= scale;
+    }
+    return size * 0.5; // convert diameter to radius
+}
+
+fn check_sphere_collision(
+    particle_pos: vec3<f32>,
+    particle_radius: f32,
+    collider: Collider,
+) -> CollisionResult {
+    var result: CollisionResult;
+    result.collided = false;
+    result.normal = vec3(0.0);
+    result.depth = 0.0;
+
+    // transform particle to collider local space
+    let local_pos = (collider.inverse_transform * vec4(particle_pos, 1.0)).xyz;
+    let collider_radius = collider.extents.x;
+
+    let dist = length(local_pos);
+    let penetration = dist - (particle_radius + collider_radius);
+
+    if (penetration <= COLLISION_EPSILON) {
+        result.collided = true;
+        result.depth = -penetration;
+
+        // normal in world space
+        if (dist > COLLISION_EPSILON) {
+            let local_normal = normalize(local_pos);
+            result.normal = normalize((collider.transform * vec4(local_normal, 0.0)).xyz);
+        } else {
+            result.normal = vec3(0.0, 1.0, 0.0);
+        }
+    }
+
+    return result;
+}
+
+fn check_box_collision(
+    particle_pos: vec3<f32>,
+    particle_radius: f32,
+    collider: Collider,
+) -> CollisionResult {
+    var result: CollisionResult;
+    result.collided = false;
+    result.normal = vec3(0.0);
+    result.depth = 0.0;
+
+    // transform particle to collider local space
+    let local_pos = (collider.inverse_transform * vec4(particle_pos, 1.0)).xyz;
+    let extents = collider.extents;
+
+    let abs_pos = abs(local_pos);
+    let sgn_pos = sign(local_pos);
+
+    // check if outside box
+    if (any(abs_pos > extents)) {
+        // find closest point on box surface
+        let closest = min(abs_pos, extents);
+        let rel = abs_pos - closest;
+        let dist = length(rel);
+        let penetration = dist - particle_radius;
+
+        if (penetration <= COLLISION_EPSILON) {
+            result.collided = true;
+            result.depth = -penetration;
+
+            if (dist > COLLISION_EPSILON) {
+                let local_normal = normalize(rel) * sgn_pos;
+                result.normal = normalize((collider.transform * vec4(local_normal, 0.0)).xyz);
+            } else {
+                result.normal = vec3(0.0, 1.0, 0.0);
+            }
+        }
+    } else {
+        // inside box - push out along shortest axis
+        let axis_dist = extents - abs_pos;
+        var local_normal: vec3<f32>;
+        var min_dist: f32;
+
+        if (axis_dist.x <= axis_dist.y && axis_dist.x <= axis_dist.z) {
+            local_normal = vec3(1.0, 0.0, 0.0) * sgn_pos.x;
+            min_dist = axis_dist.x;
+        } else if (axis_dist.y <= axis_dist.z) {
+            local_normal = vec3(0.0, 1.0, 0.0) * sgn_pos.y;
+            min_dist = axis_dist.y;
+        } else {
+            local_normal = vec3(0.0, 0.0, 1.0) * sgn_pos.z;
+            min_dist = axis_dist.z;
+        }
+
+        result.collided = true;
+        result.depth = min_dist + particle_radius;
+        result.normal = normalize((collider.transform * vec4(local_normal, 0.0)).xyz);
+    }
+
+    return result;
+}
+
+fn process_collisions(
+    particle_pos: vec3<f32>,
+    particle_radius: f32,
+) -> CollisionResult {
+    var final_result: CollisionResult;
+    final_result.collided = false;
+    final_result.normal = vec3(0.0);
+    final_result.depth = 0.0;
+
+    for (var i = 0u; i < params.collider_count; i++) {
+        let collider = colliders.colliders[i];
+        var col_result: CollisionResult;
+
+        switch collider.collider_type {
+            case COLLIDER_TYPE_SPHERE: {
+                col_result = check_sphere_collision(particle_pos, particle_radius, collider);
+            }
+            case COLLIDER_TYPE_BOX: {
+                col_result = check_box_collision(particle_pos, particle_radius, collider);
+            }
+            default: {
+                continue;
+            }
+        }
+
+        if (col_result.collided) {
+            if (!final_result.collided) {
+                // first collision
+                final_result = col_result;
+            } else {
+                // accumulate multiple collisions (from godot)
+                let c = final_result.normal * final_result.depth;
+                let new_c = c + col_result.normal * max(0.0, col_result.depth - dot(col_result.normal, c));
+                final_result.depth = length(new_c);
+                if (final_result.depth > COLLISION_EPSILON) {
+                    final_result.normal = normalize(new_c);
+                }
+            }
+        }
+    }
+
+    return final_result;
+}
+
 fn spawn_particle(idx: u32) -> Particle {
     var p: Particle;
     // per-particle seed derivation:
@@ -660,6 +846,14 @@ fn spawn_particle(idx: u32) -> Particle {
         spawn_index = f32(params.cycle * params.amount + idx);
     }
     p.custom = vec4(0.0, spawn_index, bitcast<f32>(seed), bitcast<f32>(PARTICLE_FLAG_ACTIVE));
+
+    // initialize alignment direction for ALIGN_Y_TO_VELOCITY (like godot)
+    // if velocity > 0, use normalized velocity; otherwise use default up
+    if length(vel) > 0.0 {
+        p.alignment_dir = vec4(normalize(vel), 0.0);
+    } else {
+        p.alignment_dir = vec4(0.0, 1.0, 0.0, 0.0);
+    }
 
     return p;
 }
@@ -749,10 +943,15 @@ fn update_particle(p_in: Particle) -> Particle {
     }
 
     // combine physics velocity with controlled displacements (like radial velocity)
-    // this is used for both position update and alignment in the material shader
     let effective_velocity = physics_velocity + radial_displacement;
 
     p.velocity = vec4(effective_velocity, lifetime);
+
+    // update alignment direction only when velocity > 0 (like godot)
+    // if velocity is zero, keep the existing alignment direction
+    if length(effective_velocity) > 0.0 {
+        p.alignment_dir = vec4(normalize(effective_velocity), 0.0);
+    }
 
     // update position
     var new_position = p.position.xyz + effective_velocity * dt;
@@ -767,6 +966,53 @@ fn update_particle(p_in: Particle) -> Particle {
     let scale = get_scale_at_lifetime(initial_scale, age, lifetime);
 
     p.position = vec4(new_position, scale);
+
+    // collision handling
+    if (params.collision_mode != COLLISION_MODE_DISABLED && params.collider_count > 0u) {
+        let particle_radius = get_particle_collision_size(scale);
+        let collision = process_collisions(p.position.xyz, particle_radius);
+
+        if (collision.collided) {
+            if (params.collision_mode == COLLISION_MODE_HIDE_ON_CONTACT) {
+                p.custom.w = bitcast<f32>(0u);
+                return p;
+            }
+
+            // COLLISION_MODE_RIGID
+            var velocity = p.velocity.xyz;
+            let collision_response = dot(collision.normal, velocity);
+
+            // adaptive bounce threshold (from godot)
+            let bounce_threshold = 2.0 / clamp(params.collision_bounce + 1.0, 1.0, 2.0);
+            let should_bounce = step(bounce_threshold, abs(collision_response));
+
+            // push particle out of collision
+            var col_position = p.position.xyz + collision.normal * collision.depth;
+
+            // remove velocity component along normal
+            var col_velocity = velocity - collision.normal * collision_response;
+
+            // apply friction to remaining velocity
+            col_velocity = mix(col_velocity, vec3(0.0), clamp(params.collision_friction, 0.0, 1.0));
+
+            // apply bounce
+            col_velocity -= collision.normal * collision_response * params.collision_bounce * should_bounce;
+
+            // handle 2D mode
+            if ((params.particle_flags & PARTICLE_FLAG_DISABLE_Z) != 0u) {
+                col_position.z = 0.0;
+                col_velocity.z = 0.0;
+            }
+
+            p.position = vec4(col_position, scale);
+            p.velocity = vec4(col_velocity, lifetime);
+
+            // update alignment direction only when velocity > 0 (like godot)
+            if length(col_velocity) > 0.0 {
+                p.alignment_dir = vec4(normalize(col_velocity), 0.0);
+            }
+        }
+    }
 
     // update alpha based on lifetime progress
     let initial_alpha = get_initial_alpha(seed);
@@ -803,3 +1049,4 @@ fn random_vec3(seed: u32, variation: vec3<f32>) -> vec3<f32> {
         random_range(seed + 2u, variation.z)
     );
 }
+

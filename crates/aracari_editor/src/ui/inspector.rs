@@ -459,6 +459,7 @@ fn inspect_particle_mesh(
         ParticleMesh::Sphere { .. } => "Sphere",
         ParticleMesh::Cuboid { .. } => "Cuboid",
         ParticleMesh::Cylinder { .. } => "Cylinder",
+        ParticleMesh::Prism { .. } => "Prism",
     };
 
     changed |= instantiable_row(ui, label, indent_level, current_variant, |ui| {
@@ -500,6 +501,19 @@ fn inspect_particle_mesh(
                 rings: 4,
                 cap_top: true,
                 cap_bottom: true,
+            };
+            inner_changed = true;
+        }
+        if ui
+            .selectable_label(matches!(value, ParticleMesh::Prism { .. }), "Prism")
+            .clicked()
+        {
+            *value = ParticleMesh::Prism {
+                left_to_right: 0.5,
+                size: Vec3::splat(1.0),
+                subdivide_width: 0,
+                subdivide_height: 0,
+                subdivide_depth: 0,
             };
             inner_changed = true;
         }
@@ -545,6 +559,41 @@ fn inspect_particle_mesh(
             changed |= inspect_u32(ui, &field_label("rings"), rings, inner_indent);
             changed |= inspect_bool(ui, &field_label("cap_top"), cap_top, inner_indent);
             changed |= inspect_bool(ui, &field_label("cap_bottom"), cap_bottom, inner_indent);
+        }
+        ParticleMesh::Prism {
+            left_to_right,
+            size,
+            subdivide_width,
+            subdivide_height,
+            subdivide_depth,
+        } => {
+            changed |= inspect_f32_clamped(
+                ui,
+                &field_label("left_to_right"),
+                left_to_right,
+                -2.0,
+                2.0,
+                inner_indent,
+            );
+            changed |= inspect_vec3(ui, &field_label("size"), size, inner_indent);
+            changed |= inspect_u32(
+                ui,
+                &field_label("subdivide_width"),
+                subdivide_width,
+                inner_indent,
+            );
+            changed |= inspect_u32(
+                ui,
+                &field_label("subdivide_height"),
+                subdivide_height,
+                inner_indent,
+            );
+            changed |= inspect_u32(
+                ui,
+                &field_label("subdivide_depth"),
+                subdivide_depth,
+                inner_indent,
+            );
         }
     });
 
@@ -1575,6 +1624,102 @@ fn inspect_turbulence(
     changed
 }
 
+fn inspect_collision(
+    ui: &mut egui::Ui,
+    id: &str,
+    collision: &mut Option<ParticleProcessCollision>,
+    indent_level: u8,
+) -> bool {
+    let mut changed = false;
+
+    inspector_category(ui, id, "Collision", indent_level, |ui, indent| {
+        let current_mode = match collision {
+            Some(c) => match &c.mode {
+                ParticleProcessCollisionMode::Rigid { .. } => "Rigid",
+                ParticleProcessCollisionMode::HideOnContact => "Hide on contact",
+            },
+            None => "Disabled",
+        };
+
+        changed |= instantiable_row(ui, "Mode", indent, current_mode, |ui| {
+            let mut inner_changed = false;
+
+            if ui
+                .selectable_label(collision.is_none(), "Disabled")
+                .clicked()
+            {
+                *collision = None;
+                inner_changed = true;
+            }
+
+            if ui
+                .selectable_label(
+                    matches!(
+                        collision,
+                        Some(c) if matches!(c.mode, ParticleProcessCollisionMode::Rigid { .. })
+                    ),
+                    "Rigid",
+                )
+                .clicked()
+            {
+                *collision = Some(ParticleProcessCollision {
+                    mode: ParticleProcessCollisionMode::Rigid {
+                        friction: 0.0,
+                        bounce: 0.0,
+                    },
+                    ..Default::default()
+                });
+                inner_changed = true;
+            }
+
+            if ui
+                .selectable_label(
+                    matches!(
+                        collision,
+                        Some(c) if matches!(c.mode, ParticleProcessCollisionMode::HideOnContact)
+                    ),
+                    "Hide on contact",
+                )
+                .clicked()
+            {
+                *collision = Some(ParticleProcessCollision {
+                    mode: ParticleProcessCollisionMode::HideOnContact,
+                    ..Default::default()
+                });
+                inner_changed = true;
+            }
+
+            inner_changed
+        });
+
+        if let Some(coll) = collision {
+            changed |= inspect_f32_positive(
+                ui,
+                &field_label("base_size"),
+                &mut coll.base_size,
+                indent,
+            );
+
+            changed |= inspect_bool(ui, &field_label("use_scale"), &mut coll.use_scale, indent);
+
+            if let ParticleProcessCollisionMode::Rigid { friction, bounce } = &mut coll.mode {
+                changed |= inspect_f32_clamped(
+                    ui,
+                    &field_label("friction"),
+                    friction,
+                    0.0,
+                    1.0,
+                    indent,
+                );
+
+                changed |= inspect_f32_clamped(ui, &field_label("bounce"), bounce, 0.0, 1.0, indent);
+            }
+        }
+    });
+
+    changed
+}
+
 fn inspect_particle_flags(
     ui: &mut egui::Ui,
     id: &str,
@@ -1707,6 +1852,12 @@ fn inspect_process_config(
             ui,
             &format!("{}_turbulence", id),
             &mut config.turbulence,
+            indent,
+        );
+        changed |= inspect_collision(
+            ui,
+            &format!("{}_collision", id),
+            &mut config.collision,
             indent,
         );
     });

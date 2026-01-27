@@ -230,6 +230,26 @@ pub enum ParticleMesh {
         cap_top: bool,
         cap_bottom: bool,
     },
+    Prism {
+        #[serde(default = "default_prism_left_to_right")]
+        left_to_right: f32,
+        #[serde(default = "default_prism_size")]
+        size: Vec3,
+        #[serde(default)]
+        subdivide_width: u32,
+        #[serde(default)]
+        subdivide_height: u32,
+        #[serde(default)]
+        subdivide_depth: u32,
+    },
+}
+
+fn default_prism_left_to_right() -> f32 {
+    0.5
+}
+
+fn default_prism_size() -> Vec3 {
+    Vec3::splat(1.0)
 }
 
 impl Default for ParticleMesh {
@@ -1410,6 +1430,58 @@ impl Default for ParticleProcessTurbulence {
     }
 }
 
+// collision
+
+fn default_collision_base_size() -> f32 {
+    0.01
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ParticlesColliderShape3D {
+    Box { size: Vec3 },
+    Sphere { radius: f32 },
+}
+
+impl Default for ParticlesColliderShape3D {
+    fn default() -> Self {
+        Self::Sphere { radius: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleProcessCollision {
+    pub mode: ParticleProcessCollisionMode,
+    #[serde(default = "default_collision_base_size")]
+    pub base_size: f32,
+    #[serde(default)]
+    pub use_scale: bool,
+}
+
+impl Default for ParticleProcessCollision {
+    fn default() -> Self {
+        Self {
+            mode: ParticleProcessCollisionMode::default(),
+            base_size: default_collision_base_size(),
+            use_scale: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ParticleProcessCollisionMode {
+    Rigid { friction: f32, bounce: f32 },
+    HideOnContact,
+}
+
+impl Default for ParticleProcessCollisionMode {
+    fn default() -> Self {
+        Self::Rigid {
+            friction: 0.0,
+            bounce: 0.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
@@ -1424,6 +1496,8 @@ pub struct ParticleProcessConfig {
     pub display: ParticleProcessDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turbulence: Option<ParticleProcessTurbulence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collision: Option<ParticleProcessCollision>,
 }
 
 impl Default for ParticleProcessConfig {
@@ -1435,6 +1509,7 @@ impl Default for ParticleProcessConfig {
             accelerations: ParticleProcessAccelerations::default(),
             display: ParticleProcessDisplay::default(),
             turbulence: None,
+            collision: None,
         }
     }
 }

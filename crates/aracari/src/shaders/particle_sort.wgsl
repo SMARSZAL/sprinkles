@@ -1,9 +1,10 @@
 // particle data structure matching ParticleData in Rust
 struct Particle {
-    position: vec4<f32>,  // xyz, scale
-    velocity: vec4<f32>,  // xyz, lifetime_remaining
+    position: vec4<f32>,       // xyz, scale
+    velocity: vec4<f32>,       // xyz, lifetime_remaining
     color: vec4<f32>,
-    custom: vec4<f32>,    // age, phase, seed, flags
+    custom: vec4<f32>,         // age, phase, seed, flags
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
 }
 
 // draw order modes matching DrawOrder enum
