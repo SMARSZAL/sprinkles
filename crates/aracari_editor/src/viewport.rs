@@ -272,6 +272,41 @@ pub fn despawn_preview_on_project_change(
     }
 }
 
+pub fn respawn_preview_on_emitter_change(
+    mut commands: Commands,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    preview_query: Query<Entity, (With<EditorParticlePreview>, With<ParticleSystemRuntime>)>,
+    emitter_query: Query<&EmitterEntity>,
+) {
+    if !editor_state.should_reset {
+        return;
+    }
+
+    let Some(handle) = &editor_state.current_project else {
+        return;
+    };
+
+    let Some(asset) = assets.get(handle) else {
+        return;
+    };
+
+    let Ok(preview_entity) = preview_query.single() else {
+        return;
+    };
+
+    let current_emitter_count = emitter_query
+        .iter()
+        .filter(|e| e.parent_system == preview_entity)
+        .count();
+
+    let asset_emitter_count = asset.emitters.len();
+
+    if current_emitter_count != asset_emitter_count {
+        commands.entity(preview_entity).despawn();
+    }
+}
+
 pub fn sync_playback_state(
     mut editor_state: ResMut<EditorState>,
     assets: Res<Assets<ParticleSystemAsset>>,
