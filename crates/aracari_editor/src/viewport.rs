@@ -95,6 +95,7 @@ pub fn setup_floor(
     let material = materials.add(StandardMaterial {
         base_color_texture: Some(floor_texture),
         uv_transform: Affine2::from_scale(Vec2::splat(tile_count)),
+        perceptual_roughness: 1.0,
         ..default()
     });
 
