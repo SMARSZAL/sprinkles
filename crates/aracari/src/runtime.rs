@@ -100,46 +100,46 @@ impl EmitterRuntime {
         }
     }
 
-    pub fn system_phase(&self, lifetime: f32, delay: f32) -> f32 {
-        if lifetime <= 0.0 {
+    pub fn system_phase(&self, time: &crate::asset::EmitterTime) -> f32 {
+        if time.lifetime <= 0.0 {
             return 0.0;
         }
-        let total_duration = delay + lifetime;
+        let total_duration = time.total_duration();
         if total_duration <= 0.0 {
             return 0.0;
         }
         // during delay period, phase is 0
         let time_in_cycle = self.system_time % total_duration;
-        if time_in_cycle < delay {
+        if time_in_cycle < time.delay {
             return 0.0;
         }
-        (time_in_cycle - delay) / lifetime
+        (time_in_cycle - time.delay) / time.lifetime
     }
 
-    pub fn prev_system_phase(&self, lifetime: f32, delay: f32) -> f32 {
-        if lifetime <= 0.0 {
+    pub fn prev_system_phase(&self, time: &crate::asset::EmitterTime) -> f32 {
+        if time.lifetime <= 0.0 {
             return 0.0;
         }
-        let total_duration = delay + lifetime;
+        let total_duration = time.total_duration();
         if total_duration <= 0.0 {
             return 0.0;
         }
         // during delay period, phase is 0
         let time_in_cycle = self.prev_system_time % total_duration;
-        if time_in_cycle < delay {
+        if time_in_cycle < time.delay {
             return 0.0;
         }
-        (time_in_cycle - delay) / lifetime
+        (time_in_cycle - time.delay) / time.lifetime
     }
 
     /// returns true if the emitter is currently past its delay period and should spawn particles
-    pub fn is_past_delay(&self, lifetime: f32, delay: f32) -> bool {
-        let total_duration = delay + lifetime;
+    pub fn is_past_delay(&self, time: &crate::asset::EmitterTime) -> bool {
+        let total_duration = time.total_duration();
         if total_duration <= 0.0 {
             return true;
         }
         let time_in_cycle = self.system_time % total_duration;
-        time_in_cycle >= delay
+        time_in_cycle >= time.delay
     }
 
     /// Start or resume playback

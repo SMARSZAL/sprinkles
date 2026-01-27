@@ -805,7 +805,7 @@ fn spawn_particle(idx: u32) -> Particle {
     p.position = vec4(emission_pos, scale);
 
     var vel = get_emission_velocity(seed + 10u);
-    let lifetime = params.lifetime * (1.0 + random_range(seed + 4u, params.lifetime_randomness));
+    let lifetime = params.lifetime * (1.0 - hash_to_float(seed + 4u) * params.lifetime_randomness);
 
     // include radial velocity at spawn for correct initial alignment
     let initial_radial_velocity = get_initial_radial_velocity(seed + 60u);

@@ -120,6 +120,12 @@ impl Default for EmitterTime {
     }
 }
 
+impl EmitterTime {
+    pub fn total_duration(&self) -> f32 {
+        self.delay + self.lifetime
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmitterDrawing {
     #[serde(default)]

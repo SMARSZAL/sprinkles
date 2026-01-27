@@ -285,11 +285,11 @@ pub fn sync_playback_state(
             continue;
         };
 
-        // calculate duration from the longest emitter total duration (delay + lifetime)
+        // calculate duration from the longest emitter total duration
         let max_duration = asset
             .emitters
             .iter()
-            .map(|e| e.time.delay + e.time.lifetime)
+            .map(|e| e.time.total_duration())
             .fold(0.0_f32, |a, b| a.max(b));
         editor_state.duration_ms = max_duration * 1000.0;
 

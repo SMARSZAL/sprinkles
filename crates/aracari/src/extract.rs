@@ -237,15 +237,13 @@ pub fn extract_particle_systems(
             continue;
         }
 
-        let lifetime = emitter.time.lifetime;
-        let delay = emitter.time.delay;
         let delta_time = if system_runtime.paused {
             0.0
         } else {
             time.delta_secs()
         };
 
-        let should_emit = runtime.emitting && runtime.is_past_delay(lifetime, delay);
+        let should_emit = runtime.emitting && runtime.is_past_delay(&emitter.time);
 
         let draw_order = match emitter.drawing.draw_order {
             DrawOrder::Index => 0,
@@ -281,8 +279,8 @@ pub fn extract_particle_systems(
 
         let uniforms = EmitterUniforms {
             delta_time,
-            system_phase: runtime.system_phase(lifetime, delay),
-            prev_system_phase: runtime.prev_system_phase(lifetime, delay),
+            system_phase: runtime.system_phase(&emitter.time),
+            prev_system_phase: runtime.prev_system_phase(&emitter.time),
             cycle: runtime.cycle,
 
             amount: emitter.amount,

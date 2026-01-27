@@ -50,10 +50,8 @@ pub fn update_particle_time(
             continue;
         };
 
-        let lifetime = emitter_data.time.lifetime;
-        let delay = emitter_data.time.delay;
         let fixed_fps = emitter_data.time.fixed_fps;
-        let total_duration = delay + lifetime;
+        let total_duration = emitter_data.time.total_duration();
 
         runtime.prev_system_time = runtime.system_time;
 

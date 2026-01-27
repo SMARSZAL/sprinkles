@@ -666,16 +666,46 @@
                         ),
                         curve: Some((
                             curve: Custom([
-                                (position: 0.0, value: 1.0),
-                                (position: 0.8, value: 1.0),
-                                (position: 0.825, value: 0.962),
-                                (position: 0.85, value: 0.854),
-                                (position: 0.875, value: 0.691),
-                                (position: 0.9, value: 0.5),
-                                (position: 0.925, value: 0.309),
-                                (position: 0.95, value: 0.146),
-                                (position: 0.975, value: 0.038),
-                                (position: 1.0, value: 0.0),
+                                (
+                                    position: 0.0,
+                                    value: 1.0,
+                                ),
+                                (
+                                    position: 0.8,
+                                    value: 1.0,
+                                ),
+                                (
+                                    position: 0.825,
+                                    value: 0.962,
+                                ),
+                                (
+                                    position: 0.85,
+                                    value: 0.854,
+                                ),
+                                (
+                                    position: 0.875,
+                                    value: 0.691,
+                                ),
+                                (
+                                    position: 0.9,
+                                    value: 0.5,
+                                ),
+                                (
+                                    position: 0.925,
+                                    value: 0.309,
+                                ),
+                                (
+                                    position: 0.95,
+                                    value: 0.146,
+                                ),
+                                (
+                                    position: 0.975,
+                                    value: 0.038,
+                                ),
+                                (
+                                    position: 1.0,
+                                    value: 0.0,
+                                ),
                             ]),
                             min_value: 0.0,
                             max_value: 1.0,
