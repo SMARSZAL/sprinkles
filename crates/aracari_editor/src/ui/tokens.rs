@@ -11,6 +11,7 @@ pub const BACKGROUND_COLOR: Srgba = tailwind::ZINC_800;
 pub const BORDER_COLOR: Srgba = tailwind::ZINC_700;
 pub const TEXT_BODY_COLOR: Srgba = tailwind::ZINC_200;
 pub const TEXT_DISPLAY_COLOR: Srgba = tailwind::ZINC_50;
+pub const TEXT_MUTED_COLOR: Srgba = tailwind::ZINC_400;
 
 // text sizes
 pub const TEXT_SIZE_SM: f32 = 10.0;

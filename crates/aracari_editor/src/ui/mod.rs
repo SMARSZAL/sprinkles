@@ -16,6 +16,8 @@ impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(widgets::button::plugin)
             .add_plugins(widgets::panel::plugin)
+            .add_plugins(components::seekbar::plugin)
+            .add_plugins(components::playback_controls::plugin)
             .add_systems(Startup, setup_ui)
             .add_systems(
                 Update,

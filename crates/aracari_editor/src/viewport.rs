@@ -334,6 +334,27 @@ pub fn sync_playback_state(
             continue;
         }
 
+        // handle seekbar seeking
+        if let Some(seek_time_ms) = editor_state.seek_to_ms.take() {
+            let seek_time = seek_time_ms / 1000.0;
+            for (emitter, mut runtime) in emitter_query.iter_mut() {
+                if emitter.parent_system == system_entity {
+                    runtime.system_time = seek_time;
+                    runtime.prev_system_time = seek_time;
+                    runtime.one_shot_completed = false;
+                }
+            }
+            editor_state.elapsed_ms = seek_time_ms;
+        }
+
+        // while seeking, pause and skip normal updates
+        if editor_state.is_seeking {
+            if !system_runtime.paused {
+                system_runtime.pause();
+            }
+            continue;
+        }
+
         // check if all one-shot emitters have completed
         let all_one_shots_completed =
             asset

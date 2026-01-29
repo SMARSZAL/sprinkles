@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::ui::components::playback_controls::playback_controls;
+use crate::ui::components::seekbar::seekbar;
 use crate::ui::tokens::{BACKGROUND_COLOR, BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
 use crate::ui::widgets::button::{button, ButtonProps, ButtonVariant};
 
@@ -39,15 +41,8 @@ pub fn topbar(asset_server: &AssetServer) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    (
-                        Text::new("TODO: playback controls"),
-                        TextFont {
-                            font: font.into(),
-                            font_size: TEXT_SIZE,
-                            ..default()
-                        },
-                        TextColor(TEXT_BODY_COLOR.into()),
-                    ),
+                    seekbar(asset_server),
+                    playback_controls(asset_server),
                     button(
                         ButtonProps::new("Save").variant(ButtonVariant::Primary),
                         asset_server,

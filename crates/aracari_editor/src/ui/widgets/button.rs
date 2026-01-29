@@ -13,11 +13,13 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 pub struct EditorButton;
 
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Default, Clone, Copy, PartialEq)]
 pub enum ButtonVariant {
     #[default]
     Default,
     Primary,
+    Ghost,
+    Active,
 }
 
 #[derive(Component, Default, Clone, Copy)]
@@ -29,29 +31,47 @@ pub enum ButtonSize {
 }
 
 impl ButtonVariant {
-    fn bg_color(&self) -> Srgba {
+    pub fn bg_color(&self) -> Srgba {
         match self {
-            Self::Default => tailwind::ZINC_700,
-            Self::Primary => PRIMARY_COLOR,
+            Self::Default | Self::Ghost => tailwind::ZINC_700,
+            Self::Primary | Self::Active => PRIMARY_COLOR,
         }
     }
-    fn bg_opacity(&self, hovered: bool) -> f32 {
+    pub fn bg_opacity(&self, hovered: bool) -> f32 {
         match (self, hovered) {
+            (Self::Ghost, false) => 0.0,
+            (Self::Active, false) => 0.2,
             (Self::Default, false) => 0.5,
-            (Self::Default, true) => 0.8,
+            (Self::Default | Self::Ghost, true) => 0.8,
+            (Self::Active, true) => 0.3,
             (Self::Primary, _) => 1.0,
         }
     }
-    fn text_color(&self) -> Srgba {
+    pub fn text_color(&self) -> Srgba {
         match self {
-            Self::Default => TEXT_BODY_COLOR,
+            Self::Default | Self::Ghost => TEXT_BODY_COLOR,
             Self::Primary => TEXT_DISPLAY_COLOR,
+            Self::Active => PRIMARY_COLOR,
         }
     }
-    fn border(&self) -> Val {
+    pub fn border_color(&self) -> Srgba {
         match self {
-            Self::Default => Val::Px(1.0),
+            Self::Default | Self::Ghost => tailwind::ZINC_700,
+            Self::Primary => PRIMARY_COLOR,
+            Self::Active => PRIMARY_COLOR,
+        }
+    }
+    pub fn border(&self) -> Val {
+        match self {
+            Self::Default | Self::Ghost | Self::Active => Val::Px(1.0),
             Self::Primary => Val::Px(0.0),
+        }
+    }
+    pub fn border_opacity(&self, hovered: bool) -> f32 {
+        match (self, hovered) {
+            (Self::Ghost, false) => 0.0,
+            (Self::Active, _) => 0.4,
+            _ => 1.0,
         }
     }
 }
@@ -72,6 +92,9 @@ impl ButtonSize {
             Self::Sm => Val::Px(6.0),
             Self::Icon => Val::Px(0.0),
         }
+    }
+    fn icon_size(&self) -> Val {
+        Val::Px(16.0)
     }
 }
 
@@ -99,14 +122,37 @@ impl ButtonProps {
     }
 }
 
-pub fn button(props: ButtonProps, asset_server: &AssetServer) -> impl Bundle {
-    let ButtonProps {
-        content,
-        variant,
-        size,
-    } = props;
-    let font: Handle<Font> = asset_server.load(FONT_PATH);
+#[derive(Default)]
+pub struct IconButtonProps {
+    pub icon: String,
+    pub color: Option<Srgba>,
+    pub variant: ButtonVariant,
+    pub size: ButtonSize,
+}
 
+impl IconButtonProps {
+    pub fn new(icon: impl Into<String>) -> Self {
+        Self {
+            icon: icon.into(),
+            size: ButtonSize::Icon,
+            ..default()
+        }
+    }
+    pub fn color(mut self, color: Srgba) -> Self {
+        self.color = Some(color);
+        self
+    }
+    pub fn variant(mut self, variant: ButtonVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+    pub fn size(mut self, size: ButtonSize) -> Self {
+        self.size = size;
+        self
+    }
+}
+
+fn button_base(variant: ButtonVariant, size: ButtonSize) -> impl Bundle {
     (
         Button,
         EditorButton,
@@ -129,7 +175,20 @@ pub fn button(props: ButtonProps, asset_server: &AssetServer) -> impl Bundle {
                 .with_alpha(variant.bg_opacity(false))
                 .into(),
         ),
-        BorderColor::all(tailwind::ZINC_700),
+        BorderColor::all(variant.border_color().with_alpha(variant.border_opacity(false))),
+    )
+}
+
+pub fn button(props: ButtonProps, asset_server: &AssetServer) -> impl Bundle {
+    let ButtonProps {
+        content,
+        variant,
+        size,
+    } = props;
+    let font: Handle<Font> = asset_server.load(FONT_PATH);
+
+    (
+        button_base(variant, size),
         children![(
             Text::new(content),
             TextFont {
@@ -143,16 +202,60 @@ pub fn button(props: ButtonProps, asset_server: &AssetServer) -> impl Bundle {
     )
 }
 
+pub fn icon_button(props: IconButtonProps, asset_server: &AssetServer) -> impl Bundle {
+    let IconButtonProps {
+        icon,
+        color,
+        variant,
+        size,
+    } = props;
+    let icon_color = color.unwrap_or(variant.text_color());
+
+    (
+        button_base(variant, size),
+        children![(
+            ImageNode::new(asset_server.load(&icon)).with_color(Color::Srgba(icon_color)),
+            Node {
+                width: size.icon_size(),
+                height: size.icon_size(),
+                ..default()
+            },
+        )],
+    )
+}
+
 fn handle_hover(
     mut buttons: Query<
-        (&ButtonVariant, &Hovered, &mut BackgroundColor),
+        (&ButtonVariant, &Hovered, &mut BackgroundColor, &mut BorderColor),
         (Changed<Hovered>, With<EditorButton>),
     >,
 ) {
-    for (variant, hovered, mut bg) in &mut buttons {
+    for (variant, hovered, mut bg, mut border) in &mut buttons {
+        let is_hovered = hovered.get();
         bg.0 = variant
             .bg_color()
-            .with_alpha(variant.bg_opacity(hovered.get()))
+            .with_alpha(variant.bg_opacity(is_hovered))
             .into();
+        *border = BorderColor::all(
+            variant
+                .border_color()
+                .with_alpha(variant.border_opacity(is_hovered)),
+        );
     }
+}
+
+pub fn set_button_variant(
+    variant: ButtonVariant,
+    bg: &mut BackgroundColor,
+    border: &mut BorderColor,
+) {
+    bg.0 = variant
+        .bg_color()
+        .with_alpha(variant.bg_opacity(false))
+        .into();
+    *border = BorderColor::all(
+        variant
+            .border_color()
+            .with_alpha(variant.border_opacity(false)),
+    );
 }

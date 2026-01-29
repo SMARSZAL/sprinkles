@@ -23,6 +23,10 @@ pub struct EditorState {
     pub should_reset: bool,
     /// set to true when play button is clicked, cleared after processed
     pub play_requested: bool,
+    /// when set, seek to this time in milliseconds and clear
+    pub seek_to_ms: Option<f32>,
+    /// true while user is dragging the seekbar
+    pub is_seeking: bool,
 }
 
 impl Default for EditorState {
@@ -36,6 +40,8 @@ impl Default for EditorState {
             duration_ms: 1000.0,
             should_reset: false,
             play_requested: false,
+            seek_to_ms: None,
+            is_seeking: false,
         }
     }
 }
