@@ -8,6 +8,7 @@ use components::data_panel::{data_panel, setup_data_panel_resize};
 use components::inspector_panel::{inspector_panel, setup_inspector_panel_resize};
 use components::sidebar::sidebar;
 use components::topbar::topbar;
+use components::viewport::{setup_viewport, viewport_container};
 
 pub struct EditorUiPlugin;
 
@@ -18,7 +19,11 @@ impl Plugin for EditorUiPlugin {
             .add_systems(Startup, setup_ui)
             .add_systems(
                 Update,
-                (setup_data_panel_resize, setup_inspector_panel_resize),
+                (
+                    setup_data_panel_resize,
+                    setup_inspector_panel_resize,
+                    setup_viewport,
+                ),
             );
     }
 }
@@ -42,6 +47,7 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 children![
                     sidebar(&asset_server),
                     data_panel(&asset_server),
+                    viewport_container(),
                     inspector_panel(&asset_server),
                 ],
             ),

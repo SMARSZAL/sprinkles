@@ -2,12 +2,15 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::ops::Range;
 
 use aracari::prelude::*;
+use bevy::asset::RenderAssetUsages;
+use bevy::camera::RenderTarget;
 use bevy::color::palettes::tailwind::ZINC_950;
 use bevy::image::{ImageAddressMode, ImageSamplerDescriptor};
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::math::Affine2;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
+use bevy::render::render_resource::{TextureDimension, TextureFormat, TextureUsages};
 
 use crate::state::EditorState;
 
@@ -44,12 +47,30 @@ impl Default for CameraSettings {
     }
 }
 
-pub fn setup_camera(mut commands: Commands) {
+pub fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let mut image = Image::new_uninit(
+        default(),
+        TextureDimension::D2,
+        TextureFormat::Bgra8UnormSrgb,
+        RenderAssetUsages::all(),
+    );
+    image.texture_descriptor.usage =
+        TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
+    let image_handle = images.add(image);
+
+    commands.spawn((Name::new("UiCamera"), Camera2d));
+
     let initial_position = ORBIT_TARGET + ORBIT_OFFSET.normalize() * INITIAL_ORBIT_DISTANCE;
     commands.spawn((
         EditorCamera,
-        Name::new("Camera"),
+        Name::new("ViewportCamera"),
         Camera3d::default(),
+        Camera {
+            order: -1,
+            clear_color: ClearColorConfig::Custom(ZINC_950.into()),
+            ..default()
+        },
+        RenderTarget::Image(image_handle.into()),
         Transform::from_translation(initial_position).looking_at(ORBIT_TARGET, Vec3::Y),
         Bloom::NATURAL,
         DistanceFog {
@@ -180,10 +201,6 @@ pub fn zoom_camera(
         (camera_settings.orbit_distance + zoom_delta).clamp(MIN_ZOOM_DISTANCE, MAX_ZOOM_DISTANCE);
 
     camera.translation = ORBIT_TARGET - camera.forward() * camera_settings.orbit_distance;
-}
-
-pub fn update_camera_viewport(mut camera: Single<&mut Camera, With<EditorCamera>>) {
-    camera.sub_camera_view = None;
 }
 
 #[derive(Component)]

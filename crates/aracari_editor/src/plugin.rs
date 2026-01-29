@@ -9,7 +9,7 @@ use crate::state::{
 use crate::viewport::{
     CameraSettings, configure_floor_texture, despawn_preview_on_project_change, orbit_camera,
     respawn_preview_on_emitter_change, setup_camera, setup_floor, spawn_preview_particle_system,
-    sync_playback_state, update_camera_viewport, zoom_camera,
+    sync_playback_state, zoom_camera,
 };
 
 pub struct AracariEditorPlugin;
@@ -29,7 +29,6 @@ impl Plugin for AracariEditorPlugin {
                 (
                     orbit_camera,
                     zoom_camera,
-                    update_camera_viewport,
                     configure_floor_texture,
                     spawn_preview_particle_system,
                     despawn_preview_on_project_change,

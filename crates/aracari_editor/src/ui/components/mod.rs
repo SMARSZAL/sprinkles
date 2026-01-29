@@ -3,3 +3,4 @@ pub mod inspector_panel;
 pub mod navigation;
 pub mod sidebar;
 pub mod topbar;
+pub mod viewport;
