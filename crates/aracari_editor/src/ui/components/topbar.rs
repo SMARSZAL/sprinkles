@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::ui::components::playback_controls::playback_controls;
 use crate::ui::components::seekbar::seekbar;
 use crate::ui::tokens::{BACKGROUND_COLOR, BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
-use crate::ui::widgets::button::{button, ButtonProps, ButtonVariant};
+use crate::ui::widgets::button::{ButtonProps, ButtonVariant, button};
+use crate::ui::widgets::separator::EditorSeparator;
 
 #[derive(Component)]
 pub struct EditorTopbar;
@@ -43,6 +44,7 @@ pub fn topbar(asset_server: &AssetServer) -> impl Bundle {
                 children![
                     seekbar(asset_server),
                     playback_controls(asset_server),
+                    EditorSeparator::vertical(),
                     button(
                         ButtonProps::new("Save").variant(ButtonVariant::Primary),
                         asset_server,
