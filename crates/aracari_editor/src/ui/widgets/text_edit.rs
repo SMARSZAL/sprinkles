@@ -30,6 +30,7 @@ pub fn plugin(app: &mut App) {
                 handle_drag_value,
                 handle_click_to_focus,
                 handle_cursor,
+                handle_clamp_on_unfocus,
             ),
         )
         .add_systems(PostUpdate, (apply_default_value, handle_suffix).chain());
@@ -45,7 +46,14 @@ struct TextEditWrapper(Entity);
 pub enum TextEditVariant {
     #[default]
     Default,
-    Numeric,
+    NumericF32,
+    NumericI32,
+}
+
+impl TextEditVariant {
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Self::NumericF32 | Self::NumericI32)
+    }
 }
 
 #[derive(Clone)]
@@ -78,10 +86,17 @@ struct DragHitbox {
     start_value: f64,
 }
 
+#[derive(Component, Clone, Copy)]
+struct NumericRange {
+    min: f64,
+    max: f64,
+}
+
 #[derive(Clone)]
 pub enum FilterType {
     Alphanumeric,
     Decimal,
+    Integer,
 }
 
 #[derive(Component)]
@@ -93,10 +108,11 @@ struct TextEditConfig {
     suffix: Option<String>,
     placeholder: String,
     default_value: Option<String>,
+    min: f64,
+    max: f64,
     initialized: bool,
 }
 
-#[derive(Default)]
 pub struct TextEditProps {
     pub label: Option<String>,
     pub placeholder: String,
@@ -105,6 +121,24 @@ pub struct TextEditProps {
     pub filter: Option<FilterType>,
     pub prefix: Option<TextEditPrefix>,
     pub suffix: Option<String>,
+    pub min: f64,
+    pub max: f64,
+}
+
+impl Default for TextEditProps {
+    fn default() -> Self {
+        Self {
+            label: None,
+            placeholder: String::new(),
+            default_value: None,
+            variant: TextEditVariant::Default,
+            filter: None,
+            prefix: None,
+            suffix: None,
+            min: f64::MIN,
+            max: f64::MAX,
+        }
+    }
 }
 
 impl TextEditProps {
@@ -132,11 +166,30 @@ impl TextEditProps {
         self.default_value = Some(value.into());
         self
     }
+    pub fn with_min(mut self, min: f64) -> Self {
+        self.min = min;
+        self
+    }
+    pub fn with_max(mut self, max: f64) -> Self {
+        self.max = max;
+        self
+    }
 
-    pub fn numeric(mut self) -> Self {
-        self.variant = TextEditVariant::Numeric;
+    pub fn numeric_f32(mut self) -> Self {
+        self.variant = TextEditVariant::NumericF32;
         self.filter = Some(FilterType::Decimal);
         self.prefix = Some(TextEditPrefix::default());
+        self.min = f32::MIN as f64;
+        self.max = f32::MAX as f64;
+        self
+    }
+
+    pub fn numeric_i32(mut self) -> Self {
+        self.variant = TextEditVariant::NumericI32;
+        self.filter = Some(FilterType::Integer);
+        self.prefix = Some(TextEditPrefix::default());
+        self.min = i32::MIN as f64;
+        self.max = i32::MAX as f64;
         self
     }
 }
@@ -150,6 +203,8 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
         filter,
         prefix,
         suffix,
+        min,
+        max,
     } = props;
 
     (
@@ -166,6 +221,8 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
             suffix,
             placeholder,
             default_value,
+            min,
+            max,
             initialized: false,
         },
     )
@@ -201,10 +258,11 @@ fn setup_text_edit_input(
             commands.entity(entity).add_child(label_entity);
         }
 
-        let is_numeric = config.variant == TextEditVariant::Numeric;
+        let is_numeric = config.variant.is_numeric();
         let filter = match config.filter {
             FilterType::Alphanumeric => TextInputFilter::Alphanumeric,
             FilterType::Decimal => TextInputFilter::Decimal,
+            FilterType::Integer => TextInputFilter::Integer,
         };
 
         let wrapper_entity = commands
@@ -302,12 +360,13 @@ fn setup_text_edit_input(
             TextColor(TEXT_BODY_COLOR.into()),
             TextInputStyle {
                 cursor_color: TEXT_BODY_COLOR.into(),
+                cursor_width: 1.0,
                 selection_color: PRIMARY_COLOR.with_alpha(0.3).into(),
                 ..default()
             },
             TextInputPrompt {
                 text: placeholder,
-                color: Some(TEXT_BODY_COLOR.with_alpha(0.5).into()),
+                color: Some(TEXT_BODY_COLOR.with_alpha(0.2).into()),
                 ..default()
             },
             filter,
@@ -326,6 +385,13 @@ fn setup_text_edit_input(
 
         if let Some(ref default_value) = config.default_value {
             text_input.insert(TextEditDefaultValue(default_value.clone()));
+        }
+
+        if is_numeric {
+            text_input.insert(NumericRange {
+                min: config.min,
+                max: config.max,
+            });
         }
 
         let text_input_entity = text_input.id();
@@ -382,15 +448,16 @@ fn apply_default_value(
         &TextEditVariant,
         &TextInputBuffer,
         &mut TextInputQueue,
+        Option<&NumericRange>,
     )>,
 ) {
-    for (entity, default_value, variant, buffer, mut queue) in &mut text_edits {
+    for (entity, default_value, variant, buffer, mut queue, range) in &mut text_edits {
         if buffer.get_text().is_empty() {
-            let text = match variant {
-                TextEditVariant::Numeric => {
-                    format_numeric_value(default_value.0.parse().unwrap_or(0.0))
-                }
-                TextEditVariant::Default => default_value.0.clone(),
+            let text = if variant.is_numeric() {
+                let value = clamp_value(default_value.0.parse().unwrap_or(0.0), range);
+                format_numeric_value(value, *variant)
+            } else {
+                default_value.0.clone()
             };
             queue.add(TextInputAction::Edit(TextInputEdit::Paste(text)));
         }
@@ -461,6 +528,39 @@ fn handle_unfocus(
     }
 }
 
+fn handle_clamp_on_unfocus(
+    focus: Res<InputFocus>,
+    mut prev_focus: Local<Option<Entity>>,
+    mut text_edits: Query<
+        (
+            &TextEditVariant,
+            &TextInputBuffer,
+            &mut TextInputQueue,
+            Option<&TextEditSuffix>,
+            Option<&NumericRange>,
+        ),
+        With<EditorTextEdit>,
+    >,
+) {
+    let prev = *prev_focus;
+    *prev_focus = focus.0;
+
+    let Some(was_focused) = prev else { return };
+    if focus.0 == Some(was_focused) {
+        return;
+    }
+
+    let Ok((variant, buffer, mut queue, suffix, range)) = text_edits.get_mut(was_focused) else {
+        return;
+    };
+    if !variant.is_numeric() {
+        return;
+    }
+
+    let value = parse_numeric_value(&buffer.get_text(), suffix);
+    update_input_value(&mut queue, value, *variant, range);
+}
+
 fn handle_numeric_increment(
     focus: Res<InputFocus>,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -471,6 +571,7 @@ fn handle_numeric_increment(
             &TextInputBuffer,
             &mut TextInputQueue,
             Option<&TextEditSuffix>,
+            Option<&NumericRange>,
         ),
         With<EditorTextEdit>,
     >,
@@ -478,10 +579,11 @@ fn handle_numeric_increment(
     let Some(focused_entity) = focus.0 else {
         return;
     };
-    let Ok((_, variant, buffer, mut queue, suffix)) = text_edits.get_mut(focused_entity) else {
+    let Ok((_, variant, buffer, mut queue, suffix, range)) = text_edits.get_mut(focused_entity)
+    else {
         return;
     };
-    if *variant != TextEditVariant::Numeric {
+    if !variant.is_numeric() {
         return;
     }
 
@@ -498,7 +600,7 @@ fn handle_numeric_increment(
     let step = if shift { 10.0 } else { 1.0 };
     let new_value = parse_numeric_value(&buffer.get_text(), suffix) + (direction * step);
 
-    update_input_value(&mut queue, new_value);
+    update_input_value(&mut queue, new_value, *variant, range);
 }
 
 fn handle_drag_value(
@@ -509,16 +611,16 @@ fn handle_drag_value(
     wrappers: Query<&TextEditWrapper>,
     mut text_edits: Query<
         (
+            &TextEditVariant,
             &TextInputBuffer,
             &mut TextInputQueue,
             Option<&TextEditSuffix>,
+            Option<&NumericRange>,
         ),
         With<EditorTextEdit>,
     >,
 ) {
-    let Ok(window) = windows.single() else {
-        return;
-    };
+    let Ok(window) = windows.single() else { return };
     let cursor_pos = window.cursor_position();
 
     for (mut hitbox, interaction, child_of) in &mut drag_hitboxes {
@@ -529,7 +631,7 @@ fn handle_drag_value(
 
         if mouse.just_pressed(MouseButton::Left) && *interaction == Interaction::Pressed {
             if let Some(pos) = cursor_pos {
-                let Ok((buffer, _, suffix)) = text_edits.get(input_entity) else {
+                let Ok((_, buffer, _, suffix, _)) = text_edits.get(input_entity) else {
                     continue;
                 };
                 hitbox.dragging = true;
@@ -544,7 +646,7 @@ fn handle_drag_value(
 
         if hitbox.dragging {
             if let Some(pos) = cursor_pos {
-                let Ok((_, mut queue, _)) = text_edits.get_mut(input_entity) else {
+                let Ok((variant, _, mut queue, _, range)) = text_edits.get_mut(input_entity) else {
                     continue;
                 };
 
@@ -553,17 +655,17 @@ fn handle_drag_value(
                     || keyboard.pressed(KeyCode::AltLeft)
                     || keyboard.pressed(KeyCode::AltRight);
 
-                let mut amount = 0.1;
-                let mut sensitivity = 5.0;
-                if alt_mode {
-                    amount = 1.0;
-                    sensitivity *= 2.0;
-                }
+                let (amount, sensitivity) = match (*variant, alt_mode) {
+                    (TextEditVariant::NumericI32, false) => (1.0, 5.0),
+                    (TextEditVariant::NumericI32, true) => (10.0, 10.0),
+                    (_, false) => (0.1, 5.0),
+                    (_, true) => (1.0, 10.0),
+                };
 
                 let steps = ((pos.x - hitbox.start_x) / sensitivity).floor() as f64;
                 let new_value = hitbox.start_value + (steps * amount);
 
-                update_input_value(&mut queue, new_value);
+                update_input_value(&mut queue, new_value, *variant, range);
             }
         }
     }
@@ -580,19 +682,38 @@ fn parse_numeric_value(text: &str, suffix: Option<&TextEditSuffix>) -> f64 {
     strip_suffix(text, suffix).parse().unwrap_or(0.0)
 }
 
-fn format_numeric_value(value: f64) -> String {
-    let rounded = (value * 100.0).round() / 100.0;
-    let mut text = rounded.to_string();
-    if !text.contains('.') {
-        text.push_str(".0");
+fn format_numeric_value(value: f64, variant: TextEditVariant) -> String {
+    match variant {
+        TextEditVariant::NumericI32 => (value.round() as i32).to_string(),
+        TextEditVariant::NumericF32 => {
+            let rounded = (value * 100.0).round() / 100.0;
+            let mut text = rounded.to_string();
+            if !text.contains('.') {
+                text.push_str(".0");
+            }
+            text
+        }
+        TextEditVariant::Default => value.to_string(),
     }
-    text
 }
 
-fn update_input_value(queue: &mut TextInputQueue, value: f64) {
+fn clamp_value(value: f64, range: Option<&NumericRange>) -> f64 {
+    match range {
+        Some(r) => value.clamp(r.min, r.max),
+        None => value,
+    }
+}
+
+fn update_input_value(
+    queue: &mut TextInputQueue,
+    value: f64,
+    variant: TextEditVariant,
+    range: Option<&NumericRange>,
+) {
+    let clamped = clamp_value(value, range);
     queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
     queue.add(TextInputAction::Edit(TextInputEdit::Paste(
-        format_numeric_value(value),
+        format_numeric_value(clamped, variant),
     )));
 }
 

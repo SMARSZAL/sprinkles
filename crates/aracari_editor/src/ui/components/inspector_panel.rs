@@ -78,11 +78,20 @@ fn setup_inspector_panel(
                                 ));
                                 section.spawn(text_edit(
                                     TextEditProps::default()
-                                        .numeric()
-                                        .with_label("Numeric Input")
+                                        .numeric_f32()
+                                        .with_label("Float Input")
                                         .with_placeholder("0.0")
                                         .with_default_value("45")
                                         .with_suffix("%"),
+                                ));
+                                section.spawn(text_edit(
+                                    TextEditProps::default()
+                                        .numeric_i32()
+                                        .with_label("Integer Input")
+                                        .with_placeholder("0")
+                                        .with_default_value("100")
+                                        .with_min(0.0)
+                                        .with_max(255.0),
                                 ));
                             });
 
