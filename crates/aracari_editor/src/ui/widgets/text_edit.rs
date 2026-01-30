@@ -664,8 +664,9 @@ fn handle_drag_value(
 
                 let steps = ((pos.x - hitbox.start_x) / sensitivity).floor() as f64;
                 let new_value = hitbox.start_value + (steps * amount);
+                let rounded = (new_value * 100.0).round() / 100.0;
 
-                update_input_value(&mut queue, new_value, *variant, range);
+                update_input_value(&mut queue, rounded, *variant, range);
             }
         }
     }
@@ -686,8 +687,7 @@ fn format_numeric_value(value: f64, variant: TextEditVariant) -> String {
     match variant {
         TextEditVariant::NumericI32 => (value.round() as i32).to_string(),
         TextEditVariant::NumericF32 => {
-            let rounded = (value * 100.0).round() / 100.0;
-            let mut text = rounded.to_string();
+            let mut text = value.to_string();
             if !text.contains('.') {
                 text.push_str(".0");
             }
