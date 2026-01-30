@@ -110,6 +110,7 @@ pub fn panel(props: PanelProps) -> impl Bundle {
         Node {
             width: px(width),
             height: percent(100),
+            flex_direction: FlexDirection::Column,
             border,
             margin,
             position_type: PositionType::Relative,
