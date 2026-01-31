@@ -7,13 +7,21 @@ use aracari::prelude::*;
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
 
-use crate::io::{project_path, save_editor_data, working_dir, EditorData};
+use crate::io::{EditorData, project_path, save_editor_data, working_dir};
 use crate::state::{DirtyState, EditorState};
+use crate::ui::components::toasts::ToastEvent;
 
 pub fn plugin(app: &mut App) {
     app.add_observer(on_project_save_event)
         .add_observer(on_project_save_as_event)
-        .add_systems(Update, (handle_save_keyboard_shortcut, poll_save_as_result));
+        .add_systems(
+            Update,
+            (
+                handle_save_keyboard_shortcut,
+                poll_save_as_result,
+                poll_save_result,
+            ),
+        );
 }
 
 #[derive(Event)]
@@ -25,6 +33,17 @@ pub struct ProjectSaveAsEvent;
 #[derive(Resource, Clone)]
 pub struct SaveAsResult(pub Arc<Mutex<Option<PathBuf>>>);
 
+#[derive(Clone)]
+pub enum SaveResultStatus {
+    Success(String),
+    SerializationError,
+    WriteError(String),
+    CreateError,
+}
+
+#[derive(Resource, Clone)]
+pub struct SaveResult(pub Arc<Mutex<Option<SaveResultStatus>>>);
+
 pub fn load_project_from_path(
     path: &std::path::Path,
 ) -> Option<aracari::asset::ParticleSystemAsset> {
@@ -32,25 +51,36 @@ pub fn load_project_from_path(
     ron::from_str(&contents).ok()
 }
 
-pub fn save_project_to_path(path: PathBuf, asset: &aracari::asset::ParticleSystemAsset) {
+pub fn save_project_to_path(
+    path: PathBuf,
+    asset: &aracari::asset::ParticleSystemAsset,
+    result: Arc<Mutex<Option<SaveResultStatus>>>,
+) {
     let Ok(contents) = ron::ser::to_string_pretty(asset, ron::ser::PrettyConfig::default()) else {
-        println!("TODO: implement error toast - failed to serialize project");
+        if let Ok(mut guard) = result.lock() {
+            *guard = Some(SaveResultStatus::SerializationError);
+        }
         return;
     };
 
     IoTaskPool::get()
         .spawn(async move {
-            match File::create(&path) {
+            let status = match File::create(&path) {
                 Ok(mut file) => {
+                    let filename = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "".to_string());
                     if file.write_all(contents.as_bytes()).is_ok() {
-                        println!("TODO: implement saved successfully toast");
+                        SaveResultStatus::Success(filename)
                     } else {
-                        println!("TODO: implement error toast - failed to write project file");
+                        SaveResultStatus::WriteError(filename)
                     }
                 }
-                Err(_) => {
-                    println!("TODO: implement error toast - failed to create project file");
-                }
+                Err(_) => SaveResultStatus::CreateError,
+            };
+            if let Ok(mut guard) = result.lock() {
+                *guard = Some(status);
             }
         })
         .detach();
@@ -71,7 +101,9 @@ fn on_project_save_event(
     };
 
     if let Some(path) = &editor_state.current_project_path {
-        save_project_to_path(path.clone(), asset);
+        let result = Arc::new(Mutex::new(None));
+        save_project_to_path(path.clone(), asset, result.clone());
+        commands.insert_resource(SaveResult(result));
         dirty_state.has_unsaved_changes = false;
     } else {
         commands.trigger(ProjectSaveAsEvent);
@@ -95,8 +127,11 @@ fn on_project_save_as_event(
     let default_name = format!("{}.ron", asset.name);
     let asset_clone = asset.clone();
 
-    let result = Arc::new(Mutex::new(None));
-    let result_clone = result.clone();
+    let path_result = Arc::new(Mutex::new(None));
+    let path_result_clone = path_result.clone();
+
+    let save_result = Arc::new(Mutex::new(None));
+    let save_result_clone = save_result.clone();
 
     let task = rfd::AsyncFileDialog::new()
         .set_title("Save Project As")
@@ -109,15 +144,16 @@ fn on_project_save_as_event(
         .spawn(async move {
             if let Some(file_handle) = task.await {
                 let path = file_handle.path().to_path_buf();
-                save_project_to_path(path.clone(), &asset_clone);
-                if let Ok(mut guard) = result_clone.lock() {
+                save_project_to_path(path.clone(), &asset_clone, save_result_clone);
+                if let Ok(mut guard) = path_result_clone.lock() {
                     *guard = Some(path);
                 }
             }
         })
         .detach();
 
-    commands.insert_resource(SaveAsResult(result));
+    commands.insert_resource(SaveAsResult(path_result));
+    commands.insert_resource(SaveResult(save_result));
 }
 
 fn poll_save_as_result(
@@ -150,6 +186,39 @@ fn poll_save_as_result(
         save_editor_data(&editor_data);
         dirty_state.has_unsaved_changes = false;
         commands.remove_resource::<SaveAsResult>();
+    }
+}
+
+fn poll_save_result(result: Option<Res<SaveResult>>, mut commands: Commands) {
+    let Some(result) = result else {
+        return;
+    };
+
+    let status = {
+        let Ok(mut guard) = result.0.lock() else {
+            return;
+        };
+        guard.take()
+    };
+
+    if let Some(status) = status {
+        match status {
+            SaveResultStatus::Success(filename) => {
+                commands.trigger(ToastEvent::success(format!("Saved \"{filename}\"")));
+            }
+            SaveResultStatus::SerializationError => {
+                commands.trigger(ToastEvent::error("Cannot save project with invalid data"));
+            }
+            SaveResultStatus::WriteError(filename) => {
+                commands.trigger(ToastEvent::error(format!(
+                    "Failed to write to \"{filename}\""
+                )));
+            }
+            SaveResultStatus::CreateError => {
+                commands.trigger(ToastEvent::error("Failed to create project file"));
+            }
+        }
+        commands.remove_resource::<SaveResult>();
     }
 }
 

@@ -21,6 +21,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(bevy_easings::EasingsPlugin::default())
         .add_plugins(AracariEditorPlugin)
         .add_plugins(EditorUiPlugin)
         .run();

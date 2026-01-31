@@ -57,7 +57,8 @@ pub enum ButtonSize {
 impl ButtonVariant {
     pub fn bg_color(&self) -> Srgba {
         match self {
-            Self::Default | Self::Ghost => tailwind::ZINC_700,
+            Self::Default => tailwind::ZINC_700,
+            Self::Ghost => TEXT_BODY_COLOR,
             Self::Primary | Self::Active => PRIMARY_COLOR,
         }
     }
@@ -67,7 +68,8 @@ impl ButtonVariant {
             (Self::Active, false) => 0.1,
             (Self::Active, true) => 0.15,
             (Self::Default, false) => 0.5,
-            (Self::Default | Self::Ghost, true) => 0.8,
+            (Self::Default, true) => 0.8,
+            (Self::Ghost, true) => 0.05,
             (Self::Primary, false) => 1.0,
             (Self::Primary, true) => 0.9,
         }
@@ -175,6 +177,7 @@ pub struct IconButtonProps {
     pub color: Option<Srgba>,
     pub variant: ButtonVariant,
     pub size: ButtonSize,
+    pub alpha: Option<f32>,
 }
 
 impl IconButtonProps {
@@ -195,6 +198,10 @@ impl IconButtonProps {
     }
     pub fn size(mut self, size: ButtonSize) -> Self {
         self.size = size;
+        self
+    }
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = Some(alpha);
         self
     }
 }
@@ -490,8 +497,10 @@ pub fn icon_button(props: IconButtonProps, asset_server: &AssetServer) -> impl B
         color,
         variant,
         size,
+        alpha,
     } = props;
-    let icon_color = color.unwrap_or(variant.text_color());
+    let alpha = alpha.unwrap_or(1.0);
+    let icon_color = color.unwrap_or(variant.text_color()).with_alpha(alpha);
 
     (
         button_base(variant, size, false),
