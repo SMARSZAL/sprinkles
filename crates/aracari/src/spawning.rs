@@ -642,17 +642,12 @@ pub fn setup_particle_systems(
                 &asset_server,
             ));
 
-            let fixed_seed = if emitter.time.use_fixed_seed {
-                Some(emitter.time.seed)
-            } else {
-                None
-            };
             let emitter_entity = commands
                 .spawn((
                     EmitterEntity {
                         parent_system: system_entity,
                     },
-                    EmitterRuntime::new(emitter_index, fixed_seed),
+                    EmitterRuntime::new(emitter_index, emitter.time.fixed_seed),
                     ParticleBufferHandle {
                         particle_buffer: particle_buffer_handle.clone(),
                         indices_buffer: indices_buffer_handle.clone(),

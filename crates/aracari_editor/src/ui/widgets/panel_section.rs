@@ -45,7 +45,7 @@ impl PanelSectionSize {
     fn padding(&self) -> UiRect {
         match self {
             Self::MD => UiRect::all(px(12)),
-            Self::XL => UiRect::new(px(24), px(24), px(20), px(24)),
+            Self::XL => UiRect::axes(px(24), px(14)),
         }
     }
 }
@@ -97,9 +97,9 @@ pub fn panel_section(props: PanelSectionProps, asset_server: &AssetServer) -> im
         Node {
             width: percent(100),
             flex_direction: FlexDirection::Column,
-            row_gap: px(6.0),
+            row_gap: px(12),
             padding: size.padding(),
-            border: UiRect::bottom(px(1.0)),
+            border: UiRect::bottom(px(1)),
             ..default()
         },
         BorderColor::all(BORDER_COLOR),

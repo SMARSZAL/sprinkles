@@ -42,7 +42,7 @@ struct EmitterParams {
     initial_velocity_max: f32,
     inherit_velocity_ratio: f32,
     explosiveness: f32,
-    randomness: f32,
+    spawn_time_randomness: f32,
 
     emission_shape_offset: vec3<f32>,
     _pad1: f32,

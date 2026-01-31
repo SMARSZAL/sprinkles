@@ -5,7 +5,7 @@ pub mod widgets;
 use bevy::prelude::*;
 
 use components::data_panel::data_panel;
-use components::inspector_panel::inspector_panel;
+use components::inspector::inspector_panel;
 use components::sidebar::sidebar;
 use components::topbar::topbar;
 use components::viewport::{setup_viewport, viewport_container};
@@ -20,9 +20,10 @@ impl Plugin for EditorUiPlugin {
             .add_plugins(widgets::panel_section::plugin)
             .add_plugins(widgets::text_edit::plugin)
             .add_plugins(components::data_panel::plugin)
-            .add_plugins(components::inspector_panel::plugin)
+            .add_plugins(components::inspector::plugin)
             .add_plugins(components::seekbar::plugin)
             .add_plugins(components::playback_controls::plugin)
+            .add_plugins(components::topbar::plugin)
             .add_systems(Startup, setup_ui)
             .add_systems(Update, setup_viewport);
     }

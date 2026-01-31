@@ -1,18 +1,20 @@
+pub mod binding;
+mod time;
+
 use aracari::prelude::*;
 use bevy::prelude::*;
 
 use crate::state::{EditorState, Inspectable};
-use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE, TEXT_SIZE_LG};
-use crate::ui::widgets::button::ButtonClickEvent;
+use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE_LG};
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
 use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle};
-use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
-use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
-use crate::ui::widgets::vector_edit::{VectorEditProps, vector_edit};
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Update, (setup_inspector_panel, update_panel_title));
+    app.add_plugins((binding::plugin, time::plugin)).add_systems(
+        Update,
+        (setup_inspector_panel, update_panel_title),
+    );
 }
 
 #[derive(Component)]
@@ -44,8 +46,6 @@ fn setup_inspector_panel(
     asset_server: Res<AssetServer>,
     panels: Query<Entity, Added<EditorInspectorPanel>>,
 ) {
-    let font: Handle<Font> = asset_server.load(FONT_PATH);
-
     for panel_entity in &panels {
         commands
             .entity(panel_entity)
@@ -63,59 +63,7 @@ fn setup_inspector_panel(
                         },
                     ))
                     .with_children(|content| {
-                        content
-                            .spawn(panel_section(
-                                PanelSectionProps::new("Collapsible")
-                                    .with_size(PanelSectionSize::XL)
-                                    .collapsible(),
-                                &asset_server,
-                            ))
-                            .with_children(|section| {
-                                section.spawn(test_label("Content 1", font.clone()));
-                                section.spawn(text_edit(
-                                    TextEditProps::default()
-                                        .with_label("Text Input")
-                                        .with_placeholder("Type here..."),
-                                ));
-                                section.spawn(text_edit(
-                                    TextEditProps::default()
-                                        .numeric_f32()
-                                        .with_label("Float Input")
-                                        .with_placeholder("0.0")
-                                        .with_default_value("45")
-                                        .with_suffix("%"),
-                                ));
-                                section.spawn(text_edit(
-                                    TextEditProps::default()
-                                        .numeric_i32()
-                                        .with_label("Integer Input")
-                                        .with_placeholder("0")
-                                        .with_default_value("100")
-                                        .with_min(0.0)
-                                        .with_max(255.0),
-                                ));
-                                section.spawn(vector_edit(
-                                    VectorEditProps::default()
-                                        .with_label("Position")
-                                        .with_default_values([0.0, 0.0, 0.0]),
-                                ));
-                            });
-
-                        content
-                            .spawn(panel_section(
-                                PanelSectionProps::new("Add & Collapsible")
-                                    .with_size(PanelSectionSize::XL)
-                                    .with_add_button()
-                                    .collapsible(),
-                                &asset_server,
-                            ))
-                            .observe(|_: On<ButtonClickEvent>| {
-                                println!("Add & Collapsible");
-                            })
-                            .with_children(|section| {
-                                section.spawn(test_label("Content A", font.clone()));
-                                section.spawn(test_label("Content B", font.clone()));
-                            });
+                        content.spawn(time::time_section(&asset_server));
                     });
             });
     }
@@ -215,25 +163,5 @@ fn update_panel_title(
 
     for mut icon in &mut title_icon {
         icon.image = asset_server.load(icon_path);
-    }
-}
-
-fn test_label(content: &str, font: Handle<Font>) -> impl Bundle {
-    (
-        Text::new(content),
-        TextFont {
-            font,
-            font_size: TEXT_SIZE,
-            ..default()
-        },
-        TextColor(TEXT_BODY_COLOR.into()),
-    )
-}
-
-fn fields_row() -> impl Bundle {
-    Node {
-        width: percent(100),
-        column_gap: px(12.0),
-        ..default()
     }
 }

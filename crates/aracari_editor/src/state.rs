@@ -16,6 +16,11 @@ pub struct EditorState {
     pub inspecting: Option<Inspecting>,
 }
 
+#[derive(Resource, Default)]
+pub struct DirtyState {
+    pub has_unsaved_changes: bool,
+}
+
 #[derive(Clone, Copy)]
 pub struct Inspecting {
     pub kind: Inspectable,

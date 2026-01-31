@@ -1,13 +1,21 @@
 use bevy::prelude::*;
 
+use crate::state::DirtyState;
 use crate::ui::components::playback_controls::playback_controls;
 use crate::ui::components::seekbar::seekbar;
 use crate::ui::tokens::{BACKGROUND_COLOR, BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
 use crate::ui::widgets::button::{ButtonProps, ButtonVariant, button};
 use crate::ui::widgets::separator::EditorSeparator;
 
+pub fn plugin(app: &mut App) {
+    app.add_systems(Update, update_save_button_text);
+}
+
 #[derive(Component)]
 pub struct EditorTopbar;
+
+#[derive(Component)]
+struct SaveButton;
 
 pub fn topbar(asset_server: &AssetServer) -> impl Bundle {
     let font: Handle<Font> = asset_server.load(FONT_PATH);
@@ -45,12 +53,39 @@ pub fn topbar(asset_server: &AssetServer) -> impl Bundle {
                     seekbar(asset_server),
                     playback_controls(asset_server),
                     EditorSeparator::vertical(),
-                    button(
-                        ButtonProps::new("Save").with_variant(ButtonVariant::Primary),
-                        asset_server,
+                    (
+                        SaveButton,
+                        button(
+                            ButtonProps::new("Save").with_variant(ButtonVariant::Primary),
+                            asset_server,
+                        ),
                     ),
                 ],
             ),
         ],
     )
+}
+
+fn update_save_button_text(
+    dirty_state: Res<DirtyState>,
+    save_buttons: Query<&Children, With<SaveButton>>,
+    mut texts: Query<&mut Text>,
+) {
+    if !dirty_state.is_changed() {
+        return;
+    }
+
+    let label = if dirty_state.has_unsaved_changes {
+        "Save*"
+    } else {
+        "Save"
+    };
+
+    for children in &save_buttons {
+        for child in children.iter() {
+            if let Ok(mut text) = texts.get_mut(child) {
+                **text = label.to_string();
+            }
+        }
+    }
 }

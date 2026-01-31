@@ -6,7 +6,10 @@ use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
 const ICON_CHECK: &str = "icons/ri-check-fill.png";
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Update, (handle_checkbox_hover, handle_checkbox_click));
+    app.add_systems(
+        Update,
+        (handle_checkbox_hover, handle_checkbox_click, sync_checkbox_icon),
+    );
 }
 
 #[derive(Component)]
@@ -137,6 +140,36 @@ fn handle_checkbox_click(
 
         state.checked = !state.checked;
 
+        let Some(&box_entity) = checkbox_children.first() else {
+            continue;
+        };
+
+        let Ok(box_children) = boxes.get(box_entity) else {
+            continue;
+        };
+
+        let Some(&icon_entity) = box_children.first() else {
+            continue;
+        };
+
+        let Ok(mut icon_node) = icons.get_mut(icon_entity) else {
+            continue;
+        };
+
+        icon_node.display = if state.checked {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+}
+
+fn sync_checkbox_icon(
+    checkboxes: Query<(&CheckboxState, &Children), Changed<CheckboxState>>,
+    boxes: Query<&Children, With<CheckboxBox>>,
+    mut icons: Query<&mut Node, With<CheckboxIcon>>,
+) {
+    for (state, checkbox_children) in &checkboxes {
         let Some(&box_entity) = checkbox_children.first() else {
             continue;
         };

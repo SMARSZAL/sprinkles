@@ -99,7 +99,7 @@ pub struct EmitterUniforms {
     pub initial_velocity_max: f32,
     pub inherit_velocity_ratio: f32,
     pub explosiveness: f32,
-    pub randomness: f32,
+    pub spawn_time_randomness: f32,
 
     pub emission_shape_offset: [f32; 3],
     pub _pad1: f32,
@@ -304,7 +304,7 @@ pub fn extract_particle_systems(
             initial_velocity_max: velocity.initial_velocity.max,
             inherit_velocity_ratio: velocity.inherit_velocity_ratio,
             explosiveness: emitter.time.explosiveness,
-            randomness: emitter.time.randomness,
+            spawn_time_randomness: emitter.time.spawn_time_randomness,
 
             emission_shape_offset: position.emission_shape_offset.into(),
             _pad1: 0.0,

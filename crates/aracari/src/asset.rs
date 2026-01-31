@@ -62,14 +62,14 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Reflect)]
 pub enum ParticleSystemDimension {
     #[default]
     D3,
     D2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Reflect)]
 pub enum DrawOrder {
     #[default]
     Index,
@@ -78,7 +78,7 @@ pub enum DrawOrder {
     ViewDepth,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterTime {
     #[serde(default = "default_lifetime")]
     pub lifetime: f32,
@@ -91,13 +91,11 @@ pub struct EmitterTime {
     #[serde(default)]
     pub explosiveness: f32,
     #[serde(default)]
-    pub randomness: f32,
+    pub spawn_time_randomness: f32,
     #[serde(default)]
     pub fixed_fps: u32,
     #[serde(default)]
-    pub seed: u32,
-    #[serde(default)]
-    pub use_fixed_seed: bool,
+    pub fixed_seed: Option<u32>,
 }
 
 fn default_lifetime() -> f32 {
@@ -112,10 +110,9 @@ impl Default for EmitterTime {
             delay: 0.0,
             one_shot: false,
             explosiveness: 0.0,
-            randomness: 0.0,
-            fixed_fps: 30,
-            seed: 0,
-            use_fixed_seed: false,
+            spawn_time_randomness: 0.0,
+            fixed_fps: 0,
+            fixed_seed: None,
         }
     }
 }
@@ -126,7 +123,7 @@ impl EmitterTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterDrawing {
     #[serde(default)]
     pub draw_order: DrawOrder,
@@ -140,7 +137,7 @@ impl Default for EmitterDrawing {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterData {
     pub name: String,
     #[serde(default = "default_enabled")]
@@ -188,7 +185,7 @@ impl Default for EmitterData {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterDrawPass {
     pub mesh: ParticleMesh,
     #[serde(default)]
@@ -207,7 +204,7 @@ impl Default for EmitterDrawPass {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
 pub enum QuadOrientation {
     FaceX,
     FaceY,
@@ -215,7 +212,7 @@ pub enum QuadOrientation {
     FaceZ,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Reflect)]
 pub enum ParticleMesh {
     Quad {
         #[serde(default)]
@@ -273,7 +270,7 @@ impl Default for ParticleMesh {
 
 // material types
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
 pub enum SerializableAlphaMode {
     Opaque,
     Mask { cutoff: f32 },
@@ -329,7 +326,7 @@ fn default_reflectance() -> f32 {
     0.5
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct StandardParticleMaterial {
     #[serde(default = "default_base_color")]
     pub base_color: [f32; 4],
@@ -486,7 +483,7 @@ impl StandardParticleMaterial {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum DrawPassMaterial {
     Standard(StandardParticleMaterial),
     CustomShader {
@@ -522,7 +519,7 @@ impl DrawPassMaterial {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Reflect)]
 pub struct Range {
     #[serde(default)]
     pub min: f32,
@@ -542,7 +539,7 @@ impl Range {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
 pub enum EmissionShape {
     #[default]
     Point,
@@ -563,7 +560,7 @@ pub enum EmissionShape {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessSpawnPosition {
     #[serde(default)]
     pub emission_shape: EmissionShape,
@@ -587,7 +584,7 @@ impl Default for ParticleProcessSpawnPosition {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessSpawnVelocity {
     #[serde(default)]
     pub inherit_velocity_ratio: f32,
@@ -624,7 +621,7 @@ impl Default for ParticleProcessSpawnVelocity {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessAccelerations {
     #[serde(default = "default_gravity")]
     pub gravity: Vec3,
@@ -642,7 +639,7 @@ impl Default for ParticleProcessAccelerations {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessSpawn {
     #[serde(default)]
     pub position: ParticleProcessSpawnPosition,
@@ -659,7 +656,7 @@ impl Default for ParticleProcessSpawn {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct AnimatedVelocity {
     #[serde(default)]
     pub value: Range,
@@ -676,7 +673,7 @@ impl Default for AnimatedVelocity {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessAnimVelocities {
     // TODO: angular_velocity: AnimatedVelocity,
     #[serde(default)]
@@ -694,7 +691,7 @@ impl Default for ParticleProcessAnimVelocities {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct Knot {
     pub position: f32,
     pub value: f32,
@@ -706,7 +703,7 @@ impl Knot {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Reflect)]
 pub enum SplineCurve {
     Custom(Vec<Knot>),
 
@@ -813,7 +810,7 @@ fn default_curve_max() -> f32 {
     1.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct SplineCurveConfig {
     pub curve: SplineCurve,
     #[serde(default = "default_curve_min")]
@@ -1253,7 +1250,7 @@ impl SplineCurve {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, Reflect)]
 pub enum GradientInterpolation {
     Steps,
     #[default]
@@ -1261,13 +1258,13 @@ pub enum GradientInterpolation {
     Smoothstep,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct GradientStop {
     pub color: [f32; 4],
     pub position: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct Gradient {
     pub stops: Vec<GradientStop>,
     #[serde(default)]
@@ -1307,7 +1304,7 @@ impl Gradient {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum SolidOrGradientColor {
     Solid { color: [f32; 4] },
     Gradient { gradient: Gradient },
@@ -1342,7 +1339,7 @@ impl SolidOrGradientColor {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessDisplayScale {
     #[serde(default = "default_scale_range")]
     pub range: Range,
@@ -1363,7 +1360,7 @@ impl Default for ParticleProcessDisplayScale {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessDisplayColor {
     #[serde(default)]
     pub initial_color: SolidOrGradientColor,
@@ -1383,7 +1380,7 @@ impl Default for ParticleProcessDisplayColor {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Reflect)]
 pub struct ParticleProcessDisplay {
     #[serde(default)]
     pub scale: ParticleProcessDisplayScale,
@@ -1403,7 +1400,7 @@ fn default_turbulence_influence() -> Range {
     Range { min: 0.0, max: 0.1 }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessTurbulence {
     #[serde(default)]
     pub enabled: bool,
@@ -1447,7 +1444,7 @@ fn default_collision_base_size() -> f32 {
     0.01
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum ParticlesColliderShape3D {
     Box { size: Vec3 },
     Sphere { radius: f32 },
@@ -1459,7 +1456,7 @@ impl Default for ParticlesColliderShape3D {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessCollision {
     pub mode: ParticleProcessCollisionMode,
     #[serde(default = "default_collision_base_size")]
@@ -1478,7 +1475,7 @@ impl Default for ParticleProcessCollision {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum ParticleProcessCollisionMode {
     Rigid { friction: f32, bounce: f32 },
     HideOnContact,
@@ -1493,9 +1490,10 @@ impl Default for ParticleProcessCollisionMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleProcessConfig {
     #[serde(default)]
+    #[reflect(ignore)]
     pub particle_flags: ParticleFlags,
     #[serde(default)]
     pub spawn: ParticleProcessSpawn,

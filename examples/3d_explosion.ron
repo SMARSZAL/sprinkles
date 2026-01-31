@@ -15,8 +15,6 @@
                 explosiveness: 0.9,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,
@@ -133,8 +131,6 @@
                 explosiveness: 0.9,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,
@@ -257,8 +253,6 @@
                 explosiveness: 0.9,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,
@@ -376,8 +370,6 @@
                 explosiveness: 0.9,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,
@@ -501,8 +493,6 @@
                 explosiveness: 0.0,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,
@@ -596,8 +586,6 @@
                 explosiveness: 0.95,
                 randomness: 0.0,
                 fixed_fps: 30,
-                seed: 0,
-                use_fixed_seed: false,
             ),
             drawing: (
                 draw_order: Index,

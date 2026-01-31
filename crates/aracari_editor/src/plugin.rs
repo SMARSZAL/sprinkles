@@ -3,8 +3,8 @@ use bevy::color::palettes::tailwind::ZINC_950;
 use bevy::prelude::*;
 
 use crate::state::{
-    EditorData, EditorState, Inspectable, Inspecting, load_editor_data, load_project_from_path,
-    project_path, save_editor_data,
+    DirtyState, EditorData, EditorState, Inspectable, Inspecting, load_editor_data,
+    load_project_from_path, project_path, save_editor_data,
 };
 use crate::viewport::{
     CameraSettings, ViewportInputState, configure_floor_texture, despawn_preview_on_project_change,
@@ -21,6 +21,7 @@ impl Plugin for AracariEditorPlugin {
 
         app.add_plugins(AracariPlugin)
             .init_resource::<EditorState>()
+            .init_resource::<DirtyState>()
             .init_resource::<CameraSettings>()
             .init_resource::<ViewportInputState>()
             .insert_resource(editor_data)

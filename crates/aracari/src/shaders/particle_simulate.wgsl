@@ -42,7 +42,7 @@ struct EmitterParams {
     initial_velocity_max: f32,
     inherit_velocity_ratio: f32,
     explosiveness: f32,
-    randomness: f32,
+    spawn_time_randomness: f32,
 
     emission_shape_offset: vec3<f32>,
     _pad1: f32,
@@ -180,7 +180,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // phase-based emission: each particle has a phase (0-1) based on its index
     let base_phase = f32(idx) / f32(params.amount);
-    let phase = base_phase + hash_to_float(idx) * params.randomness;
+    let phase = base_phase + hash_to_float(idx) * params.spawn_time_randomness;
     let adjusted_phase = fract(phase * (1.0 - params.explosiveness));
 
     // check if this particle should restart this frame

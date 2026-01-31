@@ -338,8 +338,7 @@ pub fn handle_playback_reset_event(
                 let fixed_seed = asset
                     .emitters
                     .get(runtime.emitter_index)
-                    .filter(|e| e.time.use_fixed_seed)
-                    .map(|e| e.time.seed);
+                    .and_then(|e| e.time.fixed_seed);
                 runtime.stop(fixed_seed);
             }
         }

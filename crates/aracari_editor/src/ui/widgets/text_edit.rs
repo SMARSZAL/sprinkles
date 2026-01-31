@@ -92,6 +92,10 @@ struct NumericRange {
     max: f64,
 }
 
+/// Marker for inputs that allow empty values (skip clamping when empty)
+#[derive(Component)]
+struct AllowEmpty;
+
 #[derive(Clone)]
 pub enum FilterType {
     Alphanumeric,
@@ -110,6 +114,7 @@ struct TextEditConfig {
     default_value: Option<String>,
     min: f64,
     max: f64,
+    allow_empty: bool,
     initialized: bool,
 }
 
@@ -123,6 +128,7 @@ pub struct TextEditProps {
     pub suffix: Option<String>,
     pub min: f64,
     pub max: f64,
+    pub allow_empty: bool,
 }
 
 impl Default for TextEditProps {
@@ -137,6 +143,7 @@ impl Default for TextEditProps {
             suffix: None,
             min: f64::MIN,
             max: f64::MAX,
+            allow_empty: false,
         }
     }
 }
@@ -175,6 +182,11 @@ impl TextEditProps {
         self
     }
 
+    pub fn allow_empty(mut self) -> Self {
+        self.allow_empty = true;
+        self
+    }
+
     pub fn numeric_f32(mut self) -> Self {
         self.variant = TextEditVariant::NumericF32;
         self.filter = Some(FilterType::Decimal);
@@ -205,6 +217,7 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
         suffix,
         min,
         max,
+        allow_empty,
     } = props;
 
     (
@@ -212,6 +225,8 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
             flex_direction: FlexDirection::Column,
             row_gap: px(3),
             flex_grow: 1.0,
+            flex_shrink: 1.0,
+            flex_basis: px(0),
             ..default()
         },
         TextEditConfig {
@@ -224,6 +239,7 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
             default_value,
             min,
             max,
+            allow_empty,
             initialized: false,
         },
     )
@@ -398,6 +414,10 @@ fn setup_text_edit_input(
             });
         }
 
+        if config.allow_empty {
+            text_input.insert(AllowEmpty);
+        }
+
         let text_input_entity = text_input.id();
 
         commands.entity(wrapper_entity).add_child(text_input_entity);
@@ -542,6 +562,7 @@ fn handle_clamp_on_unfocus(
             &mut TextInputQueue,
             Option<&TextEditSuffix>,
             Option<&NumericRange>,
+            Option<&AllowEmpty>,
         ),
         With<EditorTextEdit>,
     >,
@@ -554,14 +575,21 @@ fn handle_clamp_on_unfocus(
         return;
     }
 
-    let Ok((variant, buffer, mut queue, suffix, range)) = text_edits.get_mut(was_focused) else {
+    let Ok((variant, buffer, mut queue, suffix, range, allow_empty)) =
+        text_edits.get_mut(was_focused)
+    else {
         return;
     };
     if !variant.is_numeric() {
         return;
     }
 
-    let value = parse_numeric_value(&buffer.get_text(), suffix);
+    let text = strip_suffix(&buffer.get_text(), suffix);
+    if text.is_empty() && allow_empty.is_some() {
+        return;
+    }
+
+    let value = text.parse().unwrap_or(0.0);
     update_input_value(&mut queue, value, *variant, range);
 }
 
@@ -603,8 +631,9 @@ fn handle_numeric_increment(
     let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
     let step = if shift { 10.0 } else { 1.0 };
     let new_value = parse_numeric_value(&buffer.get_text(), suffix) + (direction * step);
+    let rounded = (new_value * 100.0).round() / 100.0;
 
-    update_input_value(&mut queue, new_value, *variant, range);
+    update_input_value(&mut queue, rounded, *variant, range);
 }
 
 fn handle_drag_value(
