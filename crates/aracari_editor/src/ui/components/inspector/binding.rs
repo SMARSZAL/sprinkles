@@ -4,7 +4,7 @@ use aracari::prelude::*;
 use bevy::ecs::system::ParamSet;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
-use bevy::reflect::GetPath;
+use bevy::reflect::{DynamicEnum, DynamicVariant, PartialReflect, ReflectMut, ReflectRef};
 use bevy_ui_text_input::{
     TextInputBuffer, TextInputQueue,
     actions::{TextInputAction, TextInputEdit},
@@ -15,7 +15,8 @@ use crate::ui::widgets::checkbox::CheckboxState;
 use crate::ui::widgets::combobox::ComboBoxChangeEvent;
 use crate::ui::widgets::text_edit::EditorTextEdit;
 use crate::ui::widgets::variant_edit::{
-    EditorVariantEdit, VariantComboBox, VariantEditConfig, VariantFieldBinding, VariantFieldKind,
+    EditorVariantEdit, VariantComboBox, VariantDefinition, VariantEditConfig, VariantFieldBinding,
+    VariantFieldKind,
 };
 use crate::ui::widgets::vector_edit::EditorVectorEdit;
 
@@ -49,7 +50,6 @@ pub enum FieldKind {
     U32OrEmpty,
     OptionalU32,
     Bool,
-    VariantEdit,
     ComboBox { options: Vec<String> },
 }
 
@@ -64,7 +64,6 @@ struct FieldBound;
 
 #[derive(Component)]
 struct CheckboxBound;
-
 
 #[derive(Component)]
 struct VariantFieldBound;
@@ -81,100 +80,6 @@ impl Field {
         self.kind = kind;
         self
     }
-
-    fn reflect_path(&self) -> String {
-        format!(".{}", self.path)
-    }
-}
-
-fn get_emitter_field_value(emitter: &EmitterData, field: &Field) -> FieldValue {
-    let path = field.reflect_path();
-
-    let value = match field.kind {
-        FieldKind::F32 | FieldKind::F32Percent => emitter
-            .path::<f32>(path.as_str())
-            .ok()
-            .map(|v| FieldValue::F32(*v))
-            .unwrap_or(FieldValue::None),
-        FieldKind::U32 | FieldKind::U32OrEmpty => emitter
-            .path::<u32>(path.as_str())
-            .ok()
-            .map(|v| FieldValue::U32(*v))
-            .unwrap_or(FieldValue::None),
-        FieldKind::OptionalU32 => emitter
-            .path::<Option<u32>>(path.as_str())
-            .ok()
-            .map(|v| FieldValue::OptionalU32(*v))
-            .unwrap_or(FieldValue::None),
-        FieldKind::Bool => emitter
-            .path::<bool>(path.as_str())
-            .ok()
-            .map(|v| FieldValue::Bool(*v))
-            .unwrap_or(FieldValue::None),
-        FieldKind::VariantEdit => FieldValue::None,
-        FieldKind::ComboBox { .. } => FieldValue::None,
-    };
-
-    value.with_kind(&field.kind)
-}
-
-fn set_emitter_field_value(emitter: &mut EmitterData, field: &Field, value: FieldValue) -> bool {
-    let path = field.reflect_path();
-
-    match value {
-        FieldValue::F32(v) => {
-            if let Ok(current) = emitter.path::<f32>(path.as_str()) {
-                if (*current - v).abs() > f32::EPSILON {
-                    if let Ok(field_mut) = emitter.path_mut::<f32>(path.as_str()) {
-                        *field_mut = v;
-                        return true;
-                    }
-                }
-            }
-        }
-        FieldValue::U32(v) => {
-            if let Ok(current) = emitter.path::<u32>(path.as_str()) {
-                if *current != v {
-                    if let Ok(field_mut) = emitter.path_mut::<u32>(path.as_str()) {
-                        *field_mut = v;
-                        return true;
-                    }
-                }
-            }
-        }
-        FieldValue::OptionalU32(v) => {
-            if let Ok(current) = emitter.path::<Option<u32>>(path.as_str()) {
-                if *current != v {
-                    if let Ok(field_mut) = emitter.path_mut::<Option<u32>>(path.as_str()) {
-                        *field_mut = v;
-                        return true;
-                    }
-                }
-            }
-        }
-        FieldValue::Bool(v) => {
-            if let Ok(current) = emitter.path::<bool>(path.as_str()) {
-                if *current != v {
-                    if let Ok(field_mut) = emitter.path_mut::<bool>(path.as_str()) {
-                        *field_mut = v;
-                        return true;
-                    }
-                }
-            }
-        }
-        FieldValue::Vec3(v) => {
-            if let Ok(current) = emitter.path::<Vec3>(path.as_str()) {
-                if (*current - v).length() > f32::EPSILON {
-                    if let Ok(field_mut) = emitter.path_mut::<Vec3>(path.as_str()) {
-                        *field_mut = v;
-                        return true;
-                    }
-                }
-            }
-        }
-        FieldValue::None => {}
-    }
-    false
 }
 
 #[derive(Clone)]
@@ -188,34 +93,19 @@ enum FieldValue {
 }
 
 impl FieldValue {
-    fn with_kind(self, kind: &FieldKind) -> Self {
+    fn to_display_string(&self, kind: &FieldKind) -> Option<String> {
         match (self, kind) {
             (FieldValue::F32(v), FieldKind::F32Percent) => {
-                FieldValue::F32((v * 100.0 * 100.0).round() / 100.0)
+                let display = (v * 100.0 * 100.0).round() / 100.0;
+                Some(format_f32(display))
             }
-            (FieldValue::U32(0), FieldKind::U32OrEmpty) => FieldValue::None,
-            (FieldValue::OptionalU32(None), _) => FieldValue::None,
-            (FieldValue::OptionalU32(Some(0)), FieldKind::OptionalU32) => FieldValue::None,
-            (FieldValue::OptionalU32(Some(v)), _) => FieldValue::U32(v),
-            (other, _) => other,
-        }
-    }
-
-    fn to_display_string(&self) -> Option<String> {
-        match self {
-            FieldValue::None => None,
-            FieldValue::F32(v) => {
-                let mut text = v.to_string();
-                if !text.contains('.') {
-                    text.push_str(".0");
-                }
-                Some(text)
-            }
-            FieldValue::U32(v) => Some(v.to_string()),
-            FieldValue::OptionalU32(Some(v)) => Some(v.to_string()),
-            FieldValue::OptionalU32(None) => None,
-            FieldValue::Bool(_) => None,
-            FieldValue::Vec3(_) => None,
+            (FieldValue::F32(v), _) => Some(format_f32(*v)),
+            (FieldValue::U32(0), FieldKind::U32OrEmpty) => None,
+            (FieldValue::U32(v), _) => Some(v.to_string()),
+            (FieldValue::OptionalU32(None), _) => None,
+            (FieldValue::OptionalU32(Some(0)), FieldKind::OptionalU32) => None,
+            (FieldValue::OptionalU32(Some(v)), _) => Some(v.to_string()),
+            _ => None,
         }
     }
 
@@ -234,7 +124,39 @@ impl FieldValue {
     }
 }
 
-fn parse_field_value(text: &str, kind: FieldKind) -> FieldValue {
+fn format_f32(v: f32) -> String {
+    let mut text = v.to_string();
+    if !text.contains('.') {
+        text.push_str(".0");
+    }
+    text
+}
+
+fn get_field_value_by_reflection(
+    emitter: &EmitterData,
+    path: &str,
+    kind: &FieldKind,
+) -> FieldValue {
+    let reflect_path = format!(".{}", path);
+    let Ok(value) = emitter.reflect_path(reflect_path.as_str()) else {
+        return FieldValue::None;
+    };
+    reflect_to_field_value(value, kind)
+}
+
+fn set_field_value_by_reflection(
+    emitter: &mut EmitterData,
+    path: &str,
+    value: &FieldValue,
+) -> bool {
+    let reflect_path = format!(".{}", path);
+    let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
+        return false;
+    };
+    apply_field_value_to_reflect(target, value)
+}
+
+fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
     let text = text.trim();
 
     match kind {
@@ -250,12 +172,8 @@ fn parse_field_value(text: &str, kind: FieldKind) -> FieldValue {
             .parse::<f32>()
             .map(|v| FieldValue::F32(v / 100.0))
             .unwrap_or(FieldValue::None),
-        FieldKind::U32 => text
-            .parse::<u32>()
-            .map(FieldValue::U32)
-            .unwrap_or(FieldValue::None),
-        FieldKind::U32OrEmpty => {
-            if text.is_empty() {
+        FieldKind::U32 | FieldKind::U32OrEmpty => {
+            if text.is_empty() && matches!(kind, FieldKind::U32OrEmpty) {
                 FieldValue::U32(0)
             } else {
                 text.parse::<u32>()
@@ -279,17 +197,80 @@ fn parse_field_value(text: &str, kind: FieldKind) -> FieldValue {
                     .unwrap_or(FieldValue::None)
             }
         }
-        FieldKind::Bool => FieldValue::None,
-        FieldKind::VariantEdit => FieldValue::None,
-        FieldKind::ComboBox { .. } => FieldValue::None,
+        FieldKind::Bool | FieldKind::ComboBox { .. } => FieldValue::None,
     }
 }
 
-use bevy::reflect::{DynamicEnum, DynamicVariant, PartialReflect, ReflectMut, ReflectRef};
+fn reflect_to_field_value(value: &dyn PartialReflect, kind: &FieldKind) -> FieldValue {
+    if let Some(v) = value.try_downcast_ref::<f32>() {
+        return FieldValue::F32(*v);
+    }
+    if let Some(v) = value.try_downcast_ref::<u32>() {
+        return FieldValue::U32(*v);
+    }
+    if let Some(v) = value.try_downcast_ref::<bool>() {
+        return FieldValue::Bool(*v);
+    }
+    if let Some(v) = value.try_downcast_ref::<Vec3>() {
+        return FieldValue::Vec3(*v);
+    }
+    if let Some(v) = value.try_downcast_ref::<Option<u32>>() {
+        return FieldValue::OptionalU32(*v);
+    }
+    if let ReflectRef::Enum(enum_ref) = value.reflect_ref() {
+        return FieldValue::U32(enum_ref.variant_index() as u32);
+    }
+    let _ = kind;
+    FieldValue::None
+}
 
-use crate::ui::widgets::variant_edit::VariantDefinition;
+fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldValue) -> bool {
+    match value {
+        FieldValue::F32(v) => {
+            if let Some(field) = target.try_downcast_mut::<f32>() {
+                if (*field - v).abs() > f32::EPSILON {
+                    *field = *v;
+                    return true;
+                }
+            }
+        }
+        FieldValue::U32(v) => {
+            if let Some(field) = target.try_downcast_mut::<u32>() {
+                if *field != *v {
+                    *field = *v;
+                    return true;
+                }
+            }
+        }
+        FieldValue::OptionalU32(v) => {
+            if let Some(field) = target.try_downcast_mut::<Option<u32>>() {
+                if *field != *v {
+                    *field = *v;
+                    return true;
+                }
+            }
+        }
+        FieldValue::Bool(v) => {
+            if let Some(field) = target.try_downcast_mut::<bool>() {
+                if *field != *v {
+                    *field = *v;
+                    return true;
+                }
+            }
+        }
+        FieldValue::Vec3(v) => {
+            if let Some(field) = target.try_downcast_mut::<Vec3>() {
+                if (*field - *v).length() > f32::EPSILON {
+                    *field = *v;
+                    return true;
+                }
+            }
+        }
+        FieldValue::None => {}
+    }
+    false
+}
 
-/// Gets the variant index by matching the current variant name against the definitions.
 fn get_variant_index_by_reflection(
     emitter: &EmitterData,
     path: &str,
@@ -310,6 +291,7 @@ fn get_variant_field_value_by_reflection(
     emitter: &EmitterData,
     path: &str,
     field_name: &str,
+    kind: &VariantFieldKind,
 ) -> Option<FieldValue> {
     let reflect_path = format!(".{}", path);
     let value = emitter.reflect_path(reflect_path.as_str()).ok()?;
@@ -318,14 +300,16 @@ fn get_variant_field_value_by_reflection(
         return None;
     };
 
+    let field_kind = variant_field_kind_to_field_kind(kind);
+
     if let Some(field) = enum_ref.field(field_name) {
-        return reflect_to_field_value(field);
+        return Some(reflect_to_field_value(field, &field_kind));
     }
 
     if let Some(inner) = enum_ref.field_at(0) {
         if let ReflectRef::Struct(struct_ref) = inner.reflect_ref() {
             if let Some(field) = struct_ref.field(field_name) {
-                return reflect_to_field_value(field);
+                return Some(reflect_to_field_value(field, &field_kind));
             }
         }
     }
@@ -363,7 +347,6 @@ fn set_variant_field_value_by_reflection(
     false
 }
 
-/// Creates a new variant from the definition's default value using reflection.
 fn create_variant_from_definition(
     emitter: &mut EmitterData,
     path: &str,
@@ -378,7 +361,6 @@ fn create_variant_from_definition(
         return false;
     };
 
-    // check if already the same variant
     if let ReflectRef::Enum(current) = target.reflect_ref() {
         if current.variant_name() == variant_def.name {
             return false;
@@ -389,74 +371,16 @@ fn create_variant_from_definition(
     true
 }
 
-/// Converts a reflected value to a FieldValue.
-fn reflect_to_field_value(value: &dyn PartialReflect) -> Option<FieldValue> {
-    if let Some(v) = value.try_downcast_ref::<f32>() {
-        return Some(FieldValue::F32(*v));
+fn variant_field_kind_to_field_kind(kind: &VariantFieldKind) -> FieldKind {
+    match kind {
+        VariantFieldKind::F32 => FieldKind::F32,
+        VariantFieldKind::U32 => FieldKind::U32,
+        VariantFieldKind::Bool => FieldKind::Bool,
+        VariantFieldKind::Vec3(_) => FieldKind::F32,
+        VariantFieldKind::ComboBox { options } => FieldKind::ComboBox {
+            options: options.clone(),
+        },
     }
-    if let Some(v) = value.try_downcast_ref::<u32>() {
-        return Some(FieldValue::U32(*v));
-    }
-    if let Some(v) = value.try_downcast_ref::<bool>() {
-        return Some(FieldValue::Bool(*v));
-    }
-    if let Some(v) = value.try_downcast_ref::<Vec3>() {
-        return Some(FieldValue::Vec3(*v));
-    }
-    // handle enums (like QuadOrientation) by getting their variant index
-    if let ReflectRef::Enum(enum_ref) = value.reflect_ref() {
-        return Some(FieldValue::U32(enum_ref.variant_index() as u32));
-    }
-    None
-}
-
-/// Applies a FieldValue to a reflected field.
-fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldValue) -> bool {
-    match value {
-        FieldValue::F32(v) => {
-            if let Some(field) = target.try_downcast_mut::<f32>() {
-                if (*field - v).abs() > f32::EPSILON {
-                    *field = *v;
-                    return true;
-                }
-            }
-        }
-        FieldValue::U32(v) => {
-            if let Some(field) = target.try_downcast_mut::<u32>() {
-                if *field != *v {
-                    *field = *v;
-                    return true;
-                }
-            }
-            // handle setting enum variants by index
-            if let ReflectMut::Enum(enum_mut) = target.reflect_mut() {
-                let current_index = enum_mut.variant_index();
-                if current_index != *v as usize {
-                    // we need type info to set enum by index - this is a limitation
-                    // for now, we'll rely on the variant definitions to handle enums
-                    return false;
-                }
-            }
-        }
-        FieldValue::Bool(v) => {
-            if let Some(field) = target.try_downcast_mut::<bool>() {
-                if *field != *v {
-                    *field = *v;
-                    return true;
-                }
-            }
-        }
-        FieldValue::Vec3(v) => {
-            if let Some(field) = target.try_downcast_mut::<Vec3>() {
-                if (*field - *v).length() > f32::EPSILON {
-                    *field = *v;
-                    return true;
-                }
-            }
-        }
-        _ => {}
-    }
-    false
 }
 
 fn bind_variant_edits(
@@ -538,17 +462,21 @@ fn bind_variant_field_values(
             continue;
         };
 
-        let value =
-            get_variant_field_value_by_reflection(emitter, &config.path, &binding.field_name);
+        let value = get_variant_field_value_by_reflection(
+            emitter,
+            &config.path,
+            &binding.field_name,
+            &binding.field_kind,
+        );
 
         let Some(value) = value else {
             continue;
         };
 
+        let field_kind = variant_field_kind_to_field_kind(&binding.field_kind);
         let mut bound = false;
 
-        // bind to text edit if this is a numeric field
-        if let Some(text) = value.to_display_string() {
+        if let Some(text) = value.to_display_string(&field_kind) {
             for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
                 if find_ancestor_entity(text_edit_parent.parent(), binding_entity, &parents) {
                     queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
@@ -560,7 +488,6 @@ fn bind_variant_field_values(
             }
         }
 
-        // bind to checkbox if this is a bool field
         if let Some(checked) = value.to_bool() {
             if let Ok(mut state) = checkbox_states.get_mut(binding_entity) {
                 state.checked = checked;
@@ -568,7 +495,6 @@ fn bind_variant_field_values(
             }
         }
 
-        // bind to vector edit if this is a Vec3 field
         if let Some(vec) = value.to_vec3() {
             if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
                 let values = [vec.x, vec.y, vec.z];
@@ -581,10 +507,7 @@ fn bind_variant_field_values(
 
                     for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
                         if find_ancestor_entity(text_edit_parent.parent(), vec_child, &parents) {
-                            let mut text = values[component_index].to_string();
-                            if !text.contains('.') {
-                                text.push_str(".0");
-                            }
+                            let text = format_f32(values[component_index]);
                             queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
                             queue.add(TextInputAction::Edit(TextInputEdit::Paste(text)));
                             commands.entity(text_edit_entity).insert(VariantFieldBound);
@@ -600,7 +523,6 @@ fn bind_variant_field_values(
             }
         }
 
-        // only mark binding as bound if we actually populated something
         if bound {
             commands.entity(binding_entity).insert(VariantFieldBound);
         }
@@ -735,13 +657,15 @@ fn sync_variant_field_on_blur(
             .map(FieldValue::U32)
             .unwrap_or(FieldValue::None),
         VariantFieldKind::Bool => FieldValue::None,
-        VariantFieldKind::Vec3(_) => {
-            // get current Vec3 value and update only the changed component
+        VariantFieldKind::Vec3(suffixes) => {
             if let Ok(vec_children) = vector_edits.get(binding_entity) {
-                if let Some(FieldValue::Vec3(mut vec)) =
-                    get_variant_field_value_by_reflection(emitter, &config.path, &binding.field_name)
-                {
-                    // determine which component was edited based on text input position
+                let kind = VariantFieldKind::Vec3(*suffixes);
+                if let Some(FieldValue::Vec3(mut vec)) = get_variant_field_value_by_reflection(
+                    emitter,
+                    &config.path,
+                    &binding.field_name,
+                    &kind,
+                ) {
                     for (idx, vec_child) in vec_children.iter().enumerate() {
                         if find_ancestor_entity(text_input_parent.parent(), vec_child, &parents) {
                             if let Ok(v) = text.trim().parse::<f32>() {
@@ -845,13 +769,12 @@ fn bind_values_to_inputs(
             continue;
         };
 
-        // skip fields that belong to a VariantEdit (handled separately)
         if is_descendant_of_variant_edit(child_of.parent(), &variant_edit_query, &parents) {
             continue;
         }
 
-        let value = get_emitter_field_value(emitter, field);
-        let text = value.to_display_string().unwrap_or_default();
+        let value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
+        let text = value.to_display_string(&field.kind).unwrap_or_default();
 
         queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
         queue.add(TextInputAction::Edit(TextInputEdit::Paste(text)));
@@ -859,7 +782,6 @@ fn bind_values_to_inputs(
     }
 
     for (entity, mut state) in &mut checkbox_set.p1() {
-        // skip checkboxes that belong to a VariantEdit (handled separately)
         if let Ok(child_of) = parents.get(entity) {
             if is_descendant_of_variant_edit(child_of.parent(), &variant_edit_query, &parents) {
                 continue;
@@ -877,7 +799,7 @@ fn bind_values_to_inputs(
             continue;
         };
 
-        let value = get_emitter_field_value(emitter, field);
+        let value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
         if let Some(checked) = value.to_bool() {
             state.checked = checked;
         }
@@ -962,13 +884,13 @@ fn sync_input_on_blur(
     };
 
     let text = buffer.get_text();
-    let value = parse_field_value(&text, field.kind.clone());
+    let value = parse_field_value(&text, &field.kind);
 
     if matches!(value, FieldValue::None) {
         return;
     }
 
-    if set_emitter_field_value(emitter, field, value) {
+    if set_field_value_by_reflection(emitter, &field.path, &value) {
         dirty_state.has_unsaved_changes = true;
         for mut runtime in &mut emitter_runtimes {
             runtime.restart(emitter.time.fixed_seed);
@@ -1022,7 +944,8 @@ fn sync_checkbox_changes_to_asset(
             continue;
         };
 
-        if set_emitter_field_value(emitter, field, FieldValue::Bool(state.checked)) {
+        let value = FieldValue::Bool(state.checked);
+        if set_field_value_by_reflection(emitter, &field.path, &value) {
             dirty_state.has_unsaved_changes = true;
             for mut runtime in &mut emitter_runtimes {
                 runtime.restart(emitter.time.fixed_seed);
