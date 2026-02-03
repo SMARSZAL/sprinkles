@@ -10,7 +10,7 @@ pub fn plugin(app: &mut App) {
     app.add_systems(Update, setup_combobox_fields);
 }
 
-const UPPERCASE_ACRONYMS: &[&str] = &["fps"];
+const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z"];
 
 fn path_to_label(path: &str) -> String {
     let field_name = path.split('.').last().unwrap_or(path);

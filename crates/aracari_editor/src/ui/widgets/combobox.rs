@@ -35,11 +35,13 @@ struct ComboBoxOption {
     combobox: Entity,
     index: usize,
     label: String,
+    value: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct ComboBoxOptionData {
     pub label: String,
+    pub value: Option<String>,
     pub icon: Option<String>,
 }
 
@@ -47,8 +49,14 @@ impl ComboBoxOptionData {
     pub fn new(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
+            value: None,
             icon: None,
         }
+    }
+
+    pub fn with_value(mut self, value: impl Into<String>) -> Self {
+        self.value = Some(value.into());
+        self
     }
 
     pub fn with_icon(mut self, icon: impl Into<String>) -> Self {
@@ -84,6 +92,7 @@ pub struct ComboBoxChangeEvent {
     pub entity: Entity,
     pub selected: usize,
     pub label: String,
+    pub value: Option<String>,
 }
 
 pub fn combobox(options: Vec<impl Into<ComboBoxOptionData>>) -> impl Bundle {
@@ -288,6 +297,7 @@ fn handle_trigger_click(
                 combobox: combobox_entity,
                 index,
                 label: option.label.clone(),
+                value: option.value.clone(),
             },
             button(button_props),
         ));
@@ -403,6 +413,7 @@ fn handle_option_click(
         entity: option.combobox,
         selected: option.index,
         label: option.label.clone(),
+        value: option.value.clone(),
     });
 
     if !is_icon_only {

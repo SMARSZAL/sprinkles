@@ -1,36 +1,244 @@
 use aracari::prelude::*;
 use bevy::prelude::*;
+use bevy::reflect::{Typed, TypeInfo, VariantInfo};
 
 use crate::ui::widgets::combobox::ComboBoxOptionData;
-use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
-use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
+use crate::ui::widgets::inspector_field::InspectorFieldProps;
 use crate::ui::widgets::variant_edit::{
-    VariantDefinition, VariantEditProps, VariantField, variant_edit,
+    VariantDefinition, VariantEditProps, VariantField, name_to_label,
 };
 use crate::ui::widgets::vector_edit::VectorSuffixes;
 
-use super::binding::Field;
+use super::{InspectorItem, InspectorSection, inspector_section};
 
-pub fn plugin(app: &mut App) {
-    app.add_systems(Update, setup_draw_pass_section_fields);
-}
-
-#[derive(Component)]
-pub struct DrawPassSection;
-
-#[derive(Component)]
-struct DrawPassSectionInitialized;
+pub fn plugin(_app: &mut App) {}
 
 pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {
-    (
-        DrawPassSection,
-        panel_section(
-            PanelSectionProps::new("Draw pass")
-                .collapsible()
-                .with_size(PanelSectionSize::XL),
-            asset_server,
+    inspector_section(
+        InspectorSection::new(
+            "Draw pass",
+            vec![
+                vec![
+                    InspectorItem::Variant {
+                        path: "draw_pass.mesh".into(),
+                        props: VariantEditProps::new("draw_pass.mesh")
+                            .with_variants(mesh_variants()),
+                    },
+                    InspectorItem::Variant {
+                        path: "draw_pass.material".into(),
+                        props: VariantEditProps::new("draw_pass.material")
+                            .with_variants(material_variants()),
+                    },
+                ],
+                vec![InspectorFieldProps::new("draw_pass.draw_order")
+                    .combobox(combobox_options_from_reflect::<DrawOrder>())
+                    .into()],
+                vec![InspectorFieldProps::new("draw_pass.shadow_caster")
+                    .bool()
+                    .into()],
+            ],
         ),
+        asset_server,
     )
+}
+
+struct VariantConfig {
+    icon: Option<&'static str>,
+    field_overrides: Vec<(&'static str, VariantField)>,
+    suffix_overrides: Vec<(&'static str, VectorSuffixes)>,
+    row_layout: Option<Vec<Vec<&'static str>>>,
+    default_value: Option<Box<dyn PartialReflect>>,
+}
+
+impl Default for VariantConfig {
+    fn default() -> Self {
+        Self {
+            icon: None,
+            field_overrides: Vec::new(),
+            suffix_overrides: Vec::new(),
+            row_layout: None,
+            default_value: None,
+        }
+    }
+}
+
+impl VariantConfig {
+    fn icon(mut self, icon: &'static str) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    fn field(mut self, name: &'static str, field: VariantField) -> Self {
+        self.field_overrides.push((name, field));
+        self
+    }
+
+    fn suffixes(mut self, name: &'static str, suffixes: VectorSuffixes) -> Self {
+        self.suffix_overrides.push((name, suffixes));
+        self
+    }
+
+    fn rows(mut self, layout: Vec<Vec<&'static str>>) -> Self {
+        self.row_layout = Some(layout);
+        self
+    }
+
+    fn default_value<T: PartialReflect + Clone + 'static>(mut self, value: T) -> Self {
+        self.default_value = Some(Box::new(value));
+        self
+    }
+}
+
+fn variants_from_reflect<T: Typed + Default + PartialReflect + Clone + 'static>(
+    configs: &[(&str, VariantConfig)],
+) -> Vec<VariantDefinition> {
+    let TypeInfo::Enum(enum_info) = T::type_info() else {
+        return Vec::new();
+    };
+
+    let config_map: std::collections::HashMap<&str, &VariantConfig> =
+        configs.iter().map(|(name, cfg)| (*name, cfg)).collect();
+
+    let mut variants = Vec::new();
+
+    for i in 0..enum_info.variant_len() {
+        let Some(variant_info) = enum_info.variant_at(i) else {
+            continue;
+        };
+
+        let name = variant_info.name();
+        let config = config_map.get(name);
+
+        let mut def = VariantDefinition::new(name);
+
+        if let Some(cfg) = config {
+            if let Some(icon) = cfg.icon {
+                def = def.with_icon(icon);
+            }
+
+            if let Some(ref default_val) = cfg.default_value {
+                if let Ok(cloned) = default_val.reflect_clone() {
+                    def = def.with_default_boxed(cloned.into_partial_reflect());
+                }
+            }
+        }
+
+        let rows = rows_from_variant_info(variant_info, config);
+        if !rows.is_empty() {
+            def = def.with_rows(rows);
+        }
+
+        variants.push(def);
+    }
+
+    variants
+}
+
+fn rows_from_variant_info(
+    variant_info: &VariantInfo,
+    config: Option<&&VariantConfig>,
+) -> Vec<Vec<VariantField>> {
+    let override_map: std::collections::HashMap<&str, &VariantField> = config
+        .map(|c| {
+            c.field_overrides
+                .iter()
+                .map(|(name, field)| (*name, field))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let suffix_map: std::collections::HashMap<&str, VectorSuffixes> = config
+        .map(|c| {
+            c.suffix_overrides
+                .iter()
+                .map(|(name, suffixes)| (*name, *suffixes))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let fields: Vec<(String, VariantField)> = match variant_info {
+        VariantInfo::Struct(struct_info) => {
+            struct_info
+                .iter()
+                .filter_map(|field| {
+                    let name = field.name();
+
+                    let variant_field = if let Some(override_field) = override_map.get(name) {
+                        (*override_field).clone()
+                    } else {
+                        let type_path = field.type_path();
+                        let suffixes = suffix_map.get(name).copied();
+                        field_from_type_path(name, type_path, suffixes)?
+                    };
+
+                    Some((name.to_string(), variant_field))
+                })
+                .collect()
+        }
+        VariantInfo::Tuple(tuple_info) => {
+            tuple_info
+                .iter()
+                .enumerate()
+                .filter_map(|(i, field)| {
+                    let name = format!("{}", i);
+                    let type_path = field.type_path();
+                    let variant_field = field_from_type_path(&name, type_path, None)?;
+                    Some((name, variant_field))
+                })
+                .collect()
+        }
+        VariantInfo::Unit(_) => return Vec::new(),
+    };
+
+    if let Some(cfg) = config {
+        if let Some(ref layout) = cfg.row_layout {
+            let fields_map: std::collections::HashMap<String, VariantField> =
+                fields.into_iter().collect();
+            return layout
+                .iter()
+                .map(|row_names| {
+                    row_names
+                        .iter()
+                        .filter_map(|name| fields_map.get(*name).cloned())
+                        .collect()
+                })
+                .filter(|row: &Vec<VariantField>| !row.is_empty())
+                .collect();
+        }
+    }
+
+    fields.into_iter().map(|(_, f)| vec![f]).collect()
+}
+
+fn field_from_type_path(
+    name: &str,
+    type_path: &str,
+    suffixes: Option<VectorSuffixes>,
+) -> Option<VariantField> {
+    match type_path {
+        "f32" => Some(VariantField::f32(name)),
+        "u32" => Some(VariantField::u32(name)),
+        "bool" => Some(VariantField::bool(name)),
+        path if path.contains("Vec3") => {
+            Some(VariantField::vec3(name, suffixes.unwrap_or(VectorSuffixes::XYZ)))
+        }
+        _ => None,
+    }
+}
+
+fn combobox_options_from_reflect<T: Typed>() -> Vec<ComboBoxOptionData> {
+    let TypeInfo::Enum(enum_info) = T::type_info() else {
+        return Vec::new();
+    };
+
+    (0..enum_info.variant_len())
+        .filter_map(|i| {
+            let variant = enum_info.variant_at(i)?;
+            let name = variant.name();
+            let label = name_to_label(name);
+            Some(ComboBoxOptionData::new(label).with_value(name))
+        })
+        .collect()
 }
 
 const ICON_MESH_QUAD: &str = "icons/blender_mesh_plane.png";
@@ -40,148 +248,99 @@ const ICON_MESH_CYLINDER: &str = "icons/blender_mesh_cylinder.png";
 const ICON_MESH_PRISM: &str = "icons/blender_cone.png";
 
 fn mesh_variants() -> Vec<VariantDefinition> {
-    vec![
-        VariantDefinition::new("Quad")
-            .with_icon(ICON_MESH_QUAD)
-            .with_fields(vec![VariantField::combobox(
-                "orientation",
-                vec!["Face X", "Face Y", "Face Z"],
-            )])
-            .with_default(ParticleMesh::Quad {
-                orientation: QuadOrientation::default(),
-            }),
-        VariantDefinition::new("Sphere")
-            .with_icon(ICON_MESH_SPHERE)
-            .with_fields(vec![VariantField::f32("radius")])
-            .with_default(ParticleMesh::Sphere { radius: 1.0 }),
-        VariantDefinition::new("Cuboid")
-            .with_icon(ICON_MESH_CUBOID)
-            .with_fields(vec![VariantField::vec3("half_size", VectorSuffixes::XYZ)])
-            .with_default(ParticleMesh::Cuboid {
-                half_size: Vec3::splat(0.5),
-            }),
-        VariantDefinition::new("Cylinder")
-            .with_icon(ICON_MESH_CYLINDER)
-            .with_fields(vec![
-                VariantField::f32("top_radius"),
-                VariantField::f32("bottom_radius"),
-                VariantField::f32("height"),
-                VariantField::u32("radial_segments"),
-                VariantField::u32("rings"),
-                VariantField::bool("cap_top"),
-                VariantField::bool("cap_bottom"),
-            ])
-            .with_default(ParticleMesh::Cylinder {
-                top_radius: 0.5,
-                bottom_radius: 0.5,
-                height: 1.0,
-                radial_segments: 16,
-                rings: 1,
-                cap_top: true,
-                cap_bottom: true,
-            }),
-        VariantDefinition::new("Prism")
-            .with_icon(ICON_MESH_PRISM)
-            .with_fields(vec![
-                VariantField::f32("left_to_right"),
-                VariantField::vec3("size", VectorSuffixes::XYZ),
-                VariantField::vec3("subdivide", VectorSuffixes::WHD),
-            ])
-            .with_default(ParticleMesh::Prism {
-                left_to_right: 0.5,
-                size: Vec3::splat(1.0),
-                subdivide: Vec3::ZERO,
-            }),
-    ]
+    variants_from_reflect::<ParticleMesh>(&[
+        (
+            "Quad",
+            VariantConfig::default()
+                .icon(ICON_MESH_QUAD)
+                .field(
+                    "orientation",
+                    VariantField::combobox(
+                        "orientation",
+                        combobox_options_from_reflect::<QuadOrientation>()
+                            .iter()
+                            .map(|o| o.label.clone())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+                .default_value(ParticleMesh::Quad {
+                    orientation: QuadOrientation::default(),
+                }),
+        ),
+        (
+            "Sphere",
+            VariantConfig::default()
+                .icon(ICON_MESH_SPHERE)
+                .default_value(ParticleMesh::Sphere { radius: 1.0 }),
+        ),
+        (
+            "Cuboid",
+            VariantConfig::default()
+                .icon(ICON_MESH_CUBOID)
+                .default_value(ParticleMesh::Cuboid {
+                    half_size: Vec3::splat(0.5),
+                }),
+        ),
+        (
+            "Cylinder",
+            VariantConfig::default()
+                .icon(ICON_MESH_CYLINDER)
+                .rows(vec![
+                    vec!["top_radius", "bottom_radius"],
+                    vec!["height"],
+                    vec!["radial_segments", "rings"],
+                    vec!["cap_top"],
+                    vec!["cap_bottom"],
+                ])
+                .default_value(ParticleMesh::Cylinder {
+                    top_radius: 0.5,
+                    bottom_radius: 0.5,
+                    height: 1.0,
+                    radial_segments: 16,
+                    rings: 1,
+                    cap_top: true,
+                    cap_bottom: true,
+                }),
+        ),
+        (
+            "Prism",
+            VariantConfig::default()
+                .icon(ICON_MESH_PRISM)
+                .suffixes("subdivide", VectorSuffixes::WHD)
+                .default_value(ParticleMesh::Prism {
+                    left_to_right: 0.5,
+                    size: Vec3::splat(1.0),
+                    subdivide: Vec3::ZERO,
+                }),
+        ),
+    ])
 }
 
 fn material_variants() -> Vec<VariantDefinition> {
-    vec![
-        VariantDefinition::new("Standard")
-            .with_fields(vec![
-                VariantField::f32("perceptual_roughness"),
-                VariantField::f32("metallic"),
-                VariantField::f32("reflectance"),
-                VariantField::combobox(
+    variants_from_reflect::<DrawPassMaterial>(&[
+        (
+            "Standard",
+            VariantConfig::default()
+                .field(
                     "alpha_mode",
-                    vec![
-                        "Opaque",
-                        "Mask",
-                        "Blend",
-                        "Premultiplied",
-                        "Add",
-                        "Multiply",
-                        "Alpha To Coverage",
-                    ],
-                ),
-                VariantField::bool("double_sided"),
-                VariantField::bool("unlit"),
-                VariantField::bool("fog_enabled"),
-            ])
-            .with_default(DrawPassMaterial::Standard(StandardParticleMaterial::default())),
-        VariantDefinition::new("CustomShader").with_default(DrawPassMaterial::CustomShader {
-            vertex_shader: None,
-            fragment_shader: None,
-        }),
-    ]
-}
-
-fn draw_order_options() -> Vec<ComboBoxOptionData> {
-    vec![
-        ComboBoxOptionData::new("Index"),
-        ComboBoxOptionData::new("Lifetime"),
-        ComboBoxOptionData::new("Reverse Lifetime"),
-        ComboBoxOptionData::new("View Depth"),
-    ]
-}
-
-fn setup_draw_pass_section_fields(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    sections: Query<Entity, (With<DrawPassSection>, Without<DrawPassSectionInitialized>)>,
-) {
-    for entity in &sections {
-        commands
-            .entity(entity)
-            .insert(DrawPassSectionInitialized)
-            .with_children(|parent| {
-                // row 1: mesh and material
-                parent.spawn(fields_row()).with_children(|row| {
-                    row.spawn((
-                        Field::new("draw_pass.mesh"),
-                        variant_edit(
-                            VariantEditProps::new("draw_pass.mesh")
-                                .with_variants(mesh_variants()),
-                        ),
-                    ));
-
-                    row.spawn((
-                        Field::new("draw_pass.material"),
-                        variant_edit(
-                            VariantEditProps::new("draw_pass.material")
-                                .with_variants(material_variants()),
-                        ),
-                    ));
-                });
-
-                // row 2: draw order
-                parent.spawn(fields_row()).with_children(|row| {
-                    spawn_inspector_field(
-                        row,
-                        InspectorFieldProps::new("draw_pass.draw_order")
-                            .combobox(draw_order_options()),
-                        &asset_server,
-                    );
-                });
-
-                // row 3: shadow caster
-                parent.spawn(fields_row()).with_children(|row| {
-                    spawn_inspector_field(
-                        row,
-                        InspectorFieldProps::new("draw_pass.shadow_caster").bool(),
-                        &asset_server,
-                    );
-                });
-            });
-    }
+                    VariantField::combobox(
+                        "alpha_mode",
+                        combobox_options_from_reflect::<SerializableAlphaMode>()
+                            .iter()
+                            .map(|o| o.label.clone())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+                .default_value(DrawPassMaterial::Standard(
+                    StandardParticleMaterial::default(),
+                )),
+        ),
+        (
+            "CustomShader",
+            VariantConfig::default().default_value(DrawPassMaterial::CustomShader {
+                vertex_shader: None,
+                fragment_shader: None,
+            }),
+        ),
+    ])
 }

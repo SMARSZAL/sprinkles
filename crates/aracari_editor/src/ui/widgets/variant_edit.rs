@@ -75,7 +75,7 @@ impl VariantField {
 pub struct VariantDefinition {
     pub name: String,
     pub icon: Option<String>,
-    pub fields: Vec<VariantField>,
+    pub rows: Vec<Vec<VariantField>>,
     default_value: Option<Box<dyn PartialReflect>>,
 }
 
@@ -84,7 +84,7 @@ impl Clone for VariantDefinition {
         Self {
             name: self.name.clone(),
             icon: self.icon.clone(),
-            fields: self.fields.clone(),
+            rows: self.rows.clone(),
             default_value: self
                 .default_value
                 .as_ref()
@@ -99,7 +99,7 @@ impl std::fmt::Debug for VariantDefinition {
         f.debug_struct("VariantDefinition")
             .field("name", &self.name)
             .field("icon", &self.icon)
-            .field("fields", &self.fields)
+            .field("rows", &self.rows)
             .field("default_value", &self.default_value.is_some())
             .finish()
     }
@@ -110,7 +110,7 @@ impl VariantDefinition {
         Self {
             name: name.into(),
             icon: None,
-            fields: Vec::new(),
+            rows: Vec::new(),
             default_value: None,
         }
     }
@@ -120,13 +120,18 @@ impl VariantDefinition {
         self
     }
 
-    pub fn with_fields(mut self, fields: Vec<VariantField>) -> Self {
-        self.fields = fields;
+    pub fn with_rows(mut self, rows: Vec<Vec<VariantField>>) -> Self {
+        self.rows = rows;
         self
     }
 
     pub fn with_default<T: PartialReflect + Clone + 'static>(mut self, value: T) -> Self {
         self.default_value = Some(Box::new(value));
+        self
+    }
+
+    pub fn with_default_boxed(mut self, value: Box<dyn PartialReflect>) -> Self {
+        self.default_value = Some(value);
         self
     }
 
@@ -182,11 +187,10 @@ struct VariantEditState {
     last_synced_index: Option<usize>,
 }
 
-const UPPERCASE_ACRONYMS: &[&str] = &["fps"];
+const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z"];
 
-fn path_to_label(path: &str) -> String {
-    let field_name = path.split('.').last().unwrap_or(path);
-    let sentence = field_name.to_sentence_case();
+pub fn name_to_label(name: &str) -> String {
+    let sentence = name.to_sentence_case();
 
     sentence
         .split_whitespace()
@@ -200,6 +204,11 @@ fn path_to_label(path: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn path_to_label(path: &str) -> String {
+    let field_name = path.split('.').last().unwrap_or(path);
+    name_to_label(field_name)
 }
 
 pub struct VariantEditProps {
@@ -465,7 +474,7 @@ fn handle_variant_edit_click(
 
     let selected_variant = config.variants.get(config.selected_index);
     let has_fields = selected_variant
-        .map(|v| !v.fields.is_empty())
+        .map(|v| !v.rows.is_empty())
         .unwrap_or(false);
 
     let popover_entity = commands
@@ -523,7 +532,7 @@ fn handle_variant_edit_click(
                         &mut cmds,
                         fields_container,
                         entity,
-                        &variant.fields,
+                        &variant.rows,
                         &asset_server,
                     );
                 }
@@ -607,7 +616,7 @@ fn handle_variant_combobox_change(
             &mut commands,
             container_entity,
             variant_edit_entity,
-            &selected_variant.fields,
+            &selected_variant.rows,
             &asset_server,
         );
 
@@ -619,49 +628,40 @@ fn spawn_variant_fields_for_entity(
     commands: &mut Commands,
     container: Entity,
     variant_edit: Entity,
-    fields: &[VariantField],
+    rows: &[Vec<VariantField>],
     asset_server: &AssetServer,
 ) {
     let font: Handle<Font> = asset_server.load(FONT_PATH);
 
-    for field in fields {
-        let label = path_to_label(&field.name);
-        let binding = VariantFieldBinding {
-            variant_edit,
-            field_name: field.name.clone(),
-            field_kind: field.kind.clone(),
-        };
+    for row_fields in rows {
+        let row_entity = commands.spawn(fields_row()).id();
+        commands.entity(container).add_child(row_entity);
 
-        match &field.kind {
-            VariantFieldKind::F32 => {
-                let row = commands
-                    .spawn(fields_row())
-                    .with_child((
+        for field in row_fields {
+            let label = path_to_label(&field.name);
+            let binding = VariantFieldBinding {
+                variant_edit,
+                field_name: field.name.clone(),
+                field_kind: field.kind.clone(),
+            };
+
+            let field_entity = match &field.kind {
+                VariantFieldKind::F32 => commands
+                    .spawn((
                         binding,
                         text_edit(TextEditProps::default().with_label(label).numeric_f32()),
                     ))
-                    .id();
-                commands.entity(container).add_child(row);
-            }
-            VariantFieldKind::U32 => {
-                let row = commands
-                    .spawn(fields_row())
-                    .with_child((
+                    .id(),
+                VariantFieldKind::U32 => commands
+                    .spawn((
                         binding,
                         text_edit(TextEditProps::default().with_label(label).numeric_i32()),
                     ))
-                    .id();
-                commands.entity(container).add_child(row);
-            }
-            VariantFieldKind::Bool => {
-                let row = commands
-                    .spawn(fields_row())
-                    .with_child((binding, checkbox(CheckboxProps::new(label), asset_server)))
-                    .id();
-                commands.entity(container).add_child(row);
-            }
-            VariantFieldKind::Vec3(suffixes) => {
-                let row = commands
+                    .id(),
+                VariantFieldKind::Bool => commands
+                    .spawn((binding, checkbox(CheckboxProps::new(label), asset_server)))
+                    .id(),
+                VariantFieldKind::Vec3(suffixes) => commands
                     .spawn((
                         binding,
                         vector_edit(
@@ -670,32 +670,35 @@ fn spawn_variant_fields_for_entity(
                                 .with_suffixes(*suffixes),
                         ),
                     ))
-                    .id();
-                commands.entity(container).add_child(row);
-            }
-            VariantFieldKind::ComboBox { options } => {
-                let combobox_options: Vec<ComboBoxOptionData> =
-                    options.iter().map(|o| ComboBoxOptionData::new(o)).collect();
-                let row = commands
-                    .spawn(Node {
-                        flex_direction: FlexDirection::Column,
-                        row_gap: px(3.0),
-                        ..default()
-                    })
-                    .with_child((
-                        Text::new(label),
-                        TextFont {
-                            font: font.clone(),
-                            font_size: TEXT_SIZE_SM,
-                            weight: FontWeight::MEDIUM,
+                    .id(),
+                VariantFieldKind::ComboBox { options } => {
+                    let combobox_options: Vec<ComboBoxOptionData> =
+                        options.iter().map(|o| ComboBoxOptionData::new(o)).collect();
+                    commands
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(3.0),
+                            flex_grow: 1.0,
+                            flex_shrink: 1.0,
+                            flex_basis: px(0.0),
                             ..default()
-                        },
-                        TextColor(TEXT_MUTED_COLOR.into()),
-                    ))
-                    .with_child((binding, combobox(combobox_options)))
-                    .id();
-                commands.entity(container).add_child(row);
-            }
+                        })
+                        .with_child((
+                            Text::new(label),
+                            TextFont {
+                                font: font.clone(),
+                                font_size: TEXT_SIZE_SM,
+                                weight: FontWeight::MEDIUM,
+                                ..default()
+                            },
+                            TextColor(TEXT_MUTED_COLOR.into()),
+                        ))
+                        .with_child((binding, combobox(combobox_options)))
+                        .id()
+                }
+            };
+
+            commands.entity(row_entity).add_child(field_entity);
         }
     }
 }

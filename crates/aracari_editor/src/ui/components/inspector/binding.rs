@@ -1037,7 +1037,10 @@ fn handle_combobox_change(
         return;
     };
 
-    let variant_name = label_to_variant_name(&trigger.label);
+    let variant_name = trigger
+        .value
+        .clone()
+        .unwrap_or_else(|| label_to_variant_name(&trigger.label));
     let mut changed = false;
 
     if let Some(binding) = find_variant_field_binding_from_entity(

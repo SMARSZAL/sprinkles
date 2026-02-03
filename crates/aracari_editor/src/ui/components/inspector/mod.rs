@@ -9,11 +9,16 @@ use crate::state::{EditorState, Inspectable};
 use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE_LG};
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
+use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
 use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle};
+use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
+use crate::ui::widgets::variant_edit::{VariantEditProps, variant_edit};
+
+use binding::Field;
 
 pub fn plugin(app: &mut App) {
     app.add_plugins((binding::plugin, time::plugin, draw_pass::plugin))
-        .add_systems(Update, (setup_inspector_panel, update_panel_title));
+        .add_systems(Update, (setup_inspector_panel, update_panel_title, setup_inspector_section_fields));
 }
 
 #[derive(Component)]
@@ -121,6 +126,79 @@ fn panel_title(asset_server: &AssetServer) -> impl Bundle {
             ),
         ],
     )
+}
+
+pub enum InspectorItem {
+    Field(InspectorFieldProps),
+    Variant { path: String, props: VariantEditProps },
+}
+
+impl From<InspectorFieldProps> for InspectorItem {
+    fn from(props: InspectorFieldProps) -> Self {
+        Self::Field(props)
+    }
+}
+
+#[derive(Component)]
+pub struct InspectorSection {
+    pub title: String,
+    pub rows: Vec<Vec<InspectorItem>>,
+    initialized: bool,
+}
+
+impl InspectorSection {
+    pub fn new(title: impl Into<String>, rows: Vec<Vec<InspectorItem>>) -> Self {
+        Self {
+            title: title.into(),
+            rows,
+            initialized: false,
+        }
+    }
+}
+
+pub fn inspector_section(section: InspectorSection, asset_server: &AssetServer) -> impl Bundle {
+    let title = section.title.clone();
+    (
+        section,
+        panel_section(
+            PanelSectionProps::new(title)
+                .collapsible()
+                .with_size(PanelSectionSize::XL),
+            asset_server,
+        ),
+    )
+}
+
+fn setup_inspector_section_fields(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut sections: Query<(Entity, &mut InspectorSection)>,
+) {
+    for (entity, mut section) in &mut sections {
+        if section.initialized {
+            continue;
+        }
+        section.initialized = true;
+
+        let rows = std::mem::take(&mut section.rows);
+
+        commands.entity(entity).with_children(|parent| {
+            for row_items in rows {
+                parent.spawn(fields_row()).with_children(|row| {
+                    for item in row_items {
+                        match item {
+                            InspectorItem::Field(props) => {
+                                spawn_inspector_field(row, props, &asset_server);
+                            }
+                            InspectorItem::Variant { path, props } => {
+                                row.spawn((Field::new(&path), variant_edit(props)));
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    }
 }
 
 fn update_panel_title(
