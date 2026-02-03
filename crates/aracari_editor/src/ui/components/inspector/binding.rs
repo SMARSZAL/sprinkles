@@ -20,6 +20,26 @@ use crate::ui::widgets::variant_edit::{
 };
 use crate::ui::widgets::vector_edit::EditorVectorEdit;
 
+const MAX_ANCESTOR_DEPTH: usize = 10;
+
+fn find_ancestor<F>(
+    mut entity: Entity,
+    parents: &Query<&ChildOf>,
+    max_depth: usize,
+    mut predicate: F,
+) -> Option<Entity>
+where
+    F: FnMut(Entity) -> bool,
+{
+    for _ in 0..max_depth {
+        if predicate(entity) {
+            return Some(entity);
+        }
+        entity = parents.get(entity).ok()?.parent();
+    }
+    None
+}
+
 pub fn plugin(app: &mut App) {
     app.init_resource::<BoundEmitter>()
         .add_observer(handle_variant_change)
@@ -59,12 +79,15 @@ pub struct Field {
     pub kind: FieldKind,
 }
 
+// marker: text input has been bound to a regular field
 #[derive(Component)]
 struct FieldBound;
 
+// marker: checkbox has been bound to a regular field
 #[derive(Component)]
 struct CheckboxBound;
 
+// marker: widget has been bound to a variant field (type info in VariantFieldBinding)
 #[derive(Component)]
 struct VariantFieldBound;
 
@@ -79,6 +102,19 @@ impl Field {
     pub fn with_kind(mut self, kind: FieldKind) -> Self {
         self.kind = kind;
         self
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ReflectPath(String);
+
+impl ReflectPath {
+    fn new(path: &str) -> Self {
+        Self(format!(".{}", path))
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -132,12 +168,30 @@ fn format_f32(v: f32) -> String {
     text
 }
 
+fn set_vec3_component(vec: &mut Vec3, index: usize, value: f32) {
+    match index {
+        0 => vec.x = value,
+        1 => vec.y = value,
+        2 => vec.z = value,
+        _ => {}
+    }
+}
+
+fn get_vec3_component(vec: Vec3, index: usize) -> f32 {
+    match index {
+        0 => vec.x,
+        1 => vec.y,
+        2 => vec.z,
+        _ => 0.0,
+    }
+}
+
 fn get_field_value_by_reflection(
     emitter: &EmitterData,
     path: &str,
     kind: &FieldKind,
 ) -> FieldValue {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(value) = emitter.reflect_path(reflect_path.as_str()) else {
         return FieldValue::None;
     };
@@ -149,7 +203,7 @@ fn set_field_value_by_reflection(
     path: &str,
     value: &FieldValue,
 ) -> bool {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
         return false;
     };
@@ -276,7 +330,7 @@ fn get_variant_index_by_reflection(
     path: &str,
     variants: &[VariantDefinition],
 ) -> Option<usize> {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let value = emitter.reflect_path(reflect_path.as_str()).ok()?;
 
     let ReflectRef::Enum(enum_ref) = value.reflect_ref() else {
@@ -293,14 +347,14 @@ fn get_variant_field_value_by_reflection(
     field_name: &str,
     kind: &VariantFieldKind,
 ) -> Option<FieldValue> {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let value = emitter.reflect_path(reflect_path.as_str()).ok()?;
 
     let ReflectRef::Enum(enum_ref) = value.reflect_ref() else {
         return None;
     };
 
-    let field_kind = variant_field_kind_to_field_kind(kind);
+    let field_kind = FieldKind::from(kind);
 
     if let Some(field) = enum_ref.field(field_name) {
         return Some(reflect_to_field_value(field, &field_kind));
@@ -323,7 +377,7 @@ fn set_variant_field_value_by_reflection(
     field_name: &str,
     value: &FieldValue,
 ) -> bool {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
         return false;
     };
@@ -356,7 +410,7 @@ fn create_variant_from_definition(
         return false;
     };
 
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
         return false;
     };
@@ -371,15 +425,17 @@ fn create_variant_from_definition(
     true
 }
 
-fn variant_field_kind_to_field_kind(kind: &VariantFieldKind) -> FieldKind {
-    match kind {
-        VariantFieldKind::F32 => FieldKind::F32,
-        VariantFieldKind::U32 => FieldKind::U32,
-        VariantFieldKind::Bool => FieldKind::Bool,
-        VariantFieldKind::Vec3(_) => FieldKind::F32,
-        VariantFieldKind::ComboBox { options } => FieldKind::ComboBox {
-            options: options.clone(),
-        },
+impl From<&VariantFieldKind> for FieldKind {
+    fn from(kind: &VariantFieldKind) -> Self {
+        match kind {
+            VariantFieldKind::F32 => FieldKind::F32,
+            VariantFieldKind::U32 => FieldKind::U32,
+            VariantFieldKind::Bool => FieldKind::Bool,
+            VariantFieldKind::Vec3(_) => FieldKind::F32,
+            VariantFieldKind::ComboBox { options } => FieldKind::ComboBox {
+                options: options.clone(),
+            },
+        }
     }
 }
 
@@ -473,7 +529,7 @@ fn bind_variant_field_values(
             continue;
         };
 
-        let field_kind = variant_field_kind_to_field_kind(&binding.field_kind);
+        let field_kind = FieldKind::from(&binding.field_kind);
         let mut bound = false;
 
         if let Some(text) = value.to_display_string(&field_kind) {
@@ -497,17 +553,12 @@ fn bind_variant_field_values(
 
         if let Some(vec) = value.to_vec3() {
             if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
-                let values = [vec.x, vec.y, vec.z];
                 let mut component_index = 0;
 
-                for vec_child in vec_children.iter() {
-                    if component_index >= 3 {
-                        break;
-                    }
-
+                for vec_child in vec_children.iter().take(3) {
                     for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
                         if find_ancestor_entity(text_edit_parent.parent(), vec_child, &parents) {
-                            let text = format_f32(values[component_index]);
+                            let text = format_f32(get_vec3_component(vec, component_index));
                             queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
                             queue.add(TextInputAction::Edit(TextInputEdit::Paste(text)));
                             commands.entity(text_edit_entity).insert(VariantFieldBound);
@@ -529,17 +580,8 @@ fn bind_variant_field_values(
     }
 }
 
-fn find_ancestor_entity(mut entity: Entity, target: Entity, parents: &Query<&ChildOf>) -> bool {
-    for _ in 0..10 {
-        if entity == target {
-            return true;
-        }
-        entity = match parents.get(entity) {
-            Ok(child_of) => child_of.parent(),
-            Err(_) => return false,
-        };
-    }
-    false
+fn find_ancestor_entity(entity: Entity, target: Entity, parents: &Query<&ChildOf>) -> bool {
+    find_ancestor(entity, parents, MAX_ANCESTOR_DEPTH, |e| e == target).is_some()
 }
 
 fn handle_variant_change(
@@ -581,10 +623,7 @@ fn handle_variant_change(
     };
 
     if create_variant_from_definition(emitter, &config.path, variant_def) {
-        dirty_state.has_unsaved_changes = true;
-        for mut runtime in &mut emitter_runtimes {
-            runtime.restart(emitter.time.fixed_seed);
-        }
+        mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
     }
 }
 
@@ -658,34 +697,28 @@ fn sync_variant_field_on_blur(
             .unwrap_or(FieldValue::None),
         VariantFieldKind::Bool => FieldValue::None,
         VariantFieldKind::Vec3(suffixes) => {
-            if let Ok(vec_children) = vector_edits.get(binding_entity) {
-                let kind = VariantFieldKind::Vec3(*suffixes);
-                if let Some(FieldValue::Vec3(mut vec)) = get_variant_field_value_by_reflection(
-                    emitter,
-                    &config.path,
-                    &binding.field_name,
-                    &kind,
-                ) {
-                    for (idx, vec_child) in vec_children.iter().enumerate() {
-                        if find_ancestor_entity(text_input_parent.parent(), vec_child, &parents) {
-                            if let Ok(v) = text.trim().parse::<f32>() {
-                                match idx {
-                                    0 => vec.x = v,
-                                    1 => vec.y = v,
-                                    2 => vec.z = v,
-                                    _ => {}
-                                }
-                            }
-                            break;
-                        }
+            let Ok(vec_children) = vector_edits.get(binding_entity) else {
+                return;
+            };
+            let kind = VariantFieldKind::Vec3(*suffixes);
+            let Some(FieldValue::Vec3(mut vec)) = get_variant_field_value_by_reflection(
+                emitter,
+                &config.path,
+                &binding.field_name,
+                &kind,
+            ) else {
+                return;
+            };
+
+            for (idx, vec_child) in vec_children.iter().enumerate().take(3) {
+                if find_ancestor_entity(text_input_parent.parent(), vec_child, &parents) {
+                    if let Ok(v) = text.trim().parse::<f32>() {
+                        set_vec3_component(&mut vec, idx, v);
                     }
-                    FieldValue::Vec3(vec)
-                } else {
-                    FieldValue::None
+                    break;
                 }
-            } else {
-                FieldValue::None
             }
+            FieldValue::Vec3(vec)
         }
         VariantFieldKind::ComboBox { .. } => FieldValue::None,
     };
@@ -698,25 +731,17 @@ fn sync_variant_field_on_blur(
         set_variant_field_value_by_reflection(emitter, &config.path, &binding.field_name, &value);
 
     if changed {
-        dirty_state.has_unsaved_changes = true;
-        for mut runtime in &mut emitter_runtimes {
-            runtime.restart(emitter.time.fixed_seed);
-        }
+        mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
     }
 }
 
 fn find_variant_field_binding<'a>(
-    mut entity: Entity,
+    entity: Entity,
     bindings: &'a Query<(&VariantFieldBinding, &ChildOf)>,
     parents: &Query<&ChildOf>,
 ) -> Option<(&'a VariantFieldBinding, Entity)> {
-    for _ in 0..10 {
-        if let Ok((binding, _)) = bindings.get(entity) {
-            return Some((binding, entity));
-        }
-        entity = parents.get(entity).ok()?.parent();
-    }
-    None
+    find_ancestor(entity, parents, MAX_ANCESTOR_DEPTH, |e| bindings.get(e).is_ok())
+        .and_then(|e| bindings.get(e).ok().map(|(binding, _)| (binding, e)))
 }
 
 fn bind_values_to_inputs(
@@ -788,14 +813,7 @@ fn bind_values_to_inputs(
             }
         }
 
-        let field = if let Ok(f) = fields.get(entity) {
-            f
-        } else if let Ok(child_of) = parents.get(entity) {
-            match find_ancestor_field(child_of.parent(), &fields, &parents) {
-                Some(f) => f,
-                None => continue,
-            }
-        } else {
+        let Some(field) = find_field_for_entity(entity, &fields, &parents) else {
             continue;
         };
 
@@ -808,34 +826,48 @@ fn bind_values_to_inputs(
 }
 
 fn is_descendant_of_variant_edit(
-    mut entity: Entity,
+    entity: Entity,
     variant_edit_query: &Query<(), With<EditorVariantEdit>>,
     parents: &Query<&ChildOf>,
 ) -> bool {
-    for _ in 0..20 {
-        if variant_edit_query.get(entity).is_ok() {
-            return true;
-        }
-        entity = match parents.get(entity) {
-            Ok(child_of) => child_of.parent(),
-            Err(_) => return false,
-        };
-    }
-    false
+    find_ancestor(entity, parents, MAX_ANCESTOR_DEPTH * 2, |e| {
+        variant_edit_query.get(e).is_ok()
+    })
+    .is_some()
 }
 
 fn find_ancestor_field<'a>(
-    mut entity: Entity,
+    entity: Entity,
     fields: &'a Query<&Field>,
     parents: &Query<&ChildOf>,
 ) -> Option<&'a Field> {
-    for _ in 0..10 {
-        if let Ok(field) = fields.get(entity) {
-            return Some(field);
-        }
-        entity = parents.get(entity).ok()?.parent();
+    find_ancestor(entity, parents, MAX_ANCESTOR_DEPTH, |e| fields.get(e).is_ok())
+        .and_then(|e| fields.get(e).ok())
+}
+
+fn find_field_for_entity<'a>(
+    entity: Entity,
+    fields: &'a Query<&Field>,
+    parents: &Query<&ChildOf>,
+) -> Option<&'a Field> {
+    if let Ok(field) = fields.get(entity) {
+        return Some(field);
+    }
+    if let Ok(child_of) = parents.get(entity) {
+        return find_ancestor_field(child_of.parent(), fields, parents);
     }
     None
+}
+
+fn mark_dirty_and_restart(
+    dirty_state: &mut DirtyState,
+    emitter_runtimes: &mut Query<&mut EmitterRuntime>,
+    fixed_seed: Option<u32>,
+) {
+    dirty_state.has_unsaved_changes = true;
+    for mut runtime in emitter_runtimes.iter_mut() {
+        runtime.restart(fixed_seed);
+    }
 }
 
 fn sync_input_on_blur(
@@ -891,10 +923,7 @@ fn sync_input_on_blur(
     }
 
     if set_field_value_by_reflection(emitter, &field.path, &value) {
-        dirty_state.has_unsaved_changes = true;
-        for mut runtime in &mut emitter_runtimes {
-            runtime.restart(emitter.time.fixed_seed);
-        }
+        mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
     }
 }
 
@@ -933,23 +962,13 @@ fn sync_checkbox_changes_to_asset(
             continue;
         }
 
-        let field = if let Ok(f) = fields.get(entity) {
-            f
-        } else if let Ok(child_of) = parents.get(entity) {
-            match find_ancestor_field(child_of.parent(), &fields, &parents) {
-                Some(f) => f,
-                None => continue,
-            }
-        } else {
+        let Some(field) = find_field_for_entity(entity, &fields, &parents) else {
             continue;
         };
 
         let value = FieldValue::Bool(state.checked);
         if set_field_value_by_reflection(emitter, &field.path, &value) {
-            dirty_state.has_unsaved_changes = true;
-            for mut runtime in &mut emitter_runtimes {
-                runtime.restart(emitter.time.fixed_seed);
-            }
+            mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
         }
     }
 }
@@ -998,10 +1017,7 @@ fn sync_variant_checkbox_changes(
         set_variant_field_value_by_reflection(emitter, &config.path, &binding.field_name, &value);
 
         if changed {
-            dirty_state.has_unsaved_changes = true;
-            for mut runtime in &mut emitter_runtimes {
-                runtime.restart(emitter.time.fixed_seed);
-            }
+            mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
         }
     }
 }
@@ -1061,25 +1077,17 @@ fn handle_combobox_change(
     }
 
     if changed {
-        dirty_state.has_unsaved_changes = true;
-        for mut runtime in &mut emitter_runtimes {
-            runtime.restart(emitter.time.fixed_seed);
-        }
+        mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
     }
 }
 
 fn find_variant_field_binding_from_entity<'a>(
-    mut entity: Entity,
+    entity: Entity,
     bindings: &'a Query<&VariantFieldBinding>,
     parents: &Query<&ChildOf>,
 ) -> Option<&'a VariantFieldBinding> {
-    for _ in 0..10 {
-        if let Ok(binding) = bindings.get(entity) {
-            return Some(binding);
-        }
-        entity = parents.get(entity).ok()?.parent();
-    }
-    None
+    find_ancestor(entity, parents, MAX_ANCESTOR_DEPTH, |e| bindings.get(e).is_ok())
+        .and_then(|e| bindings.get(e).ok())
 }
 
 fn label_to_variant_name(label: &str) -> String {
@@ -1092,7 +1100,7 @@ fn set_variant_field_enum_by_name(
     field_name: &str,
     variant_name: &str,
 ) -> bool {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
         return false;
     };
@@ -1117,7 +1125,7 @@ fn set_variant_field_enum_by_name(
 }
 
 fn set_field_enum_by_name(emitter: &mut EmitterData, path: &str, variant_name: &str) -> bool {
-    let reflect_path = format!(".{}", path);
+    let reflect_path = ReflectPath::new(path);
     let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
         return false;
     };
