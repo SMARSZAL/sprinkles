@@ -2,6 +2,7 @@ pub mod components;
 pub mod tokens;
 pub mod widgets;
 
+use bevy::asset::{load_internal_asset, uuid_handle};
 use bevy::prelude::*;
 
 use components::data_panel::data_panel;
@@ -10,12 +11,22 @@ use components::sidebar::sidebar;
 use components::topbar::topbar;
 use components::viewport::{setup_viewport, viewport_container};
 
+const SHADER_COMMON: Handle<Shader> = uuid_handle!("81dc1f0a-ec1e-4913-862a-1ec536a2a792");
+
 pub struct EditorUiPlugin;
 
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
+        load_internal_asset!(
+            app,
+            SHADER_COMMON,
+            "../../assets/shaders/common.wgsl",
+            Shader::from_wgsl
+        );
+
         app.add_plugins(widgets::button::plugin)
             .add_plugins(widgets::checkbox::plugin)
+            .add_plugins(widgets::color_picker::plugin)
             .add_plugins(widgets::combobox::plugin)
             .add_plugins(widgets::inspector_field::plugin)
             .add_plugins(widgets::variant_edit::plugin)

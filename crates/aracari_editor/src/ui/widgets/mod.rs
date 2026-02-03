@@ -1,5 +1,6 @@
 pub mod button;
 pub mod checkbox;
+pub mod color_picker;
 pub mod combobox;
 pub mod inspector_field;
 pub mod panel;
