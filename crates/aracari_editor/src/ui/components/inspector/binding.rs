@@ -21,7 +21,7 @@ use crate::ui::widgets::variant_edit::{
     EditorVariantEdit, VariantComboBox, VariantDefinition, VariantEditConfig, VariantFieldBinding,
     VariantFieldKind,
 };
-use crate::ui::widgets::vector_edit::EditorVectorEdit;
+use crate::ui::widgets::vector_edit::{EditorVectorEdit, VectorSuffixes};
 
 const MAX_ANCESTOR_DEPTH: usize = 10;
 
@@ -103,6 +103,7 @@ pub enum FieldKind {
     U32OrEmpty,
     OptionalU32,
     Bool,
+    Vec3(VectorSuffixes),
     ComboBox { options: Vec<String> },
     Color,
 }
@@ -293,7 +294,9 @@ fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
                     .unwrap_or(FieldValue::None)
             }
         }
-        FieldKind::Bool | FieldKind::ComboBox { .. } | FieldKind::Color => FieldValue::None,
+        FieldKind::Bool | FieldKind::Vec3(_) | FieldKind::ComboBox { .. } | FieldKind::Color => {
+            FieldValue::None
+        }
     }
 }
 
@@ -484,7 +487,7 @@ impl From<&VariantFieldKind> for FieldKind {
             VariantFieldKind::F32 => FieldKind::F32,
             VariantFieldKind::U32 => FieldKind::U32,
             VariantFieldKind::Bool => FieldKind::Bool,
-            VariantFieldKind::Vec3(_) => FieldKind::F32,
+            VariantFieldKind::Vec3(suffixes) => FieldKind::Vec3(*suffixes),
             VariantFieldKind::ComboBox { options } => FieldKind::ComboBox {
                 options: options.clone(),
             },
@@ -767,6 +770,7 @@ fn bind_values_to_inputs(
     )>,
     parents: Query<&ChildOf>,
     variant_edit_query: Query<(), With<EditorVariantEdit>>,
+    vector_edit_children: Query<&Children, With<EditorVectorEdit>>,
 ) {
     let Some((index, emitter)) = get_inspecting_emitter(&editor_state, &assets) else {
         bound_emitter.0 = None;
@@ -790,6 +794,34 @@ fn bind_values_to_inputs(
         };
 
         if is_descendant_of_variant_edit(child_of.parent(), &variant_edit_query, &parents) {
+            continue;
+        }
+
+        // handle Vec3 fields by finding the component index
+        if let FieldKind::Vec3(_) = &field.kind {
+            let value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
+            let Some(vec) = value.to_vec3() else {
+                continue;
+            };
+
+            // find the vector edit ancestor and determine component index
+            if let Some(vec_edit_entity) =
+                find_ancestor(child_of.parent(), &parents, MAX_ANCESTOR_DEPTH, |e| {
+                    vector_edit_children.get(e).is_ok()
+                })
+            {
+                if let Ok(vec_children) = vector_edit_children.get(vec_edit_entity) {
+                    for (idx, vec_child) in vec_children.iter().enumerate().take(3) {
+                        if find_ancestor_entity(child_of.parent(), vec_child, &parents) {
+                            let text = format_f32(get_vec3_component(vec, idx));
+                            queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
+                            queue.add(TextInputAction::Edit(TextInputEdit::Paste(text)));
+                            commands.entity(entity).insert(FieldBound);
+                            break;
+                        }
+                    }
+                }
+            }
             continue;
         }
 
@@ -875,6 +907,7 @@ fn sync_input_on_blur(
     fields: Query<&Field>,
     parents: Query<&ChildOf>,
     mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    vector_edit_children: Query<&Children, With<EditorVectorEdit>>,
 ) {
     let current_focus = input_focus.0;
     let previous_focus = *last_focus;
@@ -900,6 +933,51 @@ fn sync_input_on_blur(
     };
 
     let text = buffer.get_text();
+
+    // handle Vec3 fields
+    if let FieldKind::Vec3(_) = &field.kind {
+        let current_value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
+        let Some(mut vec) = current_value.to_vec3() else {
+            return;
+        };
+
+        // find which component this text input belongs to
+        let vec_edit_entity = find_ancestor(child_of.parent(), &parents, MAX_ANCESTOR_DEPTH, |e| {
+            vector_edit_children.get(e).is_ok()
+        });
+        let Some(vec_edit_entity) = vec_edit_entity else {
+            return;
+        };
+        let Ok(vec_children) = vector_edit_children.get(vec_edit_entity) else {
+            return;
+        };
+
+        let mut component_idx = None;
+        for (idx, vec_child) in vec_children.iter().enumerate().take(3) {
+            if find_ancestor_entity(child_of.parent(), vec_child, &parents) {
+                component_idx = Some(idx);
+                break;
+            }
+        }
+
+        let Some(idx) = component_idx else {
+            return;
+        };
+
+        if let Ok(v) = text.trim().parse::<f32>() {
+            set_vec3_component(&mut vec, idx, v);
+            let value = FieldValue::Vec3(vec);
+            if set_field_value_by_reflection(emitter, &field.path, &value) {
+                mark_dirty_and_restart(
+                    &mut dirty_state,
+                    &mut emitter_runtimes,
+                    emitter.time.fixed_seed,
+                );
+            }
+        }
+        return;
+    }
+
     let value = parse_field_value(&text, &field.kind);
 
     if matches!(value, FieldValue::None) {

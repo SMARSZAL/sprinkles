@@ -4,6 +4,7 @@ use inflector::Inflector;
 use super::checkbox::{CheckboxProps, checkbox};
 use super::combobox::{ComboBoxOptionData, combobox};
 use super::text_edit::{TextEditPrefix, TextEditProps, text_edit};
+use super::vector_edit::{VectorEditProps, VectorSuffixes, vector_edit};
 use crate::ui::components::inspector::binding::{Field, FieldKind};
 
 pub fn plugin(app: &mut App) {
@@ -62,6 +63,11 @@ impl InspectorFieldProps {
         self
     }
 
+    pub fn u32(mut self) -> Self {
+        self.kind = FieldKind::U32;
+        self
+    }
+
     pub fn u32_or_empty(mut self) -> Self {
         self.kind = FieldKind::U32OrEmpty;
         self
@@ -74,6 +80,11 @@ impl InspectorFieldProps {
 
     pub fn bool(mut self) -> Self {
         self.kind = FieldKind::Bool;
+        self
+    }
+
+    pub fn vec3(mut self, suffixes: VectorSuffixes) -> Self {
+        self.kind = FieldKind::Vec3(suffixes);
         self
     }
 
@@ -135,7 +146,7 @@ impl InspectorFieldProps {
             return self.min;
         }
         match self.kind {
-            FieldKind::F32Percent | FieldKind::U32OrEmpty | FieldKind::OptionalU32 => Some(0.0),
+            FieldKind::F32Percent | FieldKind::U32 | FieldKind::U32OrEmpty | FieldKind::OptionalU32 => Some(0.0),
             _ => None,
         }
     }
@@ -172,6 +183,14 @@ pub fn spawn_inspector_field(
 
     if props.kind == FieldKind::Bool {
         spawner.spawn((field, checkbox(CheckboxProps::new(label), asset_server)));
+        return;
+    }
+
+    if let FieldKind::Vec3(suffixes) = props.kind {
+        spawner.spawn((
+            field,
+            vector_edit(VectorEditProps::default().with_label(label).with_suffixes(suffixes)),
+        ));
         return;
     }
 

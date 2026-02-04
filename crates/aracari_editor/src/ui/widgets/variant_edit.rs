@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use inflector::Inflector;
 
-use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
+use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, button, set_button_variant,
 };
@@ -178,6 +178,9 @@ pub struct VariantEditConfig {
 struct VariantEditPopover(Entity);
 
 #[derive(Component)]
+struct VariantEditLeftIcon(Entity);
+
+#[derive(Component)]
 struct VariantFieldsContainer(Entity);
 
 #[derive(Component)]
@@ -328,21 +331,43 @@ fn setup_variant_edit(
 
         let selected_variant = config.variants.get(config.selected_index);
         let value = selected_variant
-            .map(|v| v.name.clone())
+            .map(|v| name_to_label(&v.name))
             .unwrap_or_default();
         let icon = selected_variant.and_then(|v| v.icon.clone());
 
-        let mut button_props = ButtonProps::new(&value)
+        let button_props = ButtonProps::new(&value)
             .align_left()
             .with_right_icon(ICON_MORE);
-
-        if let Some(ref icon_path) = icon {
-            button_props = button_props.with_left_icon(icon_path);
-        }
 
         let button_entity = commands
             .spawn((VariantEditButton, button(button_props)))
             .id();
+
+        // spawn the left icon separately so we can track and update it
+        let has_icon = icon.is_some();
+        let icon_path = icon.unwrap_or_else(|| ICON_MORE.to_string());
+        let left_icon_entity = commands
+            .spawn((
+                VariantEditLeftIcon(entity),
+                ImageNode::new(asset_server.load(&icon_path))
+                    .with_color(Color::Srgba(TEXT_BODY_COLOR)),
+                Node {
+                    width: px(16.0),
+                    height: px(16.0),
+                    display: if has_icon {
+                        Display::Flex
+                    } else {
+                        Display::None
+                    },
+                    ..default()
+                },
+            ))
+            .id();
+
+        // insert the left icon as the first child of the button
+        commands
+            .entity(button_entity)
+            .insert_children(0, &[left_icon_entity]);
 
         commands.entity(entity).add_child(button_entity);
     }
@@ -351,14 +376,14 @@ fn setup_variant_edit(
 fn sync_variant_edit_button(
     asset_server: Res<AssetServer>,
     mut variant_edits: Query<
-        (&VariantEditConfig, &mut VariantEditState, &Children),
+        (Entity, &VariantEditConfig, &mut VariantEditState, &Children),
         With<EditorVariantEdit>,
     >,
     children_query: Query<&Children>,
     mut texts: Query<&mut Text>,
-    mut images: Query<&mut ImageNode>,
+    mut left_icons: Query<(&VariantEditLeftIcon, &mut ImageNode, &mut Node)>,
 ) {
-    for (config, mut state, children) in &mut variant_edits {
+    for (entity, config, mut state, children) in &mut variant_edits {
         if state.last_synced_index == Some(config.selected_index) {
             continue;
         }
@@ -375,25 +400,30 @@ fn sync_variant_edit_button(
             continue;
         };
 
-        // only mark as synced after we've confirmed the button children exist
+        // update the button text
         let mut text_updated = false;
-        let mut icon_updated = false;
         for child in button_children.iter() {
             if let Ok(mut text) = texts.get_mut(child) {
-                **text = selected_variant.name.clone();
+                **text = name_to_label(&selected_variant.name);
                 text_updated = true;
-            }
-            if !icon_updated {
-                if let Ok(mut image) = images.get_mut(child) {
-                    if let Some(ref icon_path) = selected_variant.icon {
-                        image.image = asset_server.load(icon_path);
-                        icon_updated = true;
-                    }
-                }
+                break;
             }
         }
 
-        // only update last_synced_index if we actually updated the button text
+        // update the left icon via the marker component
+        for (left_icon, mut image, mut node) in &mut left_icons {
+            if left_icon.0 != entity {
+                continue;
+            }
+            if let Some(ref icon_path) = selected_variant.icon {
+                image.image = asset_server.load(icon_path);
+                node.display = Display::Flex;
+            } else {
+                node.display = Display::None;
+            }
+            break;
+        }
+
         if text_updated {
             state.last_synced_index = Some(config.selected_index);
         }
@@ -473,7 +503,7 @@ fn handle_variant_edit_click(
         .variants
         .iter()
         .map(|v| {
-            let mut opt = ComboBoxOptionData::new(&v.name);
+            let mut opt = ComboBoxOptionData::new(name_to_label(&v.name)).with_value(&v.name);
             if let Some(ref icon) = v.icon {
                 opt = opt.with_icon(icon);
             }
@@ -560,7 +590,7 @@ fn handle_variant_combobox_change(
     fields_containers: Query<(Entity, &VariantFieldsContainer)>,
     variant_edit_children: Query<&Children, With<EditorVariantEdit>>,
     mut texts: Query<&mut Text>,
-    mut images: Query<&mut ImageNode>,
+    mut left_icons: Query<(&VariantEditLeftIcon, &mut ImageNode, &mut Node)>,
     children_query: Query<&Children>,
 ) {
     let combobox_entity = trigger.entity;
@@ -585,26 +615,32 @@ fn handle_variant_combobox_change(
         return;
     };
 
-    // update the button text and icon
+    // update the button text
     if let Ok(children) = variant_edit_children.get(variant_edit_entity) {
         if let Some(&button_entity) = children.last() {
             if let Ok(button_children) = children_query.get(button_entity) {
-                let mut icon_updated = false;
                 for child in button_children.iter() {
                     if let Ok(mut text) = texts.get_mut(child) {
-                        **text = selected_variant.name.clone();
-                    }
-                    if !icon_updated {
-                        if let Ok(mut image) = images.get_mut(child) {
-                            if let Some(ref icon_path) = selected_variant.icon {
-                                image.image = asset_server.load(icon_path);
-                                icon_updated = true;
-                            }
-                        }
+                        **text = name_to_label(&selected_variant.name);
+                        break;
                     }
                 }
             }
         }
+    }
+
+    // update the left icon via the marker component
+    for (left_icon, mut image, mut node) in &mut left_icons {
+        if left_icon.0 != variant_edit_entity {
+            continue;
+        }
+        if let Some(ref icon_path) = selected_variant.icon {
+            image.image = asset_server.load(icon_path);
+            node.display = Display::Flex;
+        } else {
+            node.display = Display::None;
+        }
+        break;
     }
 
     // find and update the fields container

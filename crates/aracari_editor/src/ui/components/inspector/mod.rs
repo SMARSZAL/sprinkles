@@ -1,5 +1,6 @@
 pub mod binding;
 mod draw_pass;
+mod emission;
 mod time;
 
 use aracari::prelude::*;
@@ -17,7 +18,7 @@ use crate::ui::widgets::variant_edit::{VariantEditProps, variant_edit};
 use binding::Field;
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins((binding::plugin, time::plugin, draw_pass::plugin))
+    app.add_plugins((binding::plugin, time::plugin, emission::plugin, draw_pass::plugin))
         .add_systems(Update, (setup_inspector_panel, update_panel_title, setup_inspector_section_fields));
 }
 
@@ -68,6 +69,7 @@ fn setup_inspector_panel(
                     ))
                     .with_children(|content| {
                         content.spawn(time::time_section(&asset_server));
+                        content.spawn(emission::emission_section(&asset_server));
                         content.spawn(draw_pass::draw_pass_section(&asset_server));
                     });
             });
