@@ -278,6 +278,7 @@ fn setup_toasts_container(mut commands: Commands) {
                 height: Val::Percent(100.0),
                 ..default()
             },
+            GlobalZIndex(100),
             Pickable::IGNORE,
         ))
         .with_children(|parent| {
