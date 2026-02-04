@@ -58,7 +58,8 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
             (
                 Node {
                     width: percent(100),
-                    height: percent(100),
+                    flex_grow: 1.0,
+                    min_height: px(0.0),
                     ..default()
                 },
                 children![

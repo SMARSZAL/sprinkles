@@ -9,7 +9,7 @@ use crate::ui::widgets::button::{
 use crate::ui::widgets::combobox::{
     ComboBoxChangeEvent, ComboBoxPopover, ComboBoxTrigger, combobox_icon,
 };
-use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle};
+use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 
 pub fn plugin(app: &mut App) {
@@ -77,6 +77,7 @@ fn setup_data_panel(
         commands
             .entity(panel_entity)
             .with_child(panel_resize_handle(panel_entity, PanelDirection::Left))
+            .with_child(panel_scrollbar(panel_entity))
             .with_children(|parent| {
                 parent
                     .spawn((
