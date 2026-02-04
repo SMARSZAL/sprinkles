@@ -3,7 +3,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
 use crate::ui::tokens::{
-    CORNER_RADIUS_LG, FONT_PATH, PRIMARY_COLOR, TEXT_BODY_COLOR, TEXT_DISPLAY_COLOR, TEXT_SIZE,
+    CORNER_RADIUS_LG, FONT_PATH, PRIMARY_COLOR, TEXT_BODY_COLOR, TEXT_DISPLAY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE,
 };
 
 #[derive(EntityEvent)]
@@ -26,6 +26,7 @@ pub enum ButtonVariant {
     Ghost,
     Active,
     ActiveAlt,
+    Disabled,
 }
 
 #[derive(Component, Default, Clone, Copy)]
@@ -39,13 +40,13 @@ impl ButtonVariant {
     pub fn bg_color(&self) -> Srgba {
         match self {
             Self::Default => tailwind::ZINC_700,
-            Self::Ghost | Self::ActiveAlt => TEXT_BODY_COLOR,
+            Self::Ghost | Self::ActiveAlt | Self::Disabled => TEXT_BODY_COLOR,
             Self::Primary | Self::Active => PRIMARY_COLOR,
         }
     }
     pub fn bg_opacity(&self, hovered: bool) -> f32 {
         match (self, hovered) {
-            (Self::Ghost, false) => 0.0,
+            (Self::Ghost, false) | (Self::Disabled, _) => 0.0,
             (Self::Active, false) => 0.1,
             (Self::Active, true) => 0.15,
             (Self::ActiveAlt, _) => 0.05,
@@ -61,11 +62,12 @@ impl ButtonVariant {
             Self::Default | Self::Ghost | Self::ActiveAlt => TEXT_BODY_COLOR,
             Self::Primary => TEXT_DISPLAY_COLOR,
             Self::Active => PRIMARY_COLOR.lighter(0.05),
+            Self::Disabled => TEXT_MUTED_COLOR,
         }
     }
     pub fn border_color(&self) -> Srgba {
         match self {
-            Self::Default | Self::Ghost => tailwind::ZINC_700,
+            Self::Default | Self::Ghost | Self::Disabled => tailwind::ZINC_700,
             Self::Primary | Self::Active => PRIMARY_COLOR,
             Self::ActiveAlt => TEXT_BODY_COLOR,
         }
@@ -78,7 +80,7 @@ impl ButtonVariant {
     }
     pub fn border_opacity(&self, hovered: bool) -> f32 {
         match (self, hovered) {
-            (Self::Ghost, false) => 0.0,
+            (Self::Ghost, false) | (Self::Disabled, _) => 0.0,
             (Self::ActiveAlt, _) => 0.2,
             _ => 1.0,
         }

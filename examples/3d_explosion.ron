@@ -43,9 +43,22 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, tension: 0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: 0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -58,9 +71,22 @@
                 alpha_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 0.0),
-                            (position: 1.0, value: 1.0, tension: 0.5),
+                            (
+                                position: 0.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -77,9 +103,22 @@
                     curve: Some((
                         curve: (
                             points: [
-                                (position: 0.0, value: 1.0),
-                                (position: 1.0, value: 0.0, tension: -0.5),
+                                (
+                                    position: 0.0,
+                                    value: 1.0,
+                                    mode: SingleCurve,
+                                    tension: 0.0,
+                                    easing: Power,
+                                ),
+                                (
+                                    position: 1.0,
+                                    value: 0.0,
+                                    mode: SingleCurve,
+                                    tension: -0.5,
+                                    easing: Power,
+                                ),
                             ],
+                            range: (),
                         ),
                         min_value: 0.0,
                         max_value: 1.0,
@@ -136,9 +175,22 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -162,9 +214,22 @@
                 alpha_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, tension: -0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -176,6 +241,7 @@
                 initial_velocity: (
                     max: 0.5,
                 ),
+                radial_velocity: (),
             ),
             accelerations: (
                 gravity: (0.0, 1.0, 0.0),
@@ -192,9 +258,22 @@
                 influence_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 0.0),
-                            (position: 1.0, value: 1.0, mode: DoubleCurve, tension: 0.5),
+                            (
+                                position: 0.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 1.0,
+                                mode: DoubleCurve,
+                                tension: 0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -238,9 +317,22 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, mode: DoubleCurve, tension: 0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: DoubleCurve,
+                                tension: 0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -264,9 +356,22 @@
                 emission_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, tension: -0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 10.0,
@@ -278,6 +383,7 @@
                 initial_velocity: (
                     max: 5.0,
                 ),
+                radial_velocity: (),
             ),
             accelerations: (
                 gravity: (0.0, 0.3, 0.0),
@@ -335,9 +441,22 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, mode: DoubleCurve, tension: 0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: DoubleCurve,
+                                tension: 0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -361,9 +480,22 @@
                 emission_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, tension: -0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 10.0,
@@ -376,6 +508,7 @@
                     min: 2.0,
                     max: 5.0,
                 ),
+                radial_velocity: (),
             ),
             accelerations: (
                 gravity: (0.0, -1.5, 0.0),
@@ -426,9 +559,22 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 0.0),
-                            (position: 1.0, value: 1.0, tension: -0.7),
+                            (
+                                position: 0.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: -0.7,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -441,9 +587,22 @@
                 alpha_curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 1.0, value: 0.0, tension: -0.7),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.7,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -452,9 +611,10 @@
             velocities: (
                 direction: (1.0, 0.0, 0.0),
                 spread: 45.0,
+                radial_velocity: (),
             ),
             accelerations: (
-                gravity: (0.0, -9.8, 0.0),
+                gravity: (0.0, 0.0, 0.0),
             ),
             particle_flags: "",
         ),
@@ -495,10 +655,29 @@
                 curve: Some((
                     curve: (
                         points: [
-                            (position: 0.0, value: 1.0),
-                            (position: 0.8, value: 1.0, mode: Hold),
-                            (position: 1.0, value: 0.0, tension: -0.5),
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: SingleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 0.8,
+                                value: 1.0,
+                                mode: Hold,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.5,
+                                easing: Power,
+                            ),
                         ],
+                        range: (),
                     ),
                     min_value: 0.0,
                     max_value: 1.0,
@@ -526,6 +705,7 @@
                 initial_velocity: (
                     max: 5.0,
                 ),
+                radial_velocity: (),
             ),
             accelerations: (
                 gravity: (0.0, -9.8, 0.0),

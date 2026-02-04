@@ -6,6 +6,7 @@ use crate::ui::widgets::button::{
     set_button_variant,
 };
 use crate::ui::widgets::popover::{EditorPopover, PopoverPlacement, PopoverProps, popover};
+use crate::ui::widgets::utils::is_descendant_of;
 
 const ICON_CHEVRON_DOWN: &str = "icons/ri-arrow-down-s-line.png";
 const ICON_MORE: &str = "icons/ri-more-fill.png";
@@ -84,6 +85,8 @@ struct ComboBoxConfig {
     selected: usize,
     icon: Option<String>,
     style: ComboBoxStyle,
+    label_override: Option<String>,
+    highlight_selected: bool,
     initialized: bool,
 }
 
@@ -110,6 +113,31 @@ pub fn combobox_with_selected(
             selected,
             icon: None,
             style: ComboBoxStyle::Default,
+            label_override: None,
+            highlight_selected: true,
+            initialized: false,
+        },
+        ComboBoxState::default(),
+        Node {
+            width: percent(100),
+            ..default()
+        },
+    )
+}
+
+pub fn combobox_with_label(
+    options: Vec<impl Into<ComboBoxOptionData>>,
+    label: impl Into<String>,
+) -> impl Bundle {
+    (
+        EditorComboBox,
+        ComboBoxConfig {
+            options: options.into_iter().map(Into::into).collect(),
+            selected: 0,
+            icon: None,
+            style: ComboBoxStyle::Default,
+            label_override: Some(label.into()),
+            highlight_selected: false,
             initialized: false,
         },
         ComboBoxState::default(),
@@ -128,6 +156,8 @@ pub fn combobox_icon(options: Vec<impl Into<ComboBoxOptionData>>) -> impl Bundle
             selected: 0,
             icon: None,
             style: ComboBoxStyle::IconOnly,
+            label_override: None,
+            highlight_selected: true,
             initialized: false,
         },
         ComboBoxState::default(),
@@ -158,8 +188,10 @@ fn setup_combobox(
                 .id(),
             ComboBoxStyle::Default => {
                 let selected_option = config.options.get(config.selected);
-                let label = selected_option
-                    .map(|o| o.label.clone())
+                let label = config
+                    .label_override
+                    .clone()
+                    .or_else(|| selected_option.map(|o| o.label.clone()))
                     .unwrap_or_default();
                 let selected_icon = selected_option.and_then(|o| o.icon.clone());
                 let icon_to_show = config.icon.clone().or(selected_icon);
@@ -280,7 +312,7 @@ fn handle_trigger_click(
     state.popover = Some(popover_entity);
 
     for (index, option) in config.options.iter().enumerate() {
-        let variant = if config.style == ComboBoxStyle::Default && index == config.selected {
+        let variant = if config.highlight_selected && index == config.selected {
             ButtonVariant::Active
         } else {
             ButtonVariant::Ghost
@@ -302,21 +334,6 @@ fn handle_trigger_click(
             button(button_props),
         ));
     }
-}
-
-fn is_descendant_of(entity: Entity, ancestor: Entity, parents: &Query<&ChildOf>) -> bool {
-    let mut current = entity;
-    for _ in 0..50 {
-        if current == ancestor {
-            return true;
-        }
-        if let Ok(child_of) = parents.get(current) {
-            current = child_of.parent();
-        } else {
-            return false;
-        }
-    }
-    false
 }
 
 fn reset_combobox_trigger_style(
@@ -405,6 +422,7 @@ fn handle_option_click(
     };
 
     let is_icon_only = config.style == ComboBoxStyle::IconOnly;
+    let has_label_override = config.label_override.is_some();
     let selected_option = config.options.get(option.index).cloned();
     let should_update_icon = config.icon.is_none();
     config.selected = option.index;
@@ -416,7 +434,7 @@ fn handle_option_click(
         value: option.value.clone(),
     });
 
-    if !is_icon_only {
+    if !is_icon_only && !has_label_override {
         for (_trigger_entity, combo_trigger, children) in &triggers {
             if combo_trigger.0 != option.combobox {
                 continue;

@@ -6,6 +6,7 @@ use bevy::{
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 use thiserror::Error;
 
 // serde skip helpers
@@ -584,6 +585,15 @@ impl Range {
         Self { min, max }
     }
 
+    pub fn span(&self) -> f32 {
+        let span = self.max - self.min;
+        if span.abs() < f32::EPSILON {
+            1.0
+        } else {
+            span
+        }
+    }
+
     fn is_zero(&self) -> bool {
         self.min == 0.0 && self.max == 0.0
     }
@@ -848,12 +858,48 @@ impl Default for EmitterCollision {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, Reflect)]
 pub enum CurveMode {
-    #[default]
     SingleCurve,
+    #[default]
     DoubleCurve,
     Hold,
     Stairs,
     SmoothStairs,
+}
+
+impl FromStr for CurveMode {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "SingleCurve" => Ok(Self::SingleCurve),
+            "DoubleCurve" => Ok(Self::DoubleCurve),
+            "Hold" => Ok(Self::Hold),
+            "Stairs" => Ok(Self::Stairs),
+            "SmoothStairs" => Ok(Self::SmoothStairs),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, Reflect)]
+pub enum CurveEasing {
+    #[default]
+    Power,
+    Sine,
+    Expo,
+    Circ,
+}
+
+impl FromStr for CurveEasing {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Power" => Ok(Self::Power),
+            "Sine" => Ok(Self::Sine),
+            "Expo" => Ok(Self::Expo),
+            "Circ" => Ok(Self::Circ),
+            _ => Err(()),
+        }
+    }
 }
 
 fn default_tension() -> f64 {
@@ -868,6 +914,8 @@ pub struct CurvePoint {
     pub mode: CurveMode,
     #[serde(default = "default_tension")]
     pub tension: f64,
+    #[serde(default)]
+    pub easing: CurveEasing,
 }
 
 impl CurvePoint {
@@ -877,6 +925,7 @@ impl CurvePoint {
             value,
             mode: CurveMode::default(),
             tension: 0.0,
+            easing: CurveEasing::default(),
         }
     }
 
@@ -887,6 +936,11 @@ impl CurvePoint {
 
     pub fn with_tension(mut self, tension: f64) -> Self {
         self.tension = tension;
+        self
+    }
+
+    pub fn with_easing(mut self, easing: CurveEasing) -> Self {
+        self.easing = easing;
         self
     }
 }
@@ -905,7 +959,7 @@ impl Default for CurveTexture {
                 CurvePoint::new(0.0, 1.0),
                 CurvePoint::new(1.0, 1.0),
             ],
-            range: Range::default(),
+            range: Range::new(0.0, 1.0),
         }
     }
 }
@@ -982,22 +1036,26 @@ impl CurveTexture {
         }
 
         let local_t = (t - left.position) / segment_range;
-        let curved_t = apply_curve(local_t, right.mode, right.tension as f32);
+
+        // adjust tension based on slope direction to match shader behavior
+        let slope_sign = (right.value - left.value).signum() as f32;
+        let effective_tension = right.tension as f32 * slope_sign;
+        let curved_t = apply_curve(local_t, right.mode, right.easing, effective_tension);
 
         (left.value + (right.value - left.value) * curved_t as f64) as f32
     }
 }
 
-fn apply_curve(t: f32, mode: CurveMode, tension: f32) -> f32 {
+fn apply_curve(t: f32, mode: CurveMode, easing: CurveEasing, tension: f32) -> f32 {
     match mode {
-        CurveMode::SingleCurve => apply_tension(t, tension),
+        CurveMode::SingleCurve => apply_easing(t, easing, tension),
         CurveMode::DoubleCurve => {
             if t < 0.5 {
                 let local_t = t * 2.0;
-                apply_tension(local_t, tension) * 0.5
+                apply_easing(local_t, easing, tension) * 0.5
             } else {
                 let local_t = (t - 0.5) * 2.0;
-                0.5 + apply_tension(local_t, -tension) * 0.5
+                0.5 + apply_easing(local_t, easing, -tension) * 0.5
             }
         }
         CurveMode::Hold => 0.0,
@@ -1018,7 +1076,16 @@ fn apply_curve(t: f32, mode: CurveMode, tension: f32) -> f32 {
     }
 }
 
-fn apply_tension(t: f32, tension: f32) -> f32 {
+fn apply_easing(t: f32, easing: CurveEasing, tension: f32) -> f32 {
+    match easing {
+        CurveEasing::Power => apply_power(t, tension),
+        CurveEasing::Sine => apply_sine(t, tension),
+        CurveEasing::Expo => apply_expo(t, tension),
+        CurveEasing::Circ => apply_circ(t, tension),
+    }
+}
+
+fn apply_power(t: f32, tension: f32) -> f32 {
     if tension.abs() < f32::EPSILON {
         return t;
     }
@@ -1030,11 +1097,49 @@ fn apply_tension(t: f32, tension: f32) -> f32 {
     }
 }
 
+fn apply_sine(t: f32, tension: f32) -> f32 {
+    use std::f32::consts::PI;
+    let intensity = tension.abs();
+    if intensity < f32::EPSILON {
+        return t;
+    }
+    let eased = if tension >= 0.0 {
+        1.0 - (t * PI * 0.5).cos()
+    } else {
+        (t * PI * 0.5).sin()
+    };
+    t + (eased - t) * intensity
+}
+
+fn apply_expo(t: f32, tension: f32) -> f32 {
+    let intensity = tension.abs();
+    if intensity < f32::EPSILON {
+        return t;
+    }
+    let eased = if tension >= 0.0 {
+        if t <= 0.0 { 0.0 } else { (2.0_f32).powf(10.0 * (t - 1.0)) }
+    } else {
+        if t >= 1.0 { 1.0 } else { 1.0 - (2.0_f32).powf(-10.0 * t) }
+    };
+    t + (eased - t) * intensity
+}
+
+fn apply_circ(t: f32, tension: f32) -> f32 {
+    let intensity = tension.abs();
+    if intensity < f32::EPSILON {
+        return t;
+    }
+    let eased = if tension >= 0.0 {
+        1.0 - (1.0 - t * t).sqrt()
+    } else {
+        (1.0 - (1.0 - t) * (1.0 - t)).sqrt()
+    };
+    t + (eased - t) * intensity
+}
+
 fn tension_to_steps(tension: f32) -> u32 {
     let tension = tension.clamp(0.0, 1.0);
-    let min_steps = 1u32;
-    let max_steps = 64u32;
-    min_steps + ((max_steps - min_steps) as f32 * tension) as u32
+    2 + (64.0 * tension) as u32
 }
 
 fn default_curve_min() -> f32 {
