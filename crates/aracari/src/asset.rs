@@ -164,9 +164,6 @@ pub struct EmitterData {
     #[serde(default, skip_serializing_if = "is_zero_vec3")]
     pub position: Vec3,
 
-    #[serde(default = "default_amount")]
-    pub amount: u32,
-
     #[serde(default)]
     pub time: EmitterTime,
 
@@ -174,15 +171,33 @@ pub struct EmitterData {
     pub draw_pass: EmitterDrawPass,
 
     #[serde(default)]
-    pub process: ParticleProcessConfig,
+    pub emission: EmitterEmission,
+
+    #[serde(default)]
+    pub scale: EmitterScale,
+
+    #[serde(default)]
+    pub colors: EmitterColors,
+
+    #[serde(default)]
+    pub velocities: EmitterVelocities,
+
+    #[serde(default)]
+    pub accelerations: EmitterAccelerations,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turbulence: Option<EmitterTurbulence>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collision: Option<EmitterCollision>,
+
+    #[serde(default)]
+    #[reflect(ignore)]
+    pub particle_flags: ParticleFlags,
 }
 
 fn default_enabled() -> bool {
     true
-}
-
-fn default_amount() -> u32 {
-    8
 }
 
 impl Default for EmitterData {
@@ -191,10 +206,16 @@ impl Default for EmitterData {
             name: "Emitter".to_string(),
             enabled: true,
             position: Vec3::ZERO,
-            amount: 8,
             time: EmitterTime::default(),
             draw_pass: EmitterDrawPass::default(),
-            process: ParticleProcessConfig::default(),
+            emission: EmitterEmission::default(),
+            scale: EmitterScale::default(),
+            colors: EmitterColors::default(),
+            velocities: EmitterVelocities::default(),
+            accelerations: EmitterAccelerations::default(),
+            turbulence: None,
+            collision: None,
+            particle_flags: ParticleFlags::empty(),
         }
     }
 }
@@ -595,44 +616,76 @@ impl EmissionShape {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessSpawnPosition {
-    #[serde(default, skip_serializing_if = "EmissionShape::is_default")]
-    pub emission_shape: EmissionShape,
-    #[serde(default, skip_serializing_if = "is_zero_vec3")]
-    pub emission_shape_offset: Vec3,
-    #[serde(default = "default_emission_shape_scale", skip_serializing_if = "is_one_vec3")]
-    pub emission_shape_scale: Vec3,
-}
-
-fn default_emission_shape_scale() -> Vec3 {
+fn default_emission_scale() -> Vec3 {
     Vec3::ONE
 }
 
-impl Default for ParticleProcessSpawnPosition {
+fn default_particles_amount() -> u32 {
+    8
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterEmission {
+    #[serde(default, skip_serializing_if = "is_zero_vec3")]
+    pub offset: Vec3,
+    #[serde(default = "default_emission_scale", skip_serializing_if = "is_one_vec3")]
+    pub scale: Vec3,
+    #[serde(default, skip_serializing_if = "EmissionShape::is_default")]
+    pub shape: EmissionShape,
+    #[serde(default = "default_particles_amount")]
+    pub particles_amount: u32,
+}
+
+impl Default for EmitterEmission {
     fn default() -> Self {
         Self {
-            emission_shape: EmissionShape::default(),
-            emission_shape_offset: Vec3::ZERO,
-            emission_shape_scale: Vec3::ONE,
+            offset: Vec3::ZERO,
+            scale: Vec3::ONE,
+            shape: EmissionShape::default(),
+            particles_amount: 8,
+        }
+    }
+}
+
+fn default_scale_range() -> Range {
+    Range { min: 1.0, max: 1.0 }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterScale {
+    #[serde(default = "default_scale_range")]
+    pub range: Range,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curve: Option<SplineCurveConfig>,
+}
+
+impl Default for EmitterScale {
+    fn default() -> Self {
+        Self {
+            range: default_scale_range(),
+            curve: None,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessSpawnVelocity {
-    #[serde(default, skip_serializing_if = "is_zero_f32")]
-    pub inherit_velocity_ratio: f32,
-    #[serde(default, skip_serializing_if = "is_zero_vec3")]
-    pub velocity_pivot: Vec3,
-    #[serde(default = "default_direction")]
-    pub direction: Vec3,
-    #[serde(default = "default_spread")]
-    pub spread: f32,
-    #[serde(default, skip_serializing_if = "is_zero_f32")]
-    pub flatness: f32,
-    #[serde(default, skip_serializing_if = "Range::is_zero")]
-    pub initial_velocity: Range,
+pub struct EmitterColors {
+    #[serde(default)]
+    pub initial_color: SolidOrGradientColor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alpha_curve: Option<SplineCurveConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emission_curve: Option<SplineCurveConfig>,
+}
+
+impl Default for EmitterColors {
+    fn default() -> Self {
+        Self {
+            initial_color: SolidOrGradientColor::default(),
+            alpha_curve: None,
+            emission_curve: None,
+        }
+    }
 }
 
 fn default_direction() -> Vec3 {
@@ -641,54 +694,6 @@ fn default_direction() -> Vec3 {
 
 fn default_spread() -> f32 {
     45.0
-}
-
-impl Default for ParticleProcessSpawnVelocity {
-    fn default() -> Self {
-        Self {
-            inherit_velocity_ratio: 0.0,
-            velocity_pivot: Vec3::ZERO,
-            direction: Vec3::X,
-            spread: 45.0,
-            flatness: 0.0,
-            initial_velocity: Range::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessAccelerations {
-    #[serde(default = "default_gravity")]
-    pub gravity: Vec3,
-}
-
-fn default_gravity() -> Vec3 {
-    Vec3::new(0.0, -9.8, 0.0)
-}
-
-impl Default for ParticleProcessAccelerations {
-    fn default() -> Self {
-        Self {
-            gravity: Vec3::new(0.0, -9.8, 0.0),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessSpawn {
-    #[serde(default)]
-    pub position: ParticleProcessSpawnPosition,
-    #[serde(default)]
-    pub velocity: ParticleProcessSpawnVelocity,
-}
-
-impl Default for ParticleProcessSpawn {
-    fn default() -> Self {
-        Self {
-            position: ParticleProcessSpawnPosition::default(),
-            velocity: ParticleProcessSpawnVelocity::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
@@ -709,22 +714,137 @@ impl Default for AnimatedVelocity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessAnimVelocities {
-    // TODO: angular_velocity: AnimatedVelocity,
+pub struct EmitterVelocities {
+    #[serde(default = "default_direction")]
+    pub direction: Vec3,
+    #[serde(default = "default_spread")]
+    pub spread: f32,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub flatness: f32,
+    #[serde(default, skip_serializing_if = "Range::is_zero")]
+    pub initial_velocity: Range,
     #[serde(default)]
     pub radial_velocity: AnimatedVelocity,
-    // TODO: directional_velocity: AnimatedVelocity,
-    // TODO: orbit_velocity: AnimatedVelocity,
-    // TODO: velocity_limit: Option<SplineCurve>,
+    #[serde(default, skip_serializing_if = "is_zero_vec3")]
+    pub velocity_pivot: Vec3,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub inherit_velocity_ratio: f32,
 }
 
-impl Default for ParticleProcessAnimVelocities {
+impl Default for EmitterVelocities {
     fn default() -> Self {
         Self {
+            direction: Vec3::X,
+            spread: 45.0,
+            flatness: 0.0,
+            initial_velocity: Range::default(),
             radial_velocity: AnimatedVelocity::default(),
+            velocity_pivot: Vec3::ZERO,
+            inherit_velocity_ratio: 0.0,
         }
     }
 }
+
+fn default_gravity() -> Vec3 {
+    Vec3::new(0.0, -9.8, 0.0)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterAccelerations {
+    #[serde(default = "default_gravity")]
+    pub gravity: Vec3,
+}
+
+impl Default for EmitterAccelerations {
+    fn default() -> Self {
+        Self {
+            gravity: Vec3::new(0.0, -9.8, 0.0),
+        }
+    }
+}
+
+fn default_turbulence_noise_strength() -> f32 {
+    1.0
+}
+
+fn default_turbulence_noise_scale() -> f32 {
+    2.5
+}
+
+fn default_turbulence_influence() -> Range {
+    Range { min: 0.0, max: 0.1 }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterTurbulence {
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub enabled: bool,
+    #[serde(default = "default_turbulence_noise_strength")]
+    pub noise_strength: f32,
+    #[serde(default = "default_turbulence_noise_scale")]
+    pub noise_scale: f32,
+    #[serde(default, skip_serializing_if = "is_zero_vec3")]
+    pub noise_speed: Vec3,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub noise_speed_random: f32,
+    #[serde(default = "default_turbulence_influence")]
+    pub influence: Range,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub influence_curve: Option<SplineCurveConfig>,
+}
+
+impl Default for EmitterTurbulence {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            noise_strength: default_turbulence_noise_strength(),
+            noise_scale: default_turbulence_noise_scale(),
+            noise_speed: Vec3::ZERO,
+            noise_speed_random: 0.0,
+            influence: default_turbulence_influence(),
+            influence_curve: None,
+        }
+    }
+}
+
+fn default_collision_base_size() -> f32 {
+    0.01
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub enum EmitterCollisionMode {
+    Rigid { friction: f32, bounce: f32 },
+    HideOnContact,
+}
+
+impl Default for EmitterCollisionMode {
+    fn default() -> Self {
+        Self::Rigid {
+            friction: 0.0,
+            bounce: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterCollision {
+    pub mode: EmitterCollisionMode,
+    #[serde(default = "default_collision_base_size")]
+    pub base_size: f32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub use_scale: bool,
+}
+
+impl Default for EmitterCollision {
+    fn default() -> Self {
+        Self {
+            mode: EmitterCollisionMode::default(),
+            base_size: default_collision_base_size(),
+            use_scale: false,
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct Knot {
@@ -1380,110 +1500,7 @@ impl SolidOrGradientColor {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessDisplayScale {
-    #[serde(default = "default_scale_range")]
-    pub range: Range,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub curve: Option<SplineCurveConfig>,
-}
-
-fn default_scale_range() -> Range {
-    Range { min: 1.0, max: 1.0 }
-}
-
-impl Default for ParticleProcessDisplayScale {
-    fn default() -> Self {
-        Self {
-            range: default_scale_range(),
-            curve: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessDisplayColor {
-    #[serde(default)]
-    pub initial_color: SolidOrGradientColor,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub alpha_curve: Option<SplineCurveConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub emission_curve: Option<SplineCurveConfig>,
-}
-
-impl Default for ParticleProcessDisplayColor {
-    fn default() -> Self {
-        Self {
-            initial_color: SolidOrGradientColor::default(),
-            alpha_curve: None,
-            emission_curve: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, Reflect)]
-pub struct ParticleProcessDisplay {
-    #[serde(default)]
-    pub scale: ParticleProcessDisplayScale,
-    #[serde(default)]
-    pub color_curves: ParticleProcessDisplayColor,
-}
-
-fn default_turbulence_noise_strength() -> f32 {
-    1.0
-}
-
-fn default_turbulence_noise_scale() -> f32 {
-    2.5
-}
-
-fn default_turbulence_influence() -> Range {
-    Range { min: 0.0, max: 0.1 }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessTurbulence {
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub enabled: bool,
-
-    #[serde(default = "default_turbulence_noise_strength")]
-    pub noise_strength: f32,
-
-    #[serde(default = "default_turbulence_noise_scale")]
-    pub noise_scale: f32,
-
-    #[serde(default, skip_serializing_if = "is_zero_vec3")]
-    pub noise_speed: Vec3,
-
-    #[serde(default, skip_serializing_if = "is_zero_f32")]
-    pub noise_speed_random: f32,
-
-    #[serde(default = "default_turbulence_influence")]
-    pub influence: Range,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub influence_curve: Option<SplineCurveConfig>,
-}
-
-impl Default for ParticleProcessTurbulence {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            noise_strength: default_turbulence_noise_strength(),
-            noise_scale: default_turbulence_noise_scale(),
-            noise_speed: Vec3::ZERO,
-            noise_speed_random: 0.0,
-            influence: default_turbulence_influence(),
-            influence_curve: None,
-        }
-    }
-}
-
-// collision
-
-fn default_collision_base_size() -> f32 {
-    0.01
-}
+// collision shapes
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum ParticlesColliderShape3D {
@@ -1494,73 +1511,6 @@ pub enum ParticlesColliderShape3D {
 impl Default for ParticlesColliderShape3D {
     fn default() -> Self {
         Self::Sphere { radius: 1.0 }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessCollision {
-    pub mode: ParticleProcessCollisionMode,
-    #[serde(default = "default_collision_base_size")]
-    pub base_size: f32,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub use_scale: bool,
-}
-
-impl Default for ParticleProcessCollision {
-    fn default() -> Self {
-        Self {
-            mode: ParticleProcessCollisionMode::default(),
-            base_size: default_collision_base_size(),
-            use_scale: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub enum ParticleProcessCollisionMode {
-    Rigid { friction: f32, bounce: f32 },
-    HideOnContact,
-}
-
-impl Default for ParticleProcessCollisionMode {
-    fn default() -> Self {
-        Self::Rigid {
-            friction: 0.0,
-            bounce: 0.0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
-pub struct ParticleProcessConfig {
-    #[serde(default)]
-    #[reflect(ignore)]
-    pub particle_flags: ParticleFlags,
-    #[serde(default)]
-    pub spawn: ParticleProcessSpawn,
-    #[serde(default)]
-    pub animated_velocity: ParticleProcessAnimVelocities,
-    #[serde(default)]
-    pub accelerations: ParticleProcessAccelerations,
-    #[serde(default)]
-    pub display: ParticleProcessDisplay,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub turbulence: Option<ParticleProcessTurbulence>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub collision: Option<ParticleProcessCollision>,
-}
-
-impl Default for ParticleProcessConfig {
-    fn default() -> Self {
-        Self {
-            particle_flags: ParticleFlags::empty(),
-            spawn: ParticleProcessSpawn::default(),
-            animated_velocity: ParticleProcessAnimVelocities::default(),
-            accelerations: ParticleProcessAccelerations::default(),
-            display: ParticleProcessDisplay::default(),
-            turbulence: None,
-            collision: None,
-        }
     }
 }
 

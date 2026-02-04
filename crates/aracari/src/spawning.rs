@@ -598,7 +598,7 @@ pub fn setup_particle_systems(
         ));
 
         for (emitter_index, emitter) in asset.emitters.iter().enumerate() {
-            let amount = emitter.amount;
+            let amount = emitter.emission.particles_amount;
 
             let particles: Vec<ParticleData> =
                 (0..amount).map(|_| ParticleData::default()).collect();
@@ -620,7 +620,7 @@ pub fn setup_particle_systems(
                 &current_material,
                 sorted_particles_buffer_handle.clone(),
                 amount,
-                emitter.process.particle_flags.bits(),
+                emitter.particle_flags.bits(),
                 &asset_server,
             ));
 
@@ -817,7 +817,7 @@ pub fn sync_particle_material(
                 &new_material,
                 sorted_particles_handle,
                 buffer_handle.max_particles,
-                emitter_data.process.particle_flags.bits(),
+                emitter_data.particle_flags.bits(),
                 &asset_server,
             ));
 

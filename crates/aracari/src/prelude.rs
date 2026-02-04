@@ -9,15 +9,13 @@ pub use crate::AracariPlugin;
 
 // asset types
 pub use crate::asset::{
-    AnimatedVelocity, DrawOrder, DrawPassMaterial, EmissionShape, EmitterData, EmitterDrawPass,
-    EmitterTime, Gradient as ParticleGradient, GradientInterpolation, GradientStop, ParticleFlags,
-    ParticleMesh, ParticleProcessAccelerations, ParticleProcessAnimVelocities,
-    ParticleProcessCollision, ParticleProcessCollisionMode, ParticleProcessConfig,
-    ParticleProcessDisplay, ParticleProcessDisplayColor, ParticleProcessDisplayScale,
-    ParticleProcessSpawn, ParticleProcessSpawnPosition, ParticleProcessSpawnVelocity,
-    ParticleProcessTurbulence, ParticleSystemAsset, ParticleSystemDimension,
-    ParticlesColliderShape3D, QuadOrientation, Range as ParticleRange, SerializableAlphaMode,
-    SolidOrGradientColor, SplineCurve, SplineCurveConfig, StandardParticleMaterial,
+    AnimatedVelocity, DrawOrder, DrawPassMaterial, EmissionShape, EmitterAccelerations,
+    EmitterCollision, EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass,
+    EmitterEmission, EmitterScale, EmitterTime, EmitterTurbulence, EmitterVelocities,
+    Gradient as ParticleGradient, GradientInterpolation, GradientStop, ParticleFlags,
+    ParticleMesh, ParticleSystemAsset, ParticleSystemDimension, ParticlesColliderShape3D,
+    QuadOrientation, Range as ParticleRange, SerializableAlphaMode, SolidOrGradientColor,
+    SplineCurve, SplineCurveConfig, StandardParticleMaterial,
 };
 
 // runtime types

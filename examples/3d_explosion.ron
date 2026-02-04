@@ -4,7 +4,6 @@
     emitters: [
         (
             name: "Windup",
-            amount: 10,
             time: (
                 lifetime: 0.28,
                 one_shot: true,
@@ -24,78 +23,70 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 0.5,
                     alpha_mode: Blend,
+                    perceptual_roughness: 0.5,
                     reflectance: 0.5,
                 )),
                 shadow_caster: false,
             ),
-            process: (
-                particle_flags: "ALIGN_Y_TO_VELOCITY",
-                spawn: (
-                    position: (
-                        emission_shape: SphereSurface(
-                            radius: 2.0,
-                        ),
-                    ),
-                    velocity: (
-                        direction: (0.0, 0.0, 0.0),
-                        spread: 180.0,
-                    ),
+            emission: (
+                shape: SphereSurface(
+                    radius: 2.0,
                 ),
-                animated_velocity: (
-                    radial_velocity: (
-                        value: (
-                            min: -6.0,
-                            max: -5.0,
-                        ),
-                        curve: Some((
-                            curve: SineOutReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
+                particles_amount: 10,
+            ),
+            scale: (
+                range: (
+                    min: 0.2,
+                    max: 0.4,
                 ),
-                accelerations: (
-                    gravity: (0.0, 0.0, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 0.2,
-                            max: 0.4,
-                        ),
-                        curve: Some((
-                            curve: SineInReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Solid(
-                            color: (1.0, 0.9843137, 0.92156863, 1.0),
-                        ),
-                        alpha_curve: Some((
-                            curve: SineIn,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                ),
-                turbulence: Some((
-                    noise_strength: 0.1,
-                    noise_scale: 2.5,
-                    noise_speed_random: 0.2,
-                    influence: (
-                        min: 0.01,
-                        max: 0.04,
-                    ),
+                curve: Some((
+                    curve: SineInReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
                 )),
             ),
+            colors: (
+                initial_color: Solid(
+                    color: (1.0, 0.9843137, 0.92156863, 1.0),
+                ),
+                alpha_curve: Some((
+                    curve: SineIn,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                )),
+            ),
+            velocities: (
+                direction: (0.0, 0.0, 0.0),
+                spread: 180.0,
+                radial_velocity: (
+                    value: (
+                        min: -6.0,
+                        max: -5.0,
+                    ),
+                    curve: Some((
+                        curve: SineOutReverse,
+                        min_value: 0.0,
+                        max_value: 1.0,
+                    )),
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, 0.0, 0.0),
+            ),
+            turbulence: Some((
+                noise_strength: 0.1,
+                noise_scale: 2.5,
+                noise_speed_random: 0.2,
+                influence: (
+                    min: 0.01,
+                    max: 0.04,
+                ),
+            )),
+            particle_flags: "ALIGN_Y_TO_VELOCITY",
         ),
         (
             name: "Smoke",
-            amount: 16,
             time: (
                 lifetime: 2.0,
                 delay: 0.3,
@@ -110,88 +101,79 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 1.0,
                     alpha_mode: Blend,
+                    perceptual_roughness: 1.0,
                     reflectance: 0.5,
                 )),
                 shadow_caster: false,
             ),
-            process: (
-                particle_flags: "",
-                spawn: (
-                    position: (
-                        emission_shape: Sphere(
-                            radius: 0.3,
-                        ),
-                    ),
-                    velocity: (
-                        direction: (1.0, 0.0, 0.0),
-                        spread: 45.0,
-                        initial_velocity: (
-                            max: 0.5,
-                        ),
-                    ),
+            emission: (
+                shape: Sphere(
+                    radius: 0.3,
                 ),
-                animated_velocity: (
-                    radial_velocity: (),
+                particles_amount: 16,
+            ),
+            scale: (
+                range: (
+                    min: 0.2,
+                    max: 0.3,
                 ),
-                accelerations: (
-                    gravity: (0.0, 1.0, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 0.2,
-                            max: 0.3,
-                        ),
-                        curve: Some((
-                            curve: LinearReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Gradient(
-                            gradient: (
-                                stops: [
-                                    (
-                                        color: (0.047058824, 0.039215688, 0.03529412, 1.0),
-                                        position: 0.0,
-                                    ),
-                                    (
-                                        color: (0.10980392, 0.09803922, 0.09019608, 1.0),
-                                        position: 1.0,
-                                    ),
-                                ],
-                            ),
-                        ),
-                        alpha_curve: Some((
-                            curve: SineOutReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                ),
-                turbulence: Some((
-                    enabled: true,
-                    noise_strength: 0.1,
-                    noise_scale: 0.2,
-                    noise_speed_random: 0.2,
-                    influence: (
-                        min: 0.01,
-                        max: 0.04,
-                    ),
-                    influence_curve: Some((
-                        curve: SineInOut,
-                        min_value: 0.0,
-                        max_value: 1.0,
-                    )),
+                curve: Some((
+                    curve: LinearReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
                 )),
             ),
+            colors: (
+                initial_color: Gradient(
+                    gradient: (
+                        stops: [
+                            (
+                                color: (0.047058824, 0.039215688, 0.03529412, 1.0),
+                                position: 0.0,
+                            ),
+                            (
+                                color: (0.10980392, 0.09803922, 0.09019608, 1.0),
+                                position: 1.0,
+                            ),
+                        ],
+                    ),
+                ),
+                alpha_curve: Some((
+                    curve: SineOutReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                )),
+            ),
+            velocities: (
+                direction: (1.0, 0.0, 0.0),
+                spread: 45.0,
+                initial_velocity: (
+                    max: 0.5,
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, 1.0, 0.0),
+            ),
+            turbulence: Some((
+                enabled: true,
+                noise_strength: 0.1,
+                noise_scale: 0.2,
+                noise_speed_random: 0.2,
+                influence: (
+                    min: 0.01,
+                    max: 0.04,
+                ),
+                influence_curve: Some((
+                    curve: SineInOut,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                )),
+            )),
+            particle_flags: "",
         ),
         (
             name: "Fire",
-            amount: 16,
             time: (
                 lifetime: 1.0,
                 delay: 0.3,
@@ -206,82 +188,73 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 1.0,
                     alpha_mode: Opaque,
+                    perceptual_roughness: 1.0,
                     reflectance: 0.5,
                 )),
                 shadow_caster: false,
             ),
-            process: (
-                particle_flags: "",
-                spawn: (
-                    position: (
-                        emission_shape: Sphere(
-                            radius: 0.2,
-                        ),
-                    ),
-                    velocity: (
-                        direction: (1.0, 0.0, 0.0),
-                        spread: 180.0,
-                        initial_velocity: (
-                            max: 5.0,
-                        ),
-                    ),
+            emission: (
+                shape: Sphere(
+                    radius: 0.2,
                 ),
-                animated_velocity: (
-                    radial_velocity: (),
+                particles_amount: 16,
+            ),
+            scale: (
+                range: (
+                    min: 0.2,
+                    max: 0.4,
                 ),
-                accelerations: (
-                    gravity: (0.0, 0.3, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 0.2,
-                            max: 0.4,
-                        ),
-                        curve: Some((
-                            curve: SineInOutReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Gradient(
-                            gradient: (
-                                stops: [
-                                    (
-                                        color: (0.9607843, 0.61960787, 0.043137256, 1.0),
-                                        position: 0.0,
-                                    ),
-                                    (
-                                        color: (0.9764706, 0.4509804, 0.08627451, 1.0),
-                                        position: 1.0,
-                                    ),
-                                ],
-                            ),
-                        ),
-                        emission_curve: Some((
-                            curve: SineOutReverse,
-                            min_value: 0.0,
-                            max_value: 10.0,
-                        )),
-                    ),
-                ),
-                turbulence: Some((
-                    noise_strength: 0.1,
-                    noise_scale: 2.5,
-                    noise_speed_random: 0.2,
-                    influence: (
-                        min: 0.01,
-                        max: 0.04,
-                    ),
+                curve: Some((
+                    curve: SineInOutReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
                 )),
             ),
+            colors: (
+                initial_color: Gradient(
+                    gradient: (
+                        stops: [
+                            (
+                                color: (0.9607843, 0.61960787, 0.043137256, 1.0),
+                                position: 0.0,
+                            ),
+                            (
+                                color: (0.9764706, 0.4509804, 0.08627451, 1.0),
+                                position: 1.0,
+                            ),
+                        ],
+                    ),
+                ),
+                emission_curve: Some((
+                    curve: SineOutReverse,
+                    min_value: 0.0,
+                    max_value: 10.0,
+                )),
+            ),
+            velocities: (
+                direction: (1.0, 0.0, 0.0),
+                spread: 180.0,
+                initial_velocity: (
+                    max: 5.0,
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, 0.3, 0.0),
+            ),
+            turbulence: Some((
+                noise_strength: 0.1,
+                noise_scale: 2.5,
+                noise_speed_random: 0.2,
+                influence: (
+                    min: 0.01,
+                    max: 0.04,
+                ),
+            )),
+            particle_flags: "",
         ),
         (
             name: "Sparks",
-            amount: 20,
             time: (
                 lifetime: 0.7,
                 delay: 0.3,
@@ -302,83 +275,74 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 0.5,
                     alpha_mode: Blend,
+                    perceptual_roughness: 0.5,
                     reflectance: 0.5,
                 )),
                 shadow_caster: false,
             ),
-            process: (
-                particle_flags: "ALIGN_Y_TO_VELOCITY",
-                spawn: (
-                    position: (
-                        emission_shape: Sphere(
-                            radius: 0.2,
-                        ),
-                    ),
-                    velocity: (
-                        direction: (1.0, 0.0, 0.0),
-                        spread: 180.0,
-                        initial_velocity: (
-                            min: 2.0,
-                            max: 5.0,
-                        ),
-                    ),
+            emission: (
+                shape: Sphere(
+                    radius: 0.2,
                 ),
-                animated_velocity: (
-                    radial_velocity: (),
+                particles_amount: 20,
+            ),
+            scale: (
+                range: (
+                    min: 0.2,
+                    max: 0.4,
                 ),
-                accelerations: (
-                    gravity: (0.0, -1.5, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 0.2,
-                            max: 0.4,
-                        ),
-                        curve: Some((
-                            curve: SineInOutReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Gradient(
-                            gradient: (
-                                stops: [
-                                    (
-                                        color: (0.9607843, 0.61960787, 0.043137256, 1.0),
-                                        position: 0.0,
-                                    ),
-                                    (
-                                        color: (0.9764706, 0.4509804, 0.08627451, 1.0),
-                                        position: 1.0,
-                                    ),
-                                ],
-                            ),
-                        ),
-                        emission_curve: Some((
-                            curve: SineOutReverse,
-                            min_value: 0.0,
-                            max_value: 10.0,
-                        )),
-                    ),
-                ),
-                turbulence: Some((
-                    noise_strength: 0.1,
-                    noise_scale: 2.5,
-                    noise_speed_random: 0.2,
-                    influence: (
-                        min: 0.01,
-                        max: 0.04,
-                    ),
+                curve: Some((
+                    curve: SineInOutReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
                 )),
             ),
+            colors: (
+                initial_color: Gradient(
+                    gradient: (
+                        stops: [
+                            (
+                                color: (0.9607843, 0.61960787, 0.043137256, 1.0),
+                                position: 0.0,
+                            ),
+                            (
+                                color: (0.9764706, 0.4509804, 0.08627451, 1.0),
+                                position: 1.0,
+                            ),
+                        ],
+                    ),
+                ),
+                emission_curve: Some((
+                    curve: SineOutReverse,
+                    min_value: 0.0,
+                    max_value: 10.0,
+                )),
+            ),
+            velocities: (
+                direction: (1.0, 0.0, 0.0),
+                spread: 180.0,
+                initial_velocity: (
+                    min: 2.0,
+                    max: 5.0,
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, -1.5, 0.0),
+            ),
+            turbulence: Some((
+                noise_strength: 0.1,
+                noise_scale: 2.5,
+                noise_speed_random: 0.2,
+                influence: (
+                    min: 0.01,
+                    max: 0.04,
+                ),
+            )),
+            particle_flags: "ALIGN_Y_TO_VELOCITY",
         ),
         (
             name: "Shockwave",
-            amount: 1,
             time: (
                 lifetime: 0.5,
                 delay: 0.3,
@@ -393,57 +357,49 @@
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     base_color_texture: Some("circle_01_a.png"),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 0.5,
                     alpha_mode: Blend,
+                    perceptual_roughness: 0.5,
+                    reflectance: 0.5,
                     double_sided: true,
                     unlit: true,
-                    reflectance: 0.5,
                 )),
                 shadow_caster: false,
             ),
-            process: (
-                particle_flags: "",
-                spawn: (
-                    position: (),
-                    velocity: (
-                        direction: (1.0, 0.0, 0.0),
-                        spread: 45.0,
-                    ),
-                ),
-                animated_velocity: (
-                    radial_velocity: (),
-                ),
-                accelerations: (
-                    gravity: (0.0, 0.0, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 6.0,
-                            max: 6.0,
-                        ),
-                        curve: Some((
-                            curve: CubicOut,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Solid(
-                            color: (1.0, 1.0, 1.0, 1.0),
-                        ),
-                        alpha_curve: Some((
-                            curve: CubicOutReverse,
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                ),
+            emission: (
+                particles_amount: 1,
             ),
+            scale: (
+                range: (
+                    min: 6.0,
+                    max: 6.0,
+                ),
+                curve: Some((
+                    curve: CubicOut,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                )),
+            ),
+            colors: (
+                initial_color: Solid(
+                    color: (1.0, 1.0, 1.0, 1.0),
+                ),
+                alpha_curve: Some((
+                    curve: CubicOutReverse,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                )),
+            ),
+            velocities: (
+                direction: (1.0, 0.0, 0.0),
+                spread: 45.0,
+            ),
+            accelerations: (
+                gravity: (0.0, -9.8, 0.0),
+            ),
+            particle_flags: "",
         ),
         (
             name: "Debris",
-            amount: 16,
             time: (
                 lifetime: 3.0,
                 lifetime_randomness: 0.3,
@@ -460,112 +416,104 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     emissive: (0.0, 0.0, 0.0, 0.0),
-                    perceptual_roughness: 0.5,
                     alpha_mode: Opaque,
+                    perceptual_roughness: 0.5,
                     reflectance: 0.5,
                 )),
             ),
-            process: (
-                particle_flags: "ALIGN_Y_TO_VELOCITY",
-                spawn: (
-                    position: (
-                        emission_shape: Sphere(
-                            radius: 0.2,
-                        ),
-                    ),
-                    velocity: (
-                        direction: (1.0, 0.0, 0.0),
-                        spread: 180.0,
-                        initial_velocity: (
-                            max: 5.0,
-                        ),
-                    ),
+            emission: (
+                shape: Sphere(
+                    radius: 0.2,
                 ),
-                animated_velocity: (
-                    radial_velocity: (),
+                particles_amount: 16,
+            ),
+            scale: (
+                range: (
+                    min: 0.04,
+                    max: 0.1,
                 ),
-                accelerations: (
-                    gravity: (0.0, -9.8, 0.0),
-                ),
-                display: (
-                    scale: (
-                        range: (
-                            min: 0.04,
-                            max: 0.1,
+                curve: Some((
+                    curve: Custom([
+                        (
+                            position: 0.0,
+                            value: 1.0,
                         ),
-                        curve: Some((
-                            curve: Custom([
-                                (
-                                    position: 0.0,
-                                    value: 1.0,
-                                ),
-                                (
-                                    position: 0.8,
-                                    value: 1.0,
-                                ),
-                                (
-                                    position: 0.825,
-                                    value: 0.962,
-                                ),
-                                (
-                                    position: 0.85,
-                                    value: 0.854,
-                                ),
-                                (
-                                    position: 0.875,
-                                    value: 0.691,
-                                ),
-                                (
-                                    position: 0.9,
-                                    value: 0.5,
-                                ),
-                                (
-                                    position: 0.925,
-                                    value: 0.309,
-                                ),
-                                (
-                                    position: 0.95,
-                                    value: 0.146,
-                                ),
-                                (
-                                    position: 0.975,
-                                    value: 0.038,
-                                ),
-                                (
-                                    position: 1.0,
-                                    value: 0.0,
-                                ),
-                            ]),
-                            min_value: 0.0,
-                            max_value: 1.0,
-                        )),
-                    ),
-                    color_curves: (
-                        initial_color: Gradient(
-                            gradient: (
-                                stops: [
-                                    (
-                                        color: (0.15294118, 0.15294118, 0.16470589, 1.0),
-                                        position: 0.0,
-                                    ),
-                                    (
-                                        color: (0.03529412, 0.03529412, 0.043137256, 1.0),
-                                        position: 1.0,
-                                    ),
-                                ],
-                            ),
+                        (
+                            position: 0.8,
+                            value: 1.0,
                         ),
-                    ),
-                ),
-                collision: Some((
-                    mode: Rigid(
-                        friction: 0.1,
-                        bounce: 0.15,
-                    ),
-                    base_size: 0.01,
-                    use_scale: true,
+                        (
+                            position: 0.825,
+                            value: 0.962,
+                        ),
+                        (
+                            position: 0.85,
+                            value: 0.854,
+                        ),
+                        (
+                            position: 0.875,
+                            value: 0.691,
+                        ),
+                        (
+                            position: 0.9,
+                            value: 0.5,
+                        ),
+                        (
+                            position: 0.925,
+                            value: 0.309,
+                        ),
+                        (
+                            position: 0.95,
+                            value: 0.146,
+                        ),
+                        (
+                            position: 0.975,
+                            value: 0.038,
+                        ),
+                        (
+                            position: 1.0,
+                            value: 0.0,
+                        ),
+                    ]),
+                    min_value: 0.0,
+                    max_value: 1.0,
                 )),
             ),
+            colors: (
+                initial_color: Gradient(
+                    gradient: (
+                        stops: [
+                            (
+                                color: (0.15294118, 0.15294118, 0.16470589, 1.0),
+                                position: 0.0,
+                            ),
+                            (
+                                color: (0.03529412, 0.03529412, 0.043137256, 1.0),
+                                position: 1.0,
+                            ),
+                        ],
+                    ),
+                ),
+            ),
+            velocities: (
+                direction: (1.0, 0.0, 0.0),
+                spread: 180.0,
+                initial_velocity: (
+                    max: 5.0,
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, -9.8, 0.0),
+            ),
+            collision: Some((
+                mode: Rigid(
+                    friction: 0.1,
+                    bounce: 0.15,
+                ),
+                base_size: 0.01,
+                use_scale: true,
+            )),
+            particle_flags: "ALIGN_Y_TO_VELOCITY",
         ),
     ],
 )

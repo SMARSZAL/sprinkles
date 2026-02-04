@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 
 use crate::{
     asset::{
-        DrawOrder, EmissionShape, ParticleProcessCollisionMode, ParticleSystemAsset,
+        DrawOrder, EmissionShape, EmitterCollisionMode, ParticleSystemAsset,
         ParticlesColliderShape3D, SolidOrGradientColor,
     },
     runtime::{
@@ -63,6 +63,16 @@ impl SplineCurveUniform {
 
 #[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
 #[repr(C)]
+pub struct AnimatedVelocityUniform {
+    pub min: f32,
+    pub max: f32,
+    pub _pad0: f32,
+    pub _pad1: f32,
+    pub curve: SplineCurveUniform,
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
 pub struct ColliderUniform {
     pub transform: [f32; 16],
     pub inverse_transform: [f32; 16],
@@ -101,10 +111,10 @@ pub struct EmitterUniforms {
     pub explosiveness: f32,
     pub spawn_time_randomness: f32,
 
-    pub emission_shape_offset: [f32; 3],
+    pub emission_offset: [f32; 3],
     pub _pad1: f32,
 
-    pub emission_shape_scale: [f32; 3],
+    pub emission_scale: [f32; 3],
     pub _pad2: f32,
 
     pub emission_box_extents: [f32; 3],
@@ -146,12 +156,7 @@ pub struct EmitterUniforms {
 
     pub turbulence_influence_curve: SplineCurveUniform,
 
-    pub radial_velocity_min: f32,
-    pub radial_velocity_max: f32,
-    pub _pad8: f32,
-    pub _pad9: f32,
-
-    pub radial_velocity_curve: SplineCurveUniform,
+    pub radial_velocity: AnimatedVelocityUniform,
 
     // collision
     pub collision_mode: u32,
@@ -252,14 +257,8 @@ pub fn extract_particle_systems(
             DrawOrder::ViewDepth => 3,
         };
 
-        let spawn = &emitter.process.spawn;
-        let position = &spawn.position;
-        let velocity = &spawn.velocity;
-        let accelerations = &emitter.process.accelerations;
-        let display = &emitter.process.display;
-
         let (emission_shape, emission_sphere_radius, emission_box_extents, emission_ring_axis, emission_ring_height, emission_ring_radius, emission_ring_inner_radius) =
-            match position.emission_shape {
+            match emitter.emission.shape {
                 EmissionShape::Point => {
                     (EMISSION_SHAPE_POINT, 0.0, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
                 }
@@ -277,18 +276,20 @@ pub fn extract_particle_systems(
                 }
             };
 
+        let turbulence = emitter.turbulence.as_ref();
+
         let uniforms = EmitterUniforms {
             delta_time,
             system_phase: runtime.system_phase(&emitter.time),
             prev_system_phase: runtime.prev_system_phase(&emitter.time),
             cycle: runtime.cycle,
 
-            amount: emitter.amount,
+            amount: emitter.emission.particles_amount,
             lifetime: emitter.time.lifetime,
             lifetime_randomness: emitter.time.lifetime_randomness,
             emitting: if should_emit { 1 } else { 0 },
 
-            gravity: accelerations.gravity.into(),
+            gravity: emitter.accelerations.gravity.into(),
             random_seed: runtime.random_seed,
 
             emission_shape,
@@ -297,19 +298,19 @@ pub fn extract_particle_systems(
             emission_ring_radius,
 
             emission_ring_inner_radius,
-            spread: velocity.spread,
-            flatness: velocity.flatness,
-            initial_velocity_min: velocity.initial_velocity.min,
+            spread: emitter.velocities.spread,
+            flatness: emitter.velocities.flatness,
+            initial_velocity_min: emitter.velocities.initial_velocity.min,
 
-            initial_velocity_max: velocity.initial_velocity.max,
-            inherit_velocity_ratio: velocity.inherit_velocity_ratio,
+            initial_velocity_max: emitter.velocities.initial_velocity.max,
+            inherit_velocity_ratio: emitter.velocities.inherit_velocity_ratio,
             explosiveness: emitter.time.explosiveness,
             spawn_time_randomness: emitter.time.spawn_time_randomness,
 
-            emission_shape_offset: position.emission_shape_offset.into(),
+            emission_offset: emitter.emission.offset.into(),
             _pad1: 0.0,
 
-            emission_shape_scale: position.emission_shape_scale.into(),
+            emission_scale: emitter.emission.scale.into(),
             _pad2: 0.0,
 
             emission_box_extents: emission_box_extents.into(),
@@ -318,143 +319,106 @@ pub fn extract_particle_systems(
             emission_ring_axis: emission_ring_axis.into(),
             _pad4: 0.0,
 
-            direction: velocity.direction.into(),
+            direction: emitter.velocities.direction.into(),
             _pad5: 0.0,
 
-            velocity_pivot: velocity.velocity_pivot.into(),
+            velocity_pivot: emitter.velocities.velocity_pivot.into(),
             _pad6: 0.0,
 
             draw_order,
             clear_particles: if runtime.clear_requested { 1 } else { 0 },
-            scale_min: display.scale.range.min,
-            scale_max: display.scale.range.max,
+            scale_min: emitter.scale.range.min,
+            scale_max: emitter.scale.range.max,
 
-            scale_curve: match &display.scale.curve {
+            scale_curve: match &emitter.scale.curve {
                 Some(c) if !c.is_constant() => {
                     SplineCurveUniform::enabled(c.min_value, c.max_value)
                 }
                 _ => SplineCurveUniform::disabled(),
             },
 
-            use_initial_color_gradient: match &display.color_curves.initial_color {
+            use_initial_color_gradient: match &emitter.colors.initial_color {
                 SolidOrGradientColor::Solid { .. } => 0,
                 SolidOrGradientColor::Gradient { .. } => 1,
             },
-            turbulence_enabled: match &emitter.process.turbulence {
-                Some(t) if t.enabled => 1,
-                _ => 0,
-            },
-            particle_flags: emitter.process.particle_flags.bits(),
+            turbulence_enabled: turbulence.map_or(0, |t| if t.enabled { 1 } else { 0 }),
+            particle_flags: emitter.particle_flags.bits(),
             _pad7: 0,
 
-            initial_color: match &display.color_curves.initial_color {
+            initial_color: match &emitter.colors.initial_color {
                 SolidOrGradientColor::Solid { color } => *color,
                 SolidOrGradientColor::Gradient { .. } => [1.0, 1.0, 1.0, 1.0],
             },
 
-            alpha_curve: match &display.color_curves.alpha_curve {
+            alpha_curve: match &emitter.colors.alpha_curve {
                 Some(c) if !c.is_constant() => {
                     SplineCurveUniform::enabled(c.min_value, c.max_value)
                 }
                 _ => SplineCurveUniform::disabled(),
             },
-            emission_curve: match &display.color_curves.emission_curve {
+            emission_curve: match &emitter.colors.emission_curve {
                 Some(c) if !c.is_constant() => {
                     SplineCurveUniform::enabled(c.min_value, c.max_value)
                 }
                 _ => SplineCurveUniform::disabled(),
             },
 
-            turbulence_noise_strength: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.noise_strength)
-                .unwrap_or(1.0),
-            turbulence_noise_scale: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.noise_scale)
-                .unwrap_or(2.5),
-            turbulence_noise_speed_random: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.noise_speed_random)
-                .unwrap_or(0.0),
-            turbulence_influence_min: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.influence.min)
-                .unwrap_or(0.0),
+            turbulence_noise_strength: turbulence.map_or(1.0, |t| t.noise_strength),
+            turbulence_noise_scale: turbulence.map_or(2.5, |t| t.noise_scale),
+            turbulence_noise_speed_random: turbulence.map_or(0.0, |t| t.noise_speed_random),
+            turbulence_influence_min: turbulence.map_or(0.0, |t| t.influence.min),
 
-            turbulence_noise_speed: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.noise_speed.into())
-                .unwrap_or([0.0, 0.0, 0.0]),
-            turbulence_influence_max: emitter
-                .process
-                .turbulence
-                .as_ref()
-                .map(|t| t.influence.max)
-                .unwrap_or(0.1),
+            turbulence_noise_speed: turbulence.map_or([0.0; 3], |t| t.noise_speed.into()),
+            turbulence_influence_max: turbulence.map_or(0.1, |t| t.influence.max),
 
-            turbulence_influence_curve: match &emitter.process.turbulence {
-                Some(t) => match &t.influence_curve {
+            turbulence_influence_curve: turbulence
+                .and_then(|t| t.influence_curve.as_ref())
+                .filter(|c| !c.is_constant())
+                .map_or(SplineCurveUniform::disabled(), |c| {
+                    SplineCurveUniform::enabled(c.min_value, c.max_value)
+                }),
+
+            radial_velocity: AnimatedVelocityUniform {
+                min: emitter.velocities.radial_velocity.value.min,
+                max: emitter.velocities.radial_velocity.value.max,
+                _pad0: 0.0,
+                _pad1: 0.0,
+                curve: match &emitter.velocities.radial_velocity.curve {
                     Some(c) if !c.is_constant() => {
                         SplineCurveUniform::enabled(c.min_value, c.max_value)
                     }
                     _ => SplineCurveUniform::disabled(),
                 },
-                None => SplineCurveUniform::disabled(),
             },
 
-            radial_velocity_min: emitter.process.animated_velocity.radial_velocity.value.min,
-            radial_velocity_max: emitter.process.animated_velocity.radial_velocity.value.max,
-            _pad8: 0.0,
-            _pad9: 0.0,
-
-            radial_velocity_curve: match &emitter.process.animated_velocity.radial_velocity.curve {
-                Some(c) if !c.is_constant() => {
-                    SplineCurveUniform::enabled(c.min_value, c.max_value)
-                }
-                _ => SplineCurveUniform::disabled(),
-            },
-
-            collision_mode: match &emitter.process.collision {
+            collision_mode: match &emitter.collision {
                 Some(c) => match &c.mode {
-                    ParticleProcessCollisionMode::Rigid { .. } => COLLISION_MODE_RIGID,
-                    ParticleProcessCollisionMode::HideOnContact => COLLISION_MODE_HIDE_ON_CONTACT,
+                    EmitterCollisionMode::Rigid { .. } => COLLISION_MODE_RIGID,
+                    EmitterCollisionMode::HideOnContact => COLLISION_MODE_HIDE_ON_CONTACT,
                 },
                 None => COLLISION_MODE_DISABLED,
             },
             collision_base_size: emitter
-                .process
                 .collision
                 .as_ref()
                 .map(|c| c.base_size)
                 .unwrap_or(0.01),
             collision_use_scale: emitter
-                .process
                 .collision
                 .as_ref()
                 .map(|c| c.use_scale as u32)
                 .unwrap_or(0),
-            collision_friction: match &emitter.process.collision {
+            collision_friction: match &emitter.collision {
                 Some(c) => match &c.mode {
-                    ParticleProcessCollisionMode::Rigid { friction, .. } => *friction,
-                    ParticleProcessCollisionMode::HideOnContact => 0.0,
+                    EmitterCollisionMode::Rigid { friction, .. } => *friction,
+                    EmitterCollisionMode::HideOnContact => 0.0,
                 },
                 None => 0.0,
             },
-            collision_bounce: match &emitter.process.collision {
+            collision_bounce: match &emitter.collision {
                 Some(c) => match &c.mode {
-                    ParticleProcessCollisionMode::Rigid { bounce, .. } => *bounce,
-                    ParticleProcessCollisionMode::HideOnContact => 0.0,
+                    EmitterCollisionMode::Rigid { bounce, .. } => *bounce,
+                    EmitterCollisionMode::HideOnContact => 0.0,
                 },
                 None => 0.0,
             },
@@ -463,43 +427,39 @@ pub fn extract_particle_systems(
             _collision_pad1: 0.0,
         };
 
-        let gradient_texture_handle = match &display.color_curves.initial_color {
+        let gradient_texture_handle = match &emitter.colors.initial_color {
             SolidOrGradientColor::Gradient { gradient } => gradient_cache.get(gradient),
             SolidOrGradientColor::Solid { .. } => None,
         };
 
-        let curve_texture_handle = display
+        let curve_texture_handle = emitter
             .scale
             .curve
             .as_ref()
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(&c.curve));
 
-        let alpha_curve_texture_handle = display
-            .color_curves
+        let alpha_curve_texture_handle = emitter
+            .colors
             .alpha_curve
             .as_ref()
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(&c.curve));
 
-        let emission_curve_texture_handle = display
-            .color_curves
+        let emission_curve_texture_handle = emitter
+            .colors
             .emission_curve
             .as_ref()
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(&c.curve));
 
-        let turbulence_influence_curve_texture_handle = emitter
-            .process
-            .turbulence
-            .as_ref()
+        let turbulence_influence_curve_texture_handle = turbulence
             .and_then(|t| t.influence_curve.as_ref())
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(&c.curve));
 
         let radial_velocity_curve_texture_handle = emitter
-            .process
-            .animated_velocity
+            .velocities
             .radial_velocity
             .curve
             .as_ref()
@@ -513,7 +473,7 @@ pub fn extract_particle_systems(
                 particle_buffer_handle: buffer_handle.particle_buffer.clone(),
                 indices_buffer_handle: buffer_handle.indices_buffer.clone(),
                 sorted_particles_buffer_handle: buffer_handle.sorted_particles_buffer.clone(),
-                amount: emitter.amount,
+                amount: emitter.emission.particles_amount,
                 draw_order,
                 camera_position: camera_position.into(),
                 camera_forward: camera_forward.into(),

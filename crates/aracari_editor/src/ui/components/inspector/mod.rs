@@ -75,8 +75,8 @@ fn setup_inspector_panel(
                     ))
                     .with_children(|content| {
                         content.spawn(time::time_section(&asset_server));
-                        content.spawn(emission::emission_section(&asset_server));
                         content.spawn(draw_pass::draw_pass_section(&asset_server));
+                        content.spawn(emission::emission_section(&asset_server));
                     });
             });
     }

@@ -15,22 +15,22 @@ pub fn emission_section(asset_server: &AssetServer) -> impl Bundle {
         InspectorSection::new(
             "Emission",
             vec![
-                vec![InspectorFieldProps::new("amount").u32().into()],
+                vec![
+                    InspectorFieldProps::new("emission.offset")
+                        .vec3(VectorSuffixes::XYZ)
+                        .into(),
+                ],
+                vec![
+                    InspectorFieldProps::new("emission.scale")
+                        .vec3(VectorSuffixes::XYZ)
+                        .into(),
+                ],
                 vec![InspectorItem::Variant {
-                    path: "process.spawn.position.emission_shape".into(),
-                    props: VariantEditProps::new("process.spawn.position.emission_shape")
+                    path: "emission.shape".into(),
+                    props: VariantEditProps::new("emission.shape")
                         .with_variants(emission_shape_variants()),
                 }],
-                vec![
-                    InspectorFieldProps::new("process.spawn.position.emission_shape_offset")
-                        .vec3(VectorSuffixes::XYZ)
-                        .into(),
-                ],
-                vec![
-                    InspectorFieldProps::new("process.spawn.position.emission_shape_scale")
-                        .vec3(VectorSuffixes::XYZ)
-                        .into(),
-                ],
+                vec![InspectorFieldProps::new("emission.particles_amount").u32().into()],
             ],
         ),
         asset_server,

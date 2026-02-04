@@ -136,9 +136,7 @@ pub fn prepare_gradient_textures(
             continue;
         };
         for emitter in &asset.emitters {
-            if let SolidOrGradientColor::Gradient { gradient } =
-                &emitter.process.display.color_curves.initial_color
-            {
+            if let SolidOrGradientColor::Gradient { gradient } = &emitter.colors.initial_color {
                 cache.get_or_create(gradient, &mut images);
             }
         }
@@ -250,22 +248,22 @@ pub fn prepare_curve_textures(
             continue;
         };
         for emitter in &asset.emitters {
-            if let Some(config) = &emitter.process.display.scale.curve {
+            if let Some(config) = &emitter.scale.curve {
                 if !config.is_constant() {
                     cache.get_or_create(&config.curve, &mut images);
                 }
             }
-            if let Some(config) = &emitter.process.display.color_curves.alpha_curve {
+            if let Some(config) = &emitter.colors.alpha_curve {
                 if !config.is_constant() {
                     cache.get_or_create(&config.curve, &mut images);
                 }
             }
-            if let Some(config) = &emitter.process.display.color_curves.emission_curve {
+            if let Some(config) = &emitter.colors.emission_curve {
                 if !config.is_constant() {
                     cache.get_or_create(&config.curve, &mut images);
                 }
             }
-            if let Some(turb) = &emitter.process.turbulence {
+            if let Some(turb) = &emitter.turbulence {
                 if let Some(config) = &turb.influence_curve {
                     if !config.is_constant() {
                         cache.get_or_create(&config.curve, &mut images);
