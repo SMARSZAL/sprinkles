@@ -1,34 +1,14 @@
 use bevy::prelude::*;
-use inflector::Inflector;
 
 use super::checkbox::{CheckboxProps, checkbox};
 use super::combobox::{ComboBoxOptionData, combobox};
 use super::text_edit::{TextEditPrefix, TextEditProps, text_edit};
 use super::vector_edit::{VectorEditProps, VectorSuffixes, vector_edit};
-use crate::ui::components::inspector::binding::{Field, FieldKind};
+use crate::ui::components::inspector::binding::Field;
+use crate::ui::components::inspector::{FieldKind, path_to_label};
 
 pub fn plugin(app: &mut App) {
     app.add_systems(Update, setup_combobox_fields);
-}
-
-const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z"];
-
-fn path_to_label(path: &str) -> String {
-    let field_name = path.split('.').last().unwrap_or(path);
-    let sentence = field_name.to_sentence_case();
-
-    sentence
-        .split_whitespace()
-        .map(|word| {
-            let lower = word.to_lowercase();
-            if UPPERCASE_ACRONYMS.contains(&lower.as_str()) {
-                lower.to_uppercase()
-            } else {
-                word.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 pub struct InspectorFieldProps {

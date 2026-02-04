@@ -2,6 +2,11 @@ pub mod binding;
 mod draw_pass;
 mod emission;
 mod time;
+pub mod types;
+pub mod utils;
+
+pub use types::{FieldDef, FieldKind};
+pub use utils::{name_to_label, path_to_label};
 
 use aracari::prelude::*;
 use bevy::prelude::*;

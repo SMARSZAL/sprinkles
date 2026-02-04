@@ -19,9 +19,10 @@ use crate::ui::widgets::combobox::ComboBoxChangeEvent;
 use crate::ui::widgets::text_edit::EditorTextEdit;
 use crate::ui::widgets::variant_edit::{
     EditorVariantEdit, VariantComboBox, VariantDefinition, VariantEditConfig, VariantFieldBinding,
-    VariantFieldKind,
 };
-use crate::ui::widgets::vector_edit::{EditorVectorEdit, VectorSuffixes};
+use crate::ui::widgets::vector_edit::EditorVectorEdit;
+
+use super::types::FieldKind;
 
 const MAX_ANCESTOR_DEPTH: usize = 10;
 
@@ -94,19 +95,6 @@ pub fn plugin(app: &mut App) {
 #[derive(Resource, Default)]
 struct BoundEmitter(Option<u8>);
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub enum FieldKind {
-    #[default]
-    F32,
-    F32Percent,
-    U32,
-    U32OrEmpty,
-    OptionalU32,
-    Bool,
-    Vec3(VectorSuffixes),
-    ComboBox { options: Vec<String> },
-    Color,
-}
 
 #[derive(Component, Clone)]
 pub struct Field {
@@ -401,7 +389,7 @@ fn get_variant_field_value_by_reflection(
     emitter: &EmitterData,
     path: &str,
     field_name: &str,
-    kind: &VariantFieldKind,
+    kind: &FieldKind,
 ) -> Option<FieldValue> {
     let reflect_path = ReflectPath::new(path);
     let value = emitter.reflect_path(reflect_path.as_str()).ok()?;
@@ -410,16 +398,14 @@ fn get_variant_field_value_by_reflection(
         return None;
     };
 
-    let field_kind = FieldKind::from(kind);
-
     if let Some(field) = enum_ref.field(field_name) {
-        return Some(reflect_to_field_value(field, &field_kind));
+        return Some(reflect_to_field_value(field, kind));
     }
 
     if let Some(inner) = enum_ref.field_at(0) {
         if let ReflectRef::Struct(struct_ref) = inner.reflect_ref() {
             if let Some(field) = struct_ref.field(field_name) {
-                return Some(reflect_to_field_value(field, &field_kind));
+                return Some(reflect_to_field_value(field, kind));
             }
         }
     }
@@ -481,20 +467,6 @@ fn create_variant_from_definition(
     true
 }
 
-impl From<&VariantFieldKind> for FieldKind {
-    fn from(kind: &VariantFieldKind) -> Self {
-        match kind {
-            VariantFieldKind::F32 => FieldKind::F32,
-            VariantFieldKind::U32 => FieldKind::U32,
-            VariantFieldKind::Bool => FieldKind::Bool,
-            VariantFieldKind::Vec3(suffixes) => FieldKind::Vec3(*suffixes),
-            VariantFieldKind::ComboBox { options } => FieldKind::ComboBox {
-                options: options.clone(),
-            },
-            VariantFieldKind::Color => FieldKind::Color,
-        }
-    }
-}
 
 fn bind_variant_edits(
     editor_state: Res<EditorState>,
@@ -562,10 +534,9 @@ fn bind_variant_field_values(
             continue;
         };
 
-        let field_kind = FieldKind::from(&binding.field_kind);
         let mut bound = false;
 
-        if let Some(text) = value.to_display_string(&field_kind) {
+        if let Some(text) = value.to_display_string(&binding.field_kind) {
             for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
                 if find_ancestor_entity(text_edit_parent.parent(), binding_entity, &parents) {
                     queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
@@ -696,22 +667,22 @@ fn sync_variant_field_on_blur(
 
     let text = buffer.get_text();
     let value = match &binding.field_kind {
-        VariantFieldKind::F32 => text
+        FieldKind::F32 | FieldKind::F32Percent => text
             .trim()
             .parse::<f32>()
             .map(FieldValue::F32)
             .unwrap_or(FieldValue::None),
-        VariantFieldKind::U32 => text
+        FieldKind::U32 | FieldKind::U32OrEmpty | FieldKind::OptionalU32 => text
             .trim()
             .parse::<u32>()
             .map(FieldValue::U32)
             .unwrap_or(FieldValue::None),
-        VariantFieldKind::Bool => FieldValue::None,
-        VariantFieldKind::Vec3(suffixes) => {
+        FieldKind::Bool => FieldValue::None,
+        FieldKind::Vec3(suffixes) => {
             let Ok(vec_children) = vector_edits.get(binding_entity) else {
                 return;
             };
-            let kind = VariantFieldKind::Vec3(*suffixes);
+            let kind = FieldKind::Vec3(*suffixes);
             let Some(FieldValue::Vec3(mut vec)) = get_variant_field_value_by_reflection(
                 emitter,
                 &config.path,
@@ -731,7 +702,7 @@ fn sync_variant_field_on_blur(
             }
             FieldValue::Vec3(vec)
         }
-        VariantFieldKind::ComboBox { .. } | VariantFieldKind::Color => FieldValue::None,
+        FieldKind::ComboBox { .. } | FieldKind::Color => FieldValue::None,
     };
 
     if matches!(value, FieldValue::None) {
@@ -1191,7 +1162,7 @@ fn bind_variant_color_pickers(
     };
 
     for (picker_entity, mut picker_state, binding) in &mut color_pickers {
-        if !matches!(binding.field_kind, VariantFieldKind::Color) {
+        if !matches!(binding.field_kind, FieldKind::Color) {
             continue;
         }
 

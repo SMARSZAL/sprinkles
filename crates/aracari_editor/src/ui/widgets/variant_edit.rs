@@ -1,6 +1,10 @@
 use bevy::prelude::*;
-use inflector::Inflector;
+use bevy::reflect::{Typed, TypeInfo, VariantInfo};
 
+use crate::ui::components::inspector::utils::field_from_type_path;
+use crate::ui::components::inspector::{FieldDef, FieldKind, name_to_label, path_to_label};
+
+pub type VariantField = FieldDef;
 use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, button, set_button_variant,
@@ -15,71 +19,10 @@ use crate::ui::widgets::popover::{
     popover_header,
 };
 use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
-use crate::ui::widgets::vector_edit::{VectorEditProps, VectorSuffixes, vector_edit};
+use crate::ui::widgets::vector_edit::{VectorEditProps, vector_edit};
 
 const ICON_MORE: &str = "icons/ri-more-fill.png";
 
-#[derive(Clone, Debug)]
-pub enum VariantFieldKind {
-    F32,
-    U32,
-    Bool,
-    Vec3(VectorSuffixes),
-    ComboBox { options: Vec<String> },
-    Color,
-}
-
-#[derive(Clone, Debug)]
-pub struct VariantField {
-    pub name: String,
-    pub kind: VariantFieldKind,
-}
-
-impl VariantField {
-    pub fn f32(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::F32,
-        }
-    }
-
-    pub fn u32(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::U32,
-        }
-    }
-
-    pub fn bool(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::Bool,
-        }
-    }
-
-    pub fn vec3(name: impl Into<String>, suffixes: VectorSuffixes) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::Vec3(suffixes),
-        }
-    }
-
-    pub fn combobox(name: impl Into<String>, options: Vec<impl Into<String>>) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::ComboBox {
-                options: options.into_iter().map(Into::into).collect(),
-            },
-        }
-    }
-
-    pub fn color(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            kind: VariantFieldKind::Color,
-        }
-    }
-}
 
 pub struct VariantDefinition {
     pub name: String,
@@ -150,6 +93,49 @@ impl VariantDefinition {
             .and_then(|v| v.as_ref().reflect_clone().ok())
             .map(|v| v.into_partial_reflect())
     }
+
+    pub fn from_reflect<T: Typed>(variant_name: &str) -> Option<Self> {
+        let TypeInfo::Enum(enum_info) = T::type_info() else {
+            return None;
+        };
+
+        let variant_info = (0..enum_info.variant_len())
+            .filter_map(|i| enum_info.variant_at(i))
+            .find(|v| v.name() == variant_name)?;
+
+        let mut def = Self::new(variant_name);
+        def.rows = Self::rows_from_variant_info(variant_info);
+        Some(def)
+    }
+
+    pub fn with_inferred_rows<T: Typed>(mut self) -> Self {
+        let TypeInfo::Enum(enum_info) = T::type_info() else {
+            return self;
+        };
+
+        let variant_info = (0..enum_info.variant_len())
+            .filter_map(|i| enum_info.variant_at(i))
+            .find(|v| v.name() == self.name);
+
+        if let Some(variant_info) = variant_info {
+            self.rows = Self::rows_from_variant_info(variant_info);
+        }
+        self
+    }
+
+    fn rows_from_variant_info(variant_info: &VariantInfo) -> Vec<Vec<VariantField>> {
+        match variant_info {
+            VariantInfo::Struct(struct_info) => struct_info
+                .iter()
+                .filter_map(|field| {
+                    let name = field.name();
+                    let type_path = field.type_path();
+                    field_from_type_path(name, type_path, None).map(|f| vec![f])
+                })
+                .collect(),
+            VariantInfo::Unit(_) | VariantInfo::Tuple(_) => Vec::new(),
+        }
+    }
 }
 
 pub fn plugin(app: &mut App) {
@@ -190,37 +176,13 @@ pub struct VariantComboBox(pub Entity);
 pub struct VariantFieldBinding {
     pub variant_edit: Entity,
     pub field_name: String,
-    pub field_kind: VariantFieldKind,
+    pub field_kind: FieldKind,
 }
 
 #[derive(Component, Default)]
 struct VariantEditState {
     popover: Option<Entity>,
     last_synced_index: Option<usize>,
-}
-
-const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z"];
-
-pub fn name_to_label(name: &str) -> String {
-    let sentence = name.to_sentence_case();
-
-    sentence
-        .split_whitespace()
-        .map(|word| {
-            let lower = word.to_lowercase();
-            if UPPERCASE_ACRONYMS.contains(&lower.as_str()) {
-                lower.to_uppercase()
-            } else {
-                word.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn path_to_label(path: &str) -> String {
-    let field_name = path.split('.').last().unwrap_or(path);
-    name_to_label(field_name)
 }
 
 pub struct VariantEditProps {
@@ -676,8 +638,6 @@ fn spawn_variant_fields_for_entity(
     rows: &[Vec<VariantField>],
     asset_server: &AssetServer,
 ) {
-    let font: Handle<Font> = asset_server.load(FONT_PATH);
-
     for row_fields in rows {
         let row_entity = commands.spawn(fields_row()).id();
         commands.entity(container).add_child(row_entity);
@@ -690,82 +650,94 @@ fn spawn_variant_fields_for_entity(
                 field_kind: field.kind.clone(),
             };
 
-            let field_entity = match &field.kind {
-                VariantFieldKind::F32 => commands
-                    .spawn((
-                        binding,
-                        text_edit(TextEditProps::default().with_label(label).numeric_f32()),
-                    ))
-                    .id(),
-                VariantFieldKind::U32 => commands
-                    .spawn((
-                        binding,
-                        text_edit(TextEditProps::default().with_label(label).numeric_i32()),
-                    ))
-                    .id(),
-                VariantFieldKind::Bool => commands
-                    .spawn((binding, checkbox(CheckboxProps::new(label), asset_server)))
-                    .id(),
-                VariantFieldKind::Vec3(suffixes) => commands
-                    .spawn((
-                        binding,
-                        vector_edit(
-                            VectorEditProps::default()
-                                .with_label(label)
-                                .with_suffixes(*suffixes),
-                        ),
-                    ))
-                    .id(),
-                VariantFieldKind::ComboBox { options } => {
-                    let combobox_options: Vec<ComboBoxOptionData> =
-                        options.iter().map(|o| ComboBoxOptionData::new(o)).collect();
-                    commands
-                        .spawn(Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(3.0),
-                            flex_grow: 1.0,
-                            flex_shrink: 1.0,
-                            flex_basis: px(0.0),
-                            ..default()
-                        })
-                        .with_child((
-                            Text::new(label),
-                            TextFont {
-                                font: font.clone(),
-                                font_size: TEXT_SIZE_SM,
-                                weight: FontWeight::MEDIUM,
-                                ..default()
-                            },
-                            TextColor(TEXT_MUTED_COLOR.into()),
-                        ))
-                        .with_child((binding, combobox(combobox_options)))
-                        .id()
-                }
-                VariantFieldKind::Color => commands
-                    .spawn(Node {
-                        flex_direction: FlexDirection::Column,
-                        row_gap: px(3.0),
-                        flex_grow: 1.0,
-                        flex_shrink: 1.0,
-                        flex_basis: px(0.0),
-                        ..default()
-                    })
-                    .with_child((
-                        Text::new(label),
-                        TextFont {
-                            font: font.clone(),
-                            font_size: TEXT_SIZE_SM,
-                            weight: FontWeight::MEDIUM,
-                            ..default()
-                        },
-                        TextColor(TEXT_MUTED_COLOR.into()),
-                    ))
-                    .with_child((binding, color_picker(ColorPickerProps::new())))
-                    .id(),
-            };
-
+            let field_entity = spawn_field_widget(commands, asset_server, &field.kind, label, binding);
             commands.entity(row_entity).add_child(field_entity);
         }
+    }
+}
+
+fn spawn_field_widget(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    kind: &FieldKind,
+    label: String,
+    binding: VariantFieldBinding,
+) -> Entity {
+    match kind {
+        FieldKind::F32 | FieldKind::F32Percent => commands
+            .spawn((
+                binding,
+                text_edit(TextEditProps::default().with_label(label).numeric_f32()),
+            ))
+            .id(),
+
+        FieldKind::U32 | FieldKind::U32OrEmpty | FieldKind::OptionalU32 => commands
+            .spawn((
+                binding,
+                text_edit(TextEditProps::default().with_label(label).numeric_i32()),
+            ))
+            .id(),
+
+        FieldKind::Bool => commands
+            .spawn((binding, checkbox(CheckboxProps::new(label), asset_server)))
+            .id(),
+
+        FieldKind::Vec3(suffixes) => commands
+            .spawn((
+                binding,
+                vector_edit(
+                    VectorEditProps::default()
+                        .with_label(label)
+                        .with_suffixes(*suffixes),
+                ),
+            ))
+            .id(),
+
+        FieldKind::ComboBox { options } => {
+            let combobox_options: Vec<ComboBoxOptionData> =
+                options.iter().map(|o| ComboBoxOptionData::new(o)).collect();
+            spawn_labeled_field(commands, asset_server, &label, binding, combobox(combobox_options))
+        }
+
+        FieldKind::Color => {
+            spawn_labeled_field(commands, asset_server, &label, binding, color_picker(ColorPickerProps::new()))
+        }
+    }
+}
+
+fn spawn_labeled_field(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    label: &str,
+    binding: VariantFieldBinding,
+    widget: impl Bundle,
+) -> Entity {
+    let font: Handle<Font> = asset_server.load(FONT_PATH);
+
+    commands
+        .spawn(labeled_field_wrapper())
+        .with_child((
+            Text::new(label),
+            TextFont {
+                font,
+                font_size: TEXT_SIZE_SM,
+                weight: FontWeight::MEDIUM,
+                ..default()
+            },
+            TextColor(TEXT_MUTED_COLOR.into()),
+        ))
+        .with_child((binding, widget))
+        .id()
+}
+
+fn labeled_field_wrapper() -> impl Bundle {
+    Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: px(3.0),
+        flex_grow: 1.0,
+        flex_shrink: 1.0,
+        flex_basis: px(0.0),
+        ..default()
     }
 }
 
