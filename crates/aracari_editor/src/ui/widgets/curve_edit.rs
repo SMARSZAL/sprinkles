@@ -73,7 +73,6 @@ pub struct EditorCurveEdit;
 #[derive(Component, Clone)]
 pub struct CurveEditState {
     pub curve: CurveTexture,
-    pub preset_name: Option<String>,
     popover: Option<Entity>,
 }
 
@@ -81,7 +80,6 @@ impl Default for CurveEditState {
     fn default() -> Self {
         Self {
             curve: CurveTexture::default(),
-            preset_name: Some("Constant".to_string()),
             popover: None,
         }
     }
@@ -89,118 +87,23 @@ impl Default for CurveEditState {
 
 impl CurveEditState {
     pub fn from_curve(curve: CurveTexture) -> Self {
-        let preset_name = detect_preset(&curve);
         Self {
             curve,
-            preset_name,
             popover: None,
         }
     }
 
     pub fn set_curve(&mut self, curve: CurveTexture) {
         self.curve = curve;
-        self.preset_name = detect_preset(&self.curve);
     }
 
     pub fn mark_custom(&mut self) {
-        self.preset_name = None;
+        self.curve.name = None;
     }
 
     pub fn label(&self) -> &str {
-        self.preset_name.as_deref().unwrap_or("Custom curve")
+        self.curve.name.as_deref().unwrap_or("Custom curve")
     }
-}
-
-fn detect_preset(curve: &CurveTexture) -> Option<String> {
-    if curve.points.len() == 2 {
-        let p0 = &curve.points[0];
-        let p1 = &curve.points[1];
-
-        let is_zero_to_one = (p0.position - 0.0).abs() < f32::EPSILON
-            && (p1.position - 1.0).abs() < f32::EPSILON
-            && (p0.value - 0.0).abs() < f64::EPSILON
-            && (p1.value - 1.0).abs() < f64::EPSILON;
-
-        let is_constant = (p0.position - 0.0).abs() < f32::EPSILON
-            && (p1.position - 1.0).abs() < f32::EPSILON
-            && (p0.value - 1.0).abs() < f64::EPSILON
-            && (p1.value - 1.0).abs() < f64::EPSILON;
-
-        if is_constant {
-            return Some("Constant".to_string());
-        }
-
-        if is_zero_to_one {
-            // tension values for power-based easings
-            const QUAD_TENSION: f64 = 0.5005;
-            const CUBIC_TENSION: f64 = 0.6673;
-            const QUART_TENSION: f64 = 0.7507;
-            const QUINT_TENSION: f64 = 0.8008;
-            const TOLERANCE: f64 = 0.01;
-
-            match (p1.mode, p1.easing) {
-                (CurveMode::DoubleCurve, CurveEasing::Power) => {
-                    let t = p1.tension.abs();
-                    if t < TOLERANCE {
-                        return Some("Linear".to_string());
-                    } else if (t - QUAD_TENSION).abs() < TOLERANCE {
-                        return Some("Quad in out".to_string());
-                    } else if (t - CUBIC_TENSION).abs() < TOLERANCE {
-                        return Some("Cubic in out".to_string());
-                    } else if (t - QUART_TENSION).abs() < TOLERANCE {
-                        return Some("Quart in out".to_string());
-                    } else if (t - QUINT_TENSION).abs() < TOLERANCE {
-                        return Some("Quint in out".to_string());
-                    }
-                }
-                (CurveMode::SingleCurve, CurveEasing::Power) => {
-                    let t = p1.tension.abs();
-                    let suffix = if p1.tension >= 0.0 { "in" } else { "out" };
-                    if (t - QUAD_TENSION).abs() < TOLERANCE {
-                        return Some(format!("Quad {}", suffix));
-                    } else if (t - CUBIC_TENSION).abs() < TOLERANCE {
-                        return Some(format!("Cubic {}", suffix));
-                    } else if (t - QUART_TENSION).abs() < TOLERANCE {
-                        return Some(format!("Quart {}", suffix));
-                    } else if (t - QUINT_TENSION).abs() < TOLERANCE {
-                        return Some(format!("Quint {}", suffix));
-                    }
-                }
-                (CurveMode::SingleCurve, CurveEasing::Sine) => {
-                    if p1.tension >= 0.0 {
-                        return Some("Sine in".to_string());
-                    } else {
-                        return Some("Sine out".to_string());
-                    }
-                }
-                (CurveMode::DoubleCurve, CurveEasing::Sine) => {
-                    return Some("Sine in out".to_string());
-                }
-                (CurveMode::SingleCurve, CurveEasing::Expo) => {
-                    if p1.tension >= 0.0 {
-                        return Some("Expo in".to_string());
-                    } else {
-                        return Some("Expo out".to_string());
-                    }
-                }
-                (CurveMode::DoubleCurve, CurveEasing::Expo) => {
-                    return Some("Expo in out".to_string());
-                }
-                (CurveMode::SingleCurve, CurveEasing::Circ) => {
-                    if p1.tension >= 0.0 {
-                        return Some("Circ in".to_string());
-                    } else {
-                        return Some("Circ out".to_string());
-                    }
-                }
-                (CurveMode::DoubleCurve, CurveEasing::Circ) => {
-                    return Some("Circ in out".to_string());
-                }
-                _ => {}
-            }
-        }
-    }
-    None
 }
 
 #[derive(EntityEvent)]
@@ -215,15 +118,21 @@ pub struct CurveEditCommitEvent {
     pub curve: CurveTexture,
 }
 
-#[derive(Component)]
-struct CurveEditConfig {
-    initialized: bool,
+fn trigger_curve_events(commands: &mut Commands, entity: Entity, curve: &CurveTexture) {
+    commands.trigger(CurveEditChangeEvent {
+        entity,
+        curve: curve.clone(),
+    });
+    commands.trigger(CurveEditCommitEvent {
+        entity,
+        curve: curve.clone(),
+    });
 }
+
 
 #[derive(Default)]
 pub struct CurveEditProps {
     pub curve: Option<CurveTexture>,
-    pub label: Option<String>,
 }
 
 impl CurveEditProps {
@@ -235,15 +144,10 @@ impl CurveEditProps {
         self.curve = Some(curve);
         self
     }
-
-    pub fn with_label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
 }
 
 pub fn curve_edit(props: CurveEditProps) -> impl Bundle {
-    let CurveEditProps { curve, label: _ } = props;
+    let CurveEditProps { curve } = props;
 
     let state = curve
         .map(CurveEditState::from_curve)
@@ -252,7 +156,6 @@ pub fn curve_edit(props: CurveEditProps) -> impl Bundle {
     (
         EditorCurveEdit,
         state,
-        CurveEditConfig { initialized: false },
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(3.0),
@@ -266,9 +169,6 @@ pub fn curve_edit(props: CurveEditProps) -> impl Bundle {
 
 #[derive(Component)]
 struct CurveEditTrigger(Entity);
-
-#[derive(Component)]
-struct CurveEditTriggerLabel(Entity);
 
 #[derive(Component)]
 struct CurveEditPopover(Entity);
@@ -309,10 +209,7 @@ struct TensionHandle {
 }
 
 #[derive(Component)]
-struct PointModeMenu {
-    curve_edit: Entity,
-    index: usize,
-}
+struct PointModeMenu;
 
 #[derive(Component, Default)]
 struct Dragging;
@@ -677,16 +574,11 @@ fn on_control_drag_end<C: CurveControl>(
 fn setup_curve_edit(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut curve_edits: Query<(Entity, &CurveEditState, &mut CurveEditConfig)>,
+    curve_edits: Query<(Entity, &CurveEditState), Added<EditorCurveEdit>>,
 ) {
     let font: Handle<Font> = asset_server.load(FONT_PATH);
 
-    for (entity, state, mut config) in &mut curve_edits {
-        if config.initialized {
-            continue;
-        }
-        config.initialized = true;
-
+    for (entity, state) in &curve_edits {
         let label_entity = commands
             .spawn((
                 Text::new("Curve"),
@@ -764,31 +656,7 @@ fn handle_trigger_click(
         set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
     }
 
-    let presets = vec![
-        ComboBoxOptionData::new("Constant"),
-        ComboBoxOptionData::new("Linear"),
-        ComboBoxOptionData::new("Quad in"),
-        ComboBoxOptionData::new("Quad out"),
-        ComboBoxOptionData::new("Quad in out"),
-        ComboBoxOptionData::new("Cubic in"),
-        ComboBoxOptionData::new("Cubic out"),
-        ComboBoxOptionData::new("Cubic in out"),
-        ComboBoxOptionData::new("Quart in"),
-        ComboBoxOptionData::new("Quart out"),
-        ComboBoxOptionData::new("Quart in out"),
-        ComboBoxOptionData::new("Quint in"),
-        ComboBoxOptionData::new("Quint out"),
-        ComboBoxOptionData::new("Quint in out"),
-        ComboBoxOptionData::new("Sine in"),
-        ComboBoxOptionData::new("Sine out"),
-        ComboBoxOptionData::new("Sine in out"),
-        ComboBoxOptionData::new("Expo in"),
-        ComboBoxOptionData::new("Expo out"),
-        ComboBoxOptionData::new("Expo in out"),
-        ComboBoxOptionData::new("Circ in"),
-        ComboBoxOptionData::new("Circ out"),
-        ComboBoxOptionData::new("Circ in out"),
-    ];
+    let presets: Vec<_> = CURVE_PRESETS.iter().map(|p| ComboBoxOptionData::new(p.name)).collect();
 
     let popover_entity = commands
         .spawn((
@@ -926,7 +794,7 @@ fn spawn_point_handles(parent: &mut ChildSpawnerCommands, curve_edit_entity: Ent
                     canvas: canvas_entity,
                     index: i,
                 },
-                point_handle_style(x, y),
+                handle_style(x, y, POINT_HANDLE_SIZE),
             ))
             .observe(on_control_press::<PointHandle>)
             .observe(on_control_release::<PointHandle>)
@@ -959,7 +827,7 @@ fn spawn_tension_handles(parent: &mut ChildSpawnerCommands, curve_edit_entity: E
                     canvas: canvas_entity,
                     index: i,
                 },
-                tension_handle_style(mid_x, y),
+                handle_style(mid_x, y, TENSION_HANDLE_SIZE),
             ))
             .observe(on_control_press::<TensionHandle>)
             .observe(on_control_release::<TensionHandle>)
@@ -969,39 +837,19 @@ fn spawn_tension_handles(parent: &mut ChildSpawnerCommands, curve_edit_entity: E
     }
 }
 
-fn point_handle_style(x: f32, y: f32) -> impl Bundle {
+fn handle_style(x: f32, y: f32, size: f32) -> impl Bundle {
     (
         Pickable::default(),
         Hovered::default(),
         Interaction::None,
         Node {
             position_type: PositionType::Absolute,
-            width: px(POINT_HANDLE_SIZE),
-            height: px(POINT_HANDLE_SIZE),
-            left: percent(x * 100.0 - POINT_HANDLE_SIZE / CANVAS_SIZE * 50.0),
-            top: percent(y * 100.0 - POINT_HANDLE_SIZE / CANVAS_SIZE * 50.0),
+            width: px(size),
+            height: px(size),
+            left: percent(x * 100.0 - size / CANVAS_SIZE * 50.0),
+            top: percent(y * 100.0 - size / CANVAS_SIZE * 50.0),
             border: UiRect::all(px(HANDLE_BORDER)),
-            border_radius: BorderRadius::all(px(POINT_HANDLE_SIZE / 2.0)),
-            ..default()
-        },
-        BackgroundColor(BACKGROUND_COLOR.into()),
-        BorderColor::all(PRIMARY_COLOR),
-    )
-}
-
-fn tension_handle_style(x: f32, y: f32) -> impl Bundle {
-    (
-        Pickable::default(),
-        Hovered::default(),
-        Interaction::None,
-        Node {
-            position_type: PositionType::Absolute,
-            width: px(TENSION_HANDLE_SIZE),
-            height: px(TENSION_HANDLE_SIZE),
-            left: percent(x * 100.0 - TENSION_HANDLE_SIZE / CANVAS_SIZE * 50.0),
-            top: percent(y * 100.0 - TENSION_HANDLE_SIZE / CANVAS_SIZE * 50.0),
-            border: UiRect::all(px(HANDLE_BORDER)),
-            border_radius: BorderRadius::all(px(TENSION_HANDLE_SIZE / 2.0)),
+            border_radius: BorderRadius::all(px(size / 2.0)),
             ..default()
         },
         BackgroundColor(BACKGROUND_COLOR.into()),
@@ -1201,59 +1049,67 @@ const CUBIC_TENSION: f64 = 0.6673340007;
 const QUART_TENSION: f64 = 0.7507507508;
 const QUINT_TENSION: f64 = 0.8008008008;
 
-struct CurvePresetDef {
+struct CurvePreset {
     name: &'static str,
+    start_value: f64,
     mode: CurveMode,
     easing: CurveEasing,
     tension: f64,
 }
 
-impl CurvePresetDef {
+impl CurvePreset {
     const fn new(name: &'static str, mode: CurveMode, easing: CurveEasing, tension: f64) -> Self {
-        Self { name, mode, easing, tension }
+        Self { name, start_value: 0.0, mode, easing, tension }
+    }
+
+    const fn constant(name: &'static str) -> Self {
+        Self { name, start_value: 1.0, mode: CurveMode::DoubleCurve, easing: CurveEasing::Power, tension: 0.0 }
     }
 
     fn to_curve(&self, range: aracari::prelude::ParticleRange) -> CurveTexture {
         CurveTexture::new(vec![
-            CurvePoint::new(0.0, 0.0),
+            CurvePoint::new(0.0, self.start_value),
             CurvePoint::new(1.0, 1.0)
                 .with_mode(self.mode)
                 .with_easing(self.easing)
                 .with_tension(self.tension),
         ])
+        .with_name(self.name)
         .with_range(range)
     }
 }
 
-const CURVE_PRESETS: &[CurvePresetDef] = &[
+const CURVE_PRESETS: &[CurvePreset] = &[
+    CurvePreset::constant("Constant"),
+    CurvePreset::new("Linear", CurveMode::DoubleCurve, CurveEasing::Power, 0.0),
     // Quad
-    CurvePresetDef::new("Quad in", CurveMode::SingleCurve, CurveEasing::Power, QUAD_TENSION),
-    CurvePresetDef::new("Quad out", CurveMode::SingleCurve, CurveEasing::Power, -QUAD_TENSION),
-    CurvePresetDef::new("Quad in out", CurveMode::DoubleCurve, CurveEasing::Power, QUAD_TENSION),
+    CurvePreset::new("Quad in", CurveMode::SingleCurve, CurveEasing::Power, QUAD_TENSION),
+    CurvePreset::new("Quad out", CurveMode::SingleCurve, CurveEasing::Power, -QUAD_TENSION),
+    CurvePreset::new("Quad in out", CurveMode::DoubleCurve, CurveEasing::Power, QUAD_TENSION),
     // Cubic
-    CurvePresetDef::new("Cubic in", CurveMode::SingleCurve, CurveEasing::Power, CUBIC_TENSION),
-    CurvePresetDef::new("Cubic out", CurveMode::SingleCurve, CurveEasing::Power, -CUBIC_TENSION),
-    CurvePresetDef::new("Cubic in out", CurveMode::DoubleCurve, CurveEasing::Power, CUBIC_TENSION),
+    CurvePreset::new("Cubic in", CurveMode::SingleCurve, CurveEasing::Power, CUBIC_TENSION),
+    CurvePreset::new("Cubic out", CurveMode::SingleCurve, CurveEasing::Power, -CUBIC_TENSION),
+    CurvePreset::new("Cubic in out", CurveMode::DoubleCurve, CurveEasing::Power, CUBIC_TENSION),
     // Quart
-    CurvePresetDef::new("Quart in", CurveMode::SingleCurve, CurveEasing::Power, QUART_TENSION),
-    CurvePresetDef::new("Quart out", CurveMode::SingleCurve, CurveEasing::Power, -QUART_TENSION),
-    CurvePresetDef::new("Quart in out", CurveMode::DoubleCurve, CurveEasing::Power, QUART_TENSION),
+    CurvePreset::new("Quart in", CurveMode::SingleCurve, CurveEasing::Power, QUART_TENSION),
+    CurvePreset::new("Quart out", CurveMode::SingleCurve, CurveEasing::Power, -QUART_TENSION),
+    CurvePreset::new("Quart in out", CurveMode::DoubleCurve, CurveEasing::Power, QUART_TENSION),
     // Quint
-    CurvePresetDef::new("Quint in", CurveMode::SingleCurve, CurveEasing::Power, QUINT_TENSION),
-    CurvePresetDef::new("Quint out", CurveMode::SingleCurve, CurveEasing::Power, -QUINT_TENSION),
-    CurvePresetDef::new("Quint in out", CurveMode::DoubleCurve, CurveEasing::Power, QUINT_TENSION),
+    CurvePreset::new("Quint in", CurveMode::SingleCurve, CurveEasing::Power, QUINT_TENSION),
+    CurvePreset::new("Quint out", CurveMode::SingleCurve, CurveEasing::Power, -QUINT_TENSION),
+    CurvePreset::new("Quint in out", CurveMode::DoubleCurve, CurveEasing::Power, QUINT_TENSION),
     // Sine
-    CurvePresetDef::new("Sine in", CurveMode::SingleCurve, CurveEasing::Sine, 1.0),
-    CurvePresetDef::new("Sine out", CurveMode::SingleCurve, CurveEasing::Sine, -1.0),
-    CurvePresetDef::new("Sine in out", CurveMode::DoubleCurve, CurveEasing::Sine, 1.0),
+    CurvePreset::new("Sine in", CurveMode::SingleCurve, CurveEasing::Sine, 1.0),
+    CurvePreset::new("Sine out", CurveMode::SingleCurve, CurveEasing::Sine, -1.0),
+    CurvePreset::new("Sine in out", CurveMode::DoubleCurve, CurveEasing::Sine, 1.0),
     // Expo
-    CurvePresetDef::new("Expo in", CurveMode::SingleCurve, CurveEasing::Expo, 1.0),
-    CurvePresetDef::new("Expo out", CurveMode::SingleCurve, CurveEasing::Expo, -1.0),
-    CurvePresetDef::new("Expo in out", CurveMode::DoubleCurve, CurveEasing::Expo, 1.0),
+    CurvePreset::new("Expo in", CurveMode::SingleCurve, CurveEasing::Expo, 1.0),
+    CurvePreset::new("Expo out", CurveMode::SingleCurve, CurveEasing::Expo, -1.0),
+    CurvePreset::new("Expo in out", CurveMode::DoubleCurve, CurveEasing::Expo, 1.0),
     // Circ
-    CurvePresetDef::new("Circ in", CurveMode::SingleCurve, CurveEasing::Circ, 1.0),
-    CurvePresetDef::new("Circ out", CurveMode::SingleCurve, CurveEasing::Circ, -1.0),
-    CurvePresetDef::new("Circ in out", CurveMode::DoubleCurve, CurveEasing::Circ, 1.0),
+    CurvePreset::new("Circ in", CurveMode::SingleCurve, CurveEasing::Circ, 1.0),
+    CurvePreset::new("Circ out", CurveMode::SingleCurve, CurveEasing::Circ, -1.0),
+    CurvePreset::new("Circ in out", CurveMode::DoubleCurve, CurveEasing::Circ, 1.0),
 ];
 
 fn handle_preset_change(
@@ -1273,39 +1129,11 @@ fn handle_preset_change(
 
     let range = state.curve.range;
 
-    match trigger.selected {
-        0 => {
-            state.curve = CurveTexture::new(vec![
-                CurvePoint::new(0.0, 1.0),
-                CurvePoint::new(1.0, 1.0),
-            ])
-            .with_range(range);
-            state.preset_name = Some("Constant".to_string());
-        }
-        1 => {
-            state.curve = CurveTexture::new(vec![
-                CurvePoint::new(0.0, 0.0),
-                CurvePoint::new(1.0, 1.0),
-            ])
-            .with_range(range);
-            state.preset_name = Some("Linear".to_string());
-        }
-        n if n >= 2 && n < 2 + CURVE_PRESETS.len() => {
-            let preset = &CURVE_PRESETS[n - 2];
-            state.curve = preset.to_curve(range);
-            state.preset_name = Some(preset.name.to_string());
-        }
-        _ => {}
+    if let Some(preset) = CURVE_PRESETS.get(trigger.selected) {
+        state.curve = preset.to_curve(range);
     }
 
-    commands.trigger(CurveEditChangeEvent {
-        entity: curve_edit_entity,
-        curve: state.curve.clone(),
-    });
-    commands.trigger(CurveEditCommitEvent {
-        entity: curve_edit_entity,
-        curve: state.curve.clone(),
-    });
+    trigger_curve_events(&mut commands, curve_edit_entity, &state.curve);
 }
 
 fn handle_flip_click(
@@ -1353,16 +1181,7 @@ fn handle_flip_click(
         }
     }
 
-    state.mark_custom();
-
-    commands.trigger(CurveEditChangeEvent {
-        entity: curve_edit_entity,
-        curve: state.curve.clone(),
-    });
-    commands.trigger(CurveEditCommitEvent {
-        entity: curve_edit_entity,
-        curve: state.curve.clone(),
-    });
+    trigger_curve_events(&mut commands, curve_edit_entity, &state.curve);
 }
 
 fn sync_trigger_label(
@@ -1416,7 +1235,7 @@ fn sync_range_inputs_to_state(
     states: Query<(Entity, &CurveEditState), Changed<CurveEditState>>,
     range_edits: Query<(Entity, &RangeEdit, &Children)>,
     vector_edits: Query<&Children, With<EditorVectorEdit>>,
-    mut text_inputs: Query<(Entity, &mut TextInputQueue, &ChildOf), With<EditorTextEdit>>,
+    mut text_inputs: Query<(Entity, &mut TextInputQueue), With<EditorTextEdit>>,
     parents: Query<&ChildOf>,
 ) {
     for (curve_edit_entity, state) in &states {
@@ -1438,27 +1257,12 @@ fn sync_range_inputs_to_state(
                     };
                     let text = value.to_string();
 
-                    for (text_input_entity, mut queue, child_of) in &mut text_inputs {
+                    for (text_input_entity, mut queue) in &mut text_inputs {
                         if input_focus.0 == Some(text_input_entity) {
                             continue;
                         }
 
-                        let mut current = child_of.parent();
-                        let mut is_descendant = false;
-
-                        for _ in 0..10 {
-                            if current == vector_child {
-                                is_descendant = true;
-                                break;
-                            }
-                            if let Ok(parent) = parents.get(current) {
-                                current = parent.parent();
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if is_descendant {
+                        if is_descendant_of(text_input_entity, vector_child, &parents) {
                             queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
                             queue.add(TextInputAction::Edit(TextInputEdit::Paste(text.clone())));
                         }
@@ -1567,14 +1371,7 @@ fn handle_range_blur(
                     }
 
                     state.mark_custom();
-                    commands.trigger(CurveEditChangeEvent {
-                        entity: range_edit.0,
-                        curve: state.curve.clone(),
-                    });
-                    commands.trigger(CurveEditCommitEvent {
-                        entity: range_edit.0,
-                        curve: state.curve.clone(),
-                    });
+                    trigger_curve_events(&mut commands, range_edit.0, &state.curve);
                 }
 
                 return;
@@ -1647,15 +1444,7 @@ fn handle_canvas_right_click(
 
         state.curve.points.insert(insert_idx, new_point);
         state.mark_custom();
-
-        commands.trigger(CurveEditChangeEvent {
-            entity: canvas.curve_edit,
-            curve: state.curve.clone(),
-        });
-        commands.trigger(CurveEditCommitEvent {
-            entity: canvas.curve_edit,
-            curve: state.curve.clone(),
-        });
+        trigger_curve_events(&mut commands, canvas.curve_edit, &state.curve);
 
         break;
     }
@@ -1788,10 +1577,7 @@ fn handle_point_right_click(
 
         let popover_entity = commands
             .spawn((
-                PointModeMenu {
-                    curve_edit: point_handle.curve_edit,
-                    index: point_handle.index,
-                },
+                PointModeMenu,
                 popover(
                     PopoverProps::new(handle_entity)
                         .with_placement(PopoverPlacement::BottomStart)
@@ -1845,91 +1631,44 @@ fn handle_point_mode_change(
     mut states: Query<&mut CurveEditState>,
     menus: Query<Entity, With<PointModeMenu>>,
 ) {
+    let mut handled = false;
+
     if let Ok(mode_opt) = mode_options.get(trigger.entity) {
-        if mode_opt.disabled {
-            return;
+        if !mode_opt.disabled {
+            if let Ok(mut state) = states.get_mut(mode_opt.curve_edit) {
+                if let Some(point) = state.curve.points.get_mut(mode_opt.point_index) {
+                    point.mode = mode_opt.mode;
+                    state.mark_custom();
+                    trigger_curve_events(&mut commands, mode_opt.curve_edit, &state.curve);
+                    handled = true;
+                }
+            }
         }
-
-        let Ok(mut state) = states.get_mut(mode_opt.curve_edit) else {
-            return;
-        };
-
-        if let Some(point) = state.curve.points.get_mut(mode_opt.point_index) {
-            point.mode = mode_opt.mode;
-            state.mark_custom();
-
-            commands.trigger(CurveEditChangeEvent {
-                entity: mode_opt.curve_edit,
-                curve: state.curve.clone(),
-            });
-            commands.trigger(CurveEditCommitEvent {
-                entity: mode_opt.curve_edit,
-                curve: state.curve.clone(),
-            });
+    } else if let Ok(easing_opt) = easing_options.get(trigger.entity) {
+        if !easing_opt.disabled {
+            if let Ok(mut state) = states.get_mut(easing_opt.curve_edit) {
+                if let Some(point) = state.curve.points.get_mut(easing_opt.point_index) {
+                    point.easing = easing_opt.easing;
+                    state.mark_custom();
+                    trigger_curve_events(&mut commands, easing_opt.curve_edit, &state.curve);
+                    handled = true;
+                }
+            }
         }
-
-        for menu in &menus {
-            commands.entity(menu).try_despawn();
+    } else if let Ok(delete_opt) = delete_options.get(trigger.entity) {
+        if !delete_opt.disabled {
+            if let Ok(mut state) = states.get_mut(delete_opt.curve_edit) {
+                if state.curve.points.len() > 2 {
+                    state.curve.points.remove(delete_opt.point_index);
+                    state.mark_custom();
+                    trigger_curve_events(&mut commands, delete_opt.curve_edit, &state.curve);
+                    handled = true;
+                }
+            }
         }
-
-        return;
     }
 
-    if let Ok(easing_opt) = easing_options.get(trigger.entity) {
-        if easing_opt.disabled {
-            return;
-        }
-
-        let Ok(mut state) = states.get_mut(easing_opt.curve_edit) else {
-            return;
-        };
-
-        if let Some(point) = state.curve.points.get_mut(easing_opt.point_index) {
-            point.easing = easing_opt.easing;
-            state.mark_custom();
-
-            commands.trigger(CurveEditChangeEvent {
-                entity: easing_opt.curve_edit,
-                curve: state.curve.clone(),
-            });
-            commands.trigger(CurveEditCommitEvent {
-                entity: easing_opt.curve_edit,
-                curve: state.curve.clone(),
-            });
-        }
-
-        for menu in &menus {
-            commands.entity(menu).try_despawn();
-        }
-
-        return;
-    }
-
-    if let Ok(delete_opt) = delete_options.get(trigger.entity) {
-        if delete_opt.disabled {
-            return;
-        }
-
-        let Ok(mut state) = states.get_mut(delete_opt.curve_edit) else {
-            return;
-        };
-
-        if state.curve.points.len() <= 2 {
-            return;
-        }
-
-        state.curve.points.remove(delete_opt.point_index);
-        state.mark_custom();
-
-        commands.trigger(CurveEditChangeEvent {
-            entity: delete_opt.curve_edit,
-            curve: state.curve.clone(),
-        });
-        commands.trigger(CurveEditCommitEvent {
-            entity: delete_opt.curve_edit,
-            curve: state.curve.clone(),
-        });
-
+    if handled {
         for menu in &menus {
             commands.entity(menu).try_despawn();
         }
@@ -1958,15 +1697,7 @@ fn handle_tension_right_click(
         if let Some(point) = state.curve.points.get_mut(tension_handle.index) {
             point.tension = 0.0;
             state.mark_custom();
-
-            commands.trigger(CurveEditChangeEvent {
-                entity: tension_handle.curve_edit,
-                curve: state.curve.clone(),
-            });
-            commands.trigger(CurveEditCommitEvent {
-                entity: tension_handle.curve_edit,
-                curve: state.curve.clone(),
-            });
+            trigger_curve_events(&mut commands, tension_handle.curve_edit, &state.curve);
         }
 
         break;

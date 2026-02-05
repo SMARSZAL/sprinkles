@@ -178,11 +178,12 @@
                     max: 0.3,
                 ),
                 scale_over_lifetime: Some((
+                    name: Some("Quart out"),
                     points: [
                         (
                             position: 0.0,
                             value: 1.0,
-                            mode: SingleCurve,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
@@ -190,7 +191,7 @@
                             position: 1.0,
                             value: 0.0,
                             mode: SingleCurve,
-                            tension: 0.0,
+                            tension: -0.7507507508,
                             easing: Power,
                         ),
                     ],
@@ -318,20 +319,21 @@
                     max: 0.4,
                 ),
                 scale_over_lifetime: Some((
+                    name: Some("Sine out"),
                     points: [
                         (
                             position: 0.0,
                             value: 1.0,
-                            mode: SingleCurve,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
                         (
                             position: 1.0,
                             value: 0.0,
-                            mode: DoubleCurve,
-                            tension: 0.5,
-                            easing: Power,
+                            mode: SingleCurve,
+                            tension: -1.0,
+                            easing: Sine,
                         ),
                     ],
                     range: (
@@ -441,20 +443,21 @@
                     max: 0.4,
                 ),
                 scale_over_lifetime: Some((
+                    name: Some("Sine out"),
                     points: [
                         (
                             position: 0.0,
                             value: 1.0,
-                            mode: SingleCurve,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
                         (
                             position: 1.0,
                             value: 0.0,
-                            mode: DoubleCurve,
-                            tension: 0.5,
-                            easing: Power,
+                            mode: SingleCurve,
+                            tension: -1.0,
+                            easing: Sine,
                         ),
                     ],
                     range: (
@@ -557,11 +560,12 @@
                     max: 6.0,
                 ),
                 scale_over_lifetime: Some((
+                    name: Some("Circ out"),
                     points: [
                         (
                             position: 0.0,
                             value: 0.0,
-                            mode: SingleCurve,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
@@ -569,8 +573,8 @@
                             position: 1.0,
                             value: 1.0,
                             mode: SingleCurve,
-                            tension: -0.7,
-                            easing: Power,
+                            tension: -1.0,
+                            easing: Circ,
                         ),
                     ],
                     range: (
@@ -653,16 +657,9 @@
                 scale_over_lifetime: Some((
                     points: [
                         (
-                            position: 0.0,
+                            position: 0.5,
                             value: 1.0,
-                            mode: SingleCurve,
-                            tension: 0.0,
-                            easing: Power,
-                        ),
-                        (
-                            position: 0.8,
-                            value: 1.0,
-                            mode: Hold,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
@@ -670,7 +667,7 @@
                             position: 1.0,
                             value: 0.0,
                             mode: SingleCurve,
-                            tension: -0.5,
+                            tension: -0.8008008008,
                             easing: Power,
                         ),
                     ],

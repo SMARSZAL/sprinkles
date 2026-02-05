@@ -953,8 +953,14 @@ impl CurvePoint {
     }
 }
 
+fn is_empty_string(s: &Option<String>) -> bool {
+    s.as_ref().is_none_or(|s| s.is_empty())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct CurveTexture {
+    #[serde(default, skip_serializing_if = "is_empty_string")]
+    pub name: Option<String>,
     pub points: Vec<CurvePoint>,
     #[serde(default)]
     pub range: Range,
@@ -963,6 +969,7 @@ pub struct CurveTexture {
 impl Default for CurveTexture {
     fn default() -> Self {
         Self {
+            name: Some("Constant".to_string()),
             points: vec![
                 CurvePoint::new(0.0, 1.0),
                 CurvePoint::new(1.0, 1.0),
@@ -975,9 +982,15 @@ impl Default for CurveTexture {
 impl CurveTexture {
     pub fn new(points: Vec<CurvePoint>) -> Self {
         Self {
+            name: None,
             points,
             range: Range::default(),
         }
+    }
+
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     pub fn with_range(mut self, range: Range) -> Self {
