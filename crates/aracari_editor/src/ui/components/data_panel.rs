@@ -1,8 +1,9 @@
 use aracari::prelude::*;
+use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
-use crate::state::{EditorState, Inspectable, Inspecting};
+use crate::state::{DirtyState, EditorState, Inspectable, Inspecting};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, button, set_button_variant,
 };
@@ -11,11 +12,15 @@ use crate::ui::widgets::combobox::{
 };
 use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
+use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditCommitEvent, text_edit, TextEditProps};
+
+const DOUBLE_CLICK_THRESHOLD: f32 = 0.3;
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<LastLoadedProject>()
         .add_observer(on_item_click)
         .add_observer(on_item_menu_change)
+        .add_observer(on_rename_commit)
         .add_systems(
             Update,
             (
@@ -23,6 +28,8 @@ pub fn plugin(app: &mut App) {
                 rebuild_lists,
                 update_items,
                 handle_item_right_click,
+                handle_item_double_click,
+                focus_rename_input,
             ),
         );
 }
@@ -55,6 +62,15 @@ struct ItemMenu;
 
 #[derive(Component)]
 struct ItemsList;
+
+#[derive(Component)]
+struct RenameInput {
+    item_entity: Entity,
+    focused: bool,
+}
+
+#[derive(Component)]
+struct Renaming;
 
 pub fn data_panel(_asset_server: &AssetServer) -> impl Bundle {
     (
@@ -230,7 +246,7 @@ fn spawn_items<'a>(
         let menu_entity = commands
             .spawn((
                 ItemMenu,
-                combobox_icon(vec!["Option A", "Option B", "Option C"]),
+                combobox_icon(vec!["Rename"]),
             ))
             .insert(Node {
                 position_type: PositionType::Absolute,
@@ -269,17 +285,37 @@ fn on_item_click(
 
 fn on_item_menu_change(
     event: On<ComboBoxChangeEvent>,
+    mut commands: Commands,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
     menus: Query<&ChildOf, With<ItemMenu>>,
-    items: Query<&InspectableItem>,
+    items: Query<(Entity, &InspectableItem, &Children), Without<Renaming>>,
+    mut buttons: Query<&mut Node, With<ItemButton>>,
 ) {
+    if event.label != "Rename" {
+        return;
+    }
+
     let Ok(child_of) = menus.get(event.entity) else {
         return;
     };
-    let Ok(item) = items.get(child_of.parent()) else {
+    let Ok((item_entity, item, children)) = items.get(child_of.parent()) else {
         return;
     };
 
-    println!("TODO: {} for {:?} {}", event.label, item.kind, item.index);
+    let emitter_name = get_emitter_name(&editor_state, &assets, item);
+    let Some(emitter_name) = emitter_name else {
+        return;
+    };
+
+    let button_entity = children.iter().find(|c| buttons.get(*c).is_ok());
+    if let Some(button_entity) = button_entity {
+        if let Ok(mut btn_node) = buttons.get_mut(button_entity) {
+            btn_node.display = Display::None;
+        }
+    }
+
+    start_rename(&mut commands, item_entity, &emitter_name);
 }
 
 fn handle_item_right_click(
@@ -332,9 +368,204 @@ fn handle_item_right_click(
     }
 }
 
+fn get_emitter_name(
+    editor_state: &EditorState,
+    assets: &Assets<ParticleSystemAsset>,
+    item: &InspectableItem,
+) -> Option<String> {
+    if item.kind != Inspectable::Emitter {
+        return None;
+    }
+    let handle = editor_state.current_project.as_ref()?;
+    let asset = assets.get(handle)?;
+    let emitter = asset.emitters.get(item.index as usize)?;
+    Some(emitter.name.clone())
+}
+
+fn start_rename(commands: &mut Commands, item_entity: Entity, name: &str) {
+    commands.entity(item_entity).insert(Renaming);
+
+    let rename_entity = commands
+        .spawn((
+            RenameInput {
+                item_entity,
+                focused: false,
+            },
+            text_edit(
+                TextEditProps::default()
+                    .with_default_value(name),
+            ),
+        ))
+        .id();
+
+    commands.entity(item_entity).add_child(rename_entity);
+}
+
+fn handle_item_double_click(
+    mut commands: Commands,
+    time: Res<Time<Real>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    items: Query<(Entity, &InspectableItem, &Children), Without<Renaming>>,
+    mut buttons: Query<(Entity, &Hovered, &mut Node), With<ItemButton>>,
+    mut last_click: Local<(Option<Entity>, f32)>,
+) {
+    if !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    for (item_entity, item, children) in &items {
+        for child in children.iter() {
+            let Ok((button_entity, hovered, _)) = buttons.get(child) else {
+                continue;
+            };
+            if !hovered.get() {
+                continue;
+            }
+
+            let now = time.elapsed_secs();
+            let is_double = last_click.0 == Some(button_entity)
+                && (now - last_click.1) < DOUBLE_CLICK_THRESHOLD;
+            *last_click = (Some(button_entity), now);
+
+            if !is_double {
+                continue;
+            }
+
+            *last_click = (None, 0.0);
+
+            let emitter_name = get_emitter_name(&editor_state, &assets, item);
+            let Some(emitter_name) = emitter_name else {
+                continue;
+            };
+
+            if let Ok((_, _, mut btn_node)) = buttons.get_mut(button_entity) {
+                btn_node.display = Display::None;
+            }
+
+            start_rename(&mut commands, item_entity, &emitter_name);
+            return;
+        }
+    }
+}
+
+fn focus_rename_input(
+    mut focus: ResMut<InputFocus>,
+    mut rename_inputs: Query<(Entity, &mut RenameInput)>,
+    children_query: Query<&Children>,
+    text_edits: Query<Entity, With<EditorTextEdit>>,
+) {
+    for (entity, mut rename_input) in &mut rename_inputs {
+        if rename_input.focused {
+            continue;
+        }
+        if let Some(inner) = find_inner_text_edit(entity, &children_query, &text_edits) {
+            focus.0 = Some(inner);
+            rename_input.focused = true;
+        }
+    }
+}
+
+fn find_inner_text_edit(
+    entity: Entity,
+    children_query: &Query<&Children>,
+    text_edits: &Query<Entity, With<EditorTextEdit>>,
+) -> Option<Entity> {
+    if text_edits.get(entity).is_ok() {
+        return Some(entity);
+    }
+    let Ok(children) = children_query.get(entity) else {
+        return None;
+    };
+    for child in children.iter() {
+        if let Some(found) = find_inner_text_edit(child, children_query, text_edits) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn on_rename_commit(
+    trigger: On<TextEditCommitEvent>,
+    mut commands: Commands,
+    rename_inputs: Query<(Entity, &RenameInput)>,
+    parents: Query<&ChildOf>,
+    items: Query<(&InspectableItem, &Children)>,
+    mut buttons: Query<(Entity, &mut Node), With<ItemButton>>,
+    mut button_texts: Query<&mut Text>,
+    button_children: Query<&Children, With<EditorButton>>,
+    editor_state: Res<EditorState>,
+    mut assets: ResMut<Assets<ParticleSystemAsset>>,
+    mut dirty_state: ResMut<DirtyState>,
+    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+) {
+    let text_edit_entity = trigger.entity;
+
+    let mut current = text_edit_entity;
+    let mut rename_entity = None;
+    for _ in 0..10 {
+        if let Ok((entity, _)) = rename_inputs.get(current) {
+            rename_entity = Some(entity);
+            break;
+        }
+        let Ok(child_of) = parents.get(current) else {
+            break;
+        };
+        current = child_of.parent();
+    }
+
+    let Some(rename_entity) = rename_entity else {
+        return;
+    };
+    let Ok((_, rename_input)) = rename_inputs.get(rename_entity) else {
+        return;
+    };
+
+    let item_entity = rename_input.item_entity;
+    let new_name = trigger.text.clone();
+
+    let Ok((item, children)) = items.get(item_entity) else {
+        return;
+    };
+
+    if item.kind == Inspectable::Emitter && !new_name.is_empty() {
+        if let Some(handle) = &editor_state.current_project {
+            if let Some(asset) = assets.get_mut(handle) {
+                if let Some(emitter) = asset.emitters.get_mut(item.index as usize) {
+                    emitter.name = new_name.clone();
+                    dirty_state.has_unsaved_changes = true;
+                    for mut runtime in emitter_runtimes.iter_mut() {
+                        runtime.restart(None);
+                    }
+                }
+            }
+        }
+    }
+
+    for child in children.iter() {
+        if let Ok((button_entity, mut btn_node)) = buttons.get_mut(child) {
+            btn_node.display = Display::Flex;
+
+            if !new_name.is_empty() {
+                if let Ok(btn_children) = button_children.get(button_entity) {
+                    for btn_child in btn_children.iter() {
+                        if let Ok(mut text) = button_texts.get_mut(btn_child) {
+                            **text = new_name.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    commands.entity(item_entity).remove::<Renaming>();
+    commands.entity(rename_entity).despawn();
+}
+
 fn update_items(
     editor_state: Res<EditorState>,
-    items: Query<(&InspectableItem, &Hovered, &Children)>,
+    items: Query<(&InspectableItem, &Hovered, &Children, Has<Renaming>)>,
     buttons: Query<&Children, With<ItemButton>>,
     mut button_styles: Query<
         (&mut ButtonVariant, &mut BackgroundColor, &mut BorderColor),
@@ -353,7 +584,7 @@ fn update_items(
     mut text_colors: Query<&mut TextColor>,
     popovers: Query<&ComboBoxPopover>,
 ) {
-    for (item, hovered, children) in &items {
+    for (item, hovered, children, is_renaming) in &items {
         let is_active = editor_state
             .inspecting
             .map(|i| i.kind == item.kind && i.index == item.index)
@@ -387,7 +618,7 @@ fn update_items(
             }
             if let Ok((menu_entity, mut node, menu_kids)) = menus.get_mut(child) {
                 let has_open_popover = popovers.iter().any(|p| p.0 == menu_entity);
-                let show_menu = is_active || hovered.get() || has_open_popover;
+                let show_menu = !is_renaming && (is_active || hovered.get() || has_open_popover);
 
                 node.display = if show_menu {
                     Display::Flex

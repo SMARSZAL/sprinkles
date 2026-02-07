@@ -157,7 +157,7 @@ pub fn combobox_icon(options: Vec<impl Into<ComboBoxOptionData>>) -> impl Bundle
             icon: None,
             style: ComboBoxStyle::IconOnly,
             label_override: None,
-            highlight_selected: true,
+            highlight_selected: false,
             initialized: false,
         },
         ComboBoxState::default(),
