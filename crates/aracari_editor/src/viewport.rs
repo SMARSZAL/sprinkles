@@ -286,6 +286,25 @@ pub fn despawn_preview_on_project_change(
     }
 }
 
+#[derive(Event)]
+pub struct RespawnEmittersEvent;
+
+pub fn handle_respawn_emitters(
+    _trigger: On<RespawnEmittersEvent>,
+    mut commands: Commands,
+    preview_systems: Query<Entity, With<EditorParticlePreview>>,
+    emitter_entities: Query<(Entity, &EmitterEntity)>,
+) {
+    for system_entity in &preview_systems {
+        for (emitter_entity, emitter) in &emitter_entities {
+            if emitter.parent_system == system_entity {
+                commands.entity(emitter_entity).despawn();
+            }
+        }
+        commands.entity(system_entity).remove::<ParticleSystemRuntime>();
+    }
+}
+
 pub fn respawn_preview_on_emitter_change(
     _trigger: On<PlaybackResetEvent>,
     mut commands: Commands,

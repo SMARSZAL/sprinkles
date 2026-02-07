@@ -10,6 +10,8 @@ use crate::ui::widgets::button::{
 use crate::ui::widgets::combobox::{
     ComboBoxChangeEvent, ComboBoxPopover, ComboBoxTrigger, combobox_icon,
 };
+use crate::ui::widgets::dialog::{DialogActionEvent, EditorDialog, OpenConfirmationDialogEvent};
+use crate::viewport::RespawnEmittersEvent;
 use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditCommitEvent, text_edit, TextEditProps};
@@ -21,6 +23,7 @@ pub fn plugin(app: &mut App) {
         .add_observer(on_item_click)
         .add_observer(on_item_menu_change)
         .add_observer(on_rename_commit)
+        .add_observer(on_delete_confirmed)
         .add_systems(
             Update,
             (
@@ -30,6 +33,7 @@ pub fn plugin(app: &mut App) {
                 handle_item_right_click,
                 handle_item_double_click,
                 focus_rename_input,
+                cleanup_pending_delete,
             ),
         );
 }
@@ -71,6 +75,11 @@ struct RenameInput {
 
 #[derive(Component)]
 struct Renaming;
+
+#[derive(Resource)]
+struct PendingDeleteEmitter {
+    index: u8,
+}
 
 pub fn data_panel(_asset_server: &AssetServer) -> impl Bundle {
     (
@@ -246,7 +255,7 @@ fn spawn_items<'a>(
         let menu_entity = commands
             .spawn((
                 ItemMenu,
-                combobox_icon(vec!["Rename"]),
+                combobox_icon(vec!["Rename", "Delete"]),
             ))
             .insert(Node {
                 position_type: PositionType::Absolute,
@@ -292,10 +301,6 @@ fn on_item_menu_change(
     items: Query<(Entity, &InspectableItem, &Children), Without<Renaming>>,
     mut buttons: Query<&mut Node, With<ItemButton>>,
 ) {
-    if event.label != "Rename" {
-        return;
-    }
-
     let Ok(child_of) = menus.get(event.entity) else {
         return;
     };
@@ -308,14 +313,28 @@ fn on_item_menu_change(
         return;
     };
 
-    let button_entity = children.iter().find(|c| buttons.get(*c).is_ok());
-    if let Some(button_entity) = button_entity {
-        if let Ok(mut btn_node) = buttons.get_mut(button_entity) {
-            btn_node.display = Display::None;
+    match event.label.as_str() {
+        "Rename" => {
+            let button_entity = children.iter().find(|c| buttons.get(*c).is_ok());
+            if let Some(button_entity) = button_entity {
+                if let Ok(mut btn_node) = buttons.get_mut(button_entity) {
+                    btn_node.display = Display::None;
+                }
+            }
+            start_rename(&mut commands, item_entity, &emitter_name);
         }
+        "Delete" => {
+            commands.insert_resource(PendingDeleteEmitter { index: item.index });
+            commands.trigger(
+                OpenConfirmationDialogEvent::new("Delete emitter", "Delete")
+                    .with_description(format!(
+                        "Are you sure you want to delete {}?",
+                        emitter_name
+                    )),
+            );
+        }
+        _ => {}
     }
-
-    start_rename(&mut commands, item_entity, &emitter_name);
 }
 
 fn handle_item_right_click(
@@ -561,6 +580,71 @@ fn on_rename_commit(
 
     commands.entity(item_entity).remove::<Renaming>();
     commands.entity(rename_entity).despawn();
+}
+
+fn on_delete_confirmed(
+    _event: On<DialogActionEvent>,
+    pending: Option<Res<PendingDeleteEmitter>>,
+    mut commands: Commands,
+    mut editor_state: ResMut<EditorState>,
+    mut assets: ResMut<Assets<ParticleSystemAsset>>,
+    mut dirty_state: ResMut<DirtyState>,
+    mut last_project: ResMut<LastLoadedProject>,
+) {
+    let Some(pending) = pending else {
+        return;
+    };
+
+    let index = pending.index as usize;
+    commands.remove_resource::<PendingDeleteEmitter>();
+
+    let Some(handle) = &editor_state.current_project else {
+        return;
+    };
+    let Some(asset) = assets.get_mut(handle) else {
+        return;
+    };
+
+    if index >= asset.emitters.len() {
+        return;
+    }
+
+    asset.emitters.remove(index);
+    dirty_state.has_unsaved_changes = true;
+
+    let new_len = asset.emitters.len();
+    if let Some(inspecting) = &editor_state.inspecting {
+        if inspecting.kind == Inspectable::Emitter {
+            if inspecting.index as usize == index {
+                editor_state.inspecting = if new_len > 0 {
+                    Some(Inspecting {
+                        kind: Inspectable::Emitter,
+                        index: 0,
+                    })
+                } else {
+                    None
+                };
+            } else if (inspecting.index as usize) > index {
+                editor_state.inspecting = Some(Inspecting {
+                    kind: Inspectable::Emitter,
+                    index: inspecting.index - 1,
+                });
+            }
+        }
+    }
+
+    commands.trigger(RespawnEmittersEvent);
+    last_project.handle = None;
+}
+
+fn cleanup_pending_delete(
+    pending: Option<Res<PendingDeleteEmitter>>,
+    dialogs: Query<(), With<EditorDialog>>,
+    mut commands: Commands,
+) {
+    if pending.is_some() && dialogs.is_empty() {
+        commands.remove_resource::<PendingDeleteEmitter>();
+    }
 }
 
 fn update_items(
