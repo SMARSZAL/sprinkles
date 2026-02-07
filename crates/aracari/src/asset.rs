@@ -864,10 +864,10 @@ impl Default for EmitterCollisionMode {
 pub struct EmitterCollision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<EmitterCollisionMode>,
-    #[serde(default = "default_collision_base_size")]
-    pub base_size: f32,
     #[serde(default, skip_serializing_if = "is_false")]
     pub use_scale: bool,
+    #[serde(default = "default_collision_base_size")]
+    pub base_size: f32,
 }
 
 impl Default for EmitterCollision {

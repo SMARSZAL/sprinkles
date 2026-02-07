@@ -14,7 +14,7 @@ const ICON_MORE: &str = "icons/ri-more-fill.png";
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_trigger_click)
         .add_observer(handle_option_click)
-        .add_systems(Update, (setup_combobox, handle_combobox_popover_closed));
+        .add_systems(Update, (setup_combobox, handle_combobox_popover_closed, sync_combobox_selection));
 }
 
 #[derive(Component)]
@@ -80,9 +80,9 @@ enum ComboBoxStyle {
 }
 
 #[derive(Component)]
-struct ComboBoxConfig {
+pub(crate) struct ComboBoxConfig {
     options: Vec<ComboBoxOptionData>,
-    selected: usize,
+    pub(crate) selected: usize,
     icon: Option<String>,
     style: ComboBoxStyle,
     label_override: Option<String>,
@@ -461,6 +461,33 @@ fn handle_option_click(
     for (popover_entity, popover_ref) in &popovers {
         if popover_ref.0 == option.combobox {
             commands.entity(popover_entity).try_despawn();
+        }
+    }
+}
+
+fn sync_combobox_selection(
+    configs: Query<(Entity, &ComboBoxConfig), Changed<ComboBoxConfig>>,
+    triggers: Query<(&ComboBoxTrigger, &Children)>,
+    mut texts: Query<&mut Text>,
+) {
+    for (entity, config) in &configs {
+        if !config.initialized {
+            continue;
+        }
+        let Some(option) = config.options.get(config.selected) else {
+            continue;
+        };
+        for (trigger, children) in &triggers {
+            if trigger.0 != entity {
+                continue;
+            }
+            for child in children.iter() {
+                if let Ok(mut text) = texts.get_mut(child) {
+                    **text = option.label.clone();
+                    break;
+                }
+            }
+            break;
         }
     }
 }

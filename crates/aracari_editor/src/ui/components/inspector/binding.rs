@@ -553,8 +553,14 @@ fn resolve_variant_field_ref<'a>(
         return Some(field);
     }
     if let Some(inner) = enum_ref.field_at(0) {
-        if let ReflectRef::Struct(struct_ref) = inner.reflect_ref() {
-            return struct_ref.field(field_name);
+        match inner.reflect_ref() {
+            ReflectRef::Struct(struct_ref) => {
+                return struct_ref.field(field_name);
+            }
+            ReflectRef::Enum(inner_enum) => {
+                return inner_enum.field(field_name);
+            }
+            _ => {}
         }
     }
     None
@@ -575,10 +581,18 @@ where
         return Some(f(field));
     }
     if let Some(inner) = enum_mut.field_at_mut(0) {
-        if let ReflectMut::Struct(struct_mut) = inner.reflect_mut() {
-            if let Some(field) = struct_mut.field_mut(field_name) {
-                return Some(f(field));
+        match inner.reflect_mut() {
+            ReflectMut::Struct(struct_mut) => {
+                if let Some(field) = struct_mut.field_mut(field_name) {
+                    return Some(f(field));
+                }
             }
+            ReflectMut::Enum(inner_enum) => {
+                if let Some(field) = inner_enum.field_mut(field_name) {
+                    return Some(f(field));
+                }
+            }
+            _ => {}
         }
     }
     None
@@ -978,7 +992,7 @@ fn find_field_entity_for_entity(
     None
 }
 
-fn mark_dirty_and_restart(
+pub(super) fn mark_dirty_and_restart(
     dirty_state: &mut DirtyState,
     emitter_runtimes: &mut Query<&mut EmitterRuntime>,
     fixed_seed: Option<u32>,
