@@ -24,6 +24,7 @@ pub enum ButtonVariant {
     #[default]
     Default,
     Primary,
+    Destructive,
     Ghost,
     Active,
     ActiveAlt,
@@ -35,14 +36,17 @@ pub enum ButtonSize {
     #[default]
     MD,
     Icon,
+    IconSM,
 }
 
 impl ButtonVariant {
-    pub fn bg_color(&self) -> Srgba {
-        match self {
-            Self::Default => tailwind::ZINC_700,
-            Self::Ghost | Self::ActiveAlt | Self::Disabled => TEXT_BODY_COLOR,
-            Self::Primary | Self::Active => PRIMARY_COLOR,
+    pub fn bg_color(&self, hovered: bool) -> Srgba {
+        match (self, hovered) {
+            (Self::Default, _) => tailwind::ZINC_700,
+            (Self::Ghost | Self::ActiveAlt | Self::Disabled, _) => TEXT_BODY_COLOR,
+            (Self::Primary | Self::Active, _) => PRIMARY_COLOR,
+            (Self::Destructive, false) => tailwind::RED_500,
+            (Self::Destructive, true) => tailwind::RED_600,
         }
     }
     pub fn bg_opacity(&self, hovered: bool) -> f32 {
@@ -54,14 +58,14 @@ impl ButtonVariant {
             (Self::Default, false) => 0.5,
             (Self::Default, true) => 0.8,
             (Self::Ghost, true) => 0.05,
-            (Self::Primary, false) => 1.0,
-            (Self::Primary, true) => 0.9,
+            (Self::Primary | Self::Destructive, false) => 1.0,
+            (Self::Primary | Self::Destructive, true) => 0.9,
         }
     }
     pub fn text_color(&self) -> Srgba {
         match self {
             Self::Default | Self::Ghost | Self::ActiveAlt => TEXT_BODY_COLOR,
-            Self::Primary => TEXT_DISPLAY_COLOR,
+            Self::Primary | Self::Destructive => TEXT_DISPLAY_COLOR,
             Self::Active => PRIMARY_COLOR.lighter(0.05),
             Self::Disabled => TEXT_MUTED_COLOR,
         }
@@ -70,6 +74,7 @@ impl ButtonVariant {
         match self {
             Self::Default | Self::Ghost | Self::Disabled => tailwind::ZINC_700,
             Self::Primary | Self::Active => PRIMARY_COLOR,
+            Self::Destructive => tailwind::RED_500,
             Self::ActiveAlt => TEXT_BODY_COLOR,
         }
     }
@@ -92,20 +97,27 @@ impl ButtonSize {
     fn width(&self) -> Val {
         match self {
             Self::Icon => Val::Px(28.0),
+            Self::IconSM => Val::Px(24.0),
             Self::MD => Val::Auto,
         }
     }
     fn height(&self) -> Val {
-        Val::Px(28.0)
+        match self {
+            Self::IconSM => Val::Px(24.0),
+            _ => Val::Px(28.0),
+        }
     }
     fn padding(&self) -> Val {
         match self {
             Self::MD => px(12.0),
-            Self::Icon => px(0.0),
+            Self::Icon | Self::IconSM => px(0.0),
         }
     }
     fn icon_size(&self) -> Val {
-        Val::Px(16.0)
+        match self {
+            Self::IconSM => Val::Px(14.0),
+            _ => Val::Px(16.0),
+        }
     }
 }
 
@@ -246,7 +258,7 @@ fn button_base(
         },
         BackgroundColor(
             variant
-                .bg_color()
+                .bg_color(false)
                 .with_alpha(variant.bg_opacity(false))
                 .into(),
         ),
@@ -387,7 +399,7 @@ fn handle_hover(
     for (variant, hovered, mut bg, mut border) in &mut buttons {
         let is_hovered = hovered.get();
         bg.0 = variant
-            .bg_color()
+            .bg_color(is_hovered)
             .with_alpha(variant.bg_opacity(is_hovered))
             .into();
         *border = BorderColor::all(
@@ -442,7 +454,7 @@ pub fn set_button_variant(
     border: &mut BorderColor,
 ) {
     bg.0 = variant
-        .bg_color()
+        .bg_color(false)
         .with_alpha(variant.bg_opacity(false))
         .into();
     *border = BorderColor::all(

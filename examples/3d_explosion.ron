@@ -616,9 +616,9 @@
                 alpha_over_lifetime: Some((
                     points: [
                         (
-                            position: 0.0,
+                            position: 0.25,
                             value: 1.0,
-                            mode: SingleCurve,
+                            mode: DoubleCurve,
                             tension: 0.0,
                             easing: Power,
                         ),
@@ -626,7 +626,7 @@
                             position: 1.0,
                             value: 0.0,
                             mode: SingleCurve,
-                            tension: -0.7,
+                            tension: 0.6673340007,
                             easing: Power,
                         ),
                     ],

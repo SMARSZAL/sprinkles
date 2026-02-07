@@ -113,7 +113,7 @@ pub enum FilterType {
 struct TextEditConfig {
     label: Option<String>,
     variant: TextEditVariant,
-    filter: FilterType,
+    filter: Option<FilterType>,
     prefix: Option<TextEditPrefix>,
     suffix: Option<String>,
     placeholder: String,
@@ -238,7 +238,7 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
         TextEditConfig {
             label,
             variant,
-            filter: filter.unwrap_or(FilterType::Alphanumeric),
+            filter,
             prefix,
             suffix,
             placeholder,
@@ -282,11 +282,11 @@ fn setup_text_edit_input(
         }
 
         let is_numeric = config.variant.is_numeric();
-        let filter = match config.filter {
+        let filter = config.filter.as_ref().map(|f| match f {
             FilterType::Alphanumeric => TextInputFilter::Alphanumeric,
             FilterType::Decimal => TextInputFilter::Decimal,
             FilterType::Integer => TextInputFilter::Integer,
-        };
+        });
 
         let wrapper_entity = commands
             .spawn((
@@ -395,7 +395,6 @@ fn setup_text_edit_input(
                 color: Some(TEXT_BODY_COLOR.with_alpha(0.2).into()),
                 ..default()
             },
-            filter,
             Node {
                 flex_grow: 1.0,
                 height: percent(100),
@@ -404,6 +403,10 @@ fn setup_text_edit_input(
                 ..default()
             },
         ));
+
+        if let Some(filter) = filter {
+            text_input.insert(filter);
+        }
 
         if let Some(ref suffix) = config.suffix {
             text_input.insert(TextEditSuffix(suffix.clone()));

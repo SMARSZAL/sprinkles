@@ -1,5 +1,6 @@
 pub mod button;
 pub mod checkbox;
+pub mod dialog;
 pub mod color_picker;
 pub mod combobox;
 pub mod curve_edit;
