@@ -164,7 +164,7 @@ fn panel_title(asset_server: &AssetServer) -> impl Bundle {
                     ),
                 ],
             ),
-            checkbox(CheckboxProps::new("Enabled").checked(true), asset_server),
+            (Field::new("enabled").with_kind(FieldKind::Bool), checkbox(CheckboxProps::new("Enabled").checked(true), asset_server)),
             icon_button(
                 IconButtonProps::new("icons/ri-more-fill.png").variant(ButtonVariant::Ghost),
                 asset_server,

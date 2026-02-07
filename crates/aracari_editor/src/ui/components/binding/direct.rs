@@ -7,6 +7,7 @@ use bevy_ui_text_input::{
 };
 
 use crate::state::{DirtyState, EditorState};
+use crate::viewport::RespawnEmittersEvent;
 use crate::ui::widgets::checkbox::{CheckboxCommitEvent, CheckboxState};
 use crate::ui::widgets::combobox::ComboBoxChangeEvent;
 use crate::ui::widgets::curve_edit::{CurveEditCommitEvent, CurveEditState, EditorCurveEdit};
@@ -422,6 +423,7 @@ fn handle_direct_text_commit(
 
 pub(super) fn handle_checkbox_commit(
     trigger: On<CheckboxCommitEvent>,
+    mut commands: Commands,
     editor_state: Res<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
     mut dirty_state: ResMut<DirtyState>,
@@ -463,6 +465,9 @@ pub(super) fn handle_checkbox_commit(
         };
         if super::set_field_value_by_reflection(emitter, &field.path, &value) {
             mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, emitter.time.fixed_seed);
+            if field.path == "enabled" {
+                commands.trigger(RespawnEmittersEvent);
+            }
         }
     }
 }
