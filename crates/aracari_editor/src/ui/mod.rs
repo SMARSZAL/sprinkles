@@ -7,7 +7,6 @@ use bevy::prelude::*;
 
 use components::data_panel::data_panel;
 use components::inspector::inspector_panel;
-use components::sidebar::sidebar;
 use components::topbar::topbar;
 use components::viewport::{setup_viewport, viewport_container};
 
@@ -67,7 +66,6 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ..default()
                 },
                 children![
-                    sidebar(&asset_server),
                     data_panel(&asset_server),
                     viewport_container(),
                     inspector_panel(&asset_server),

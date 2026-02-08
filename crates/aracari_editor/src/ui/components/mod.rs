@@ -5,7 +5,6 @@ pub mod navigation;
 pub mod playback_controls;
 pub mod project_selector;
 pub mod seekbar;
-pub mod sidebar;
 pub mod toasts;
 pub mod topbar;
 pub mod viewport;
