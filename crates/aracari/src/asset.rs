@@ -9,6 +9,8 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use thiserror::Error;
 
+use crate::textures::builtin::TextureRef;
+
 // serde skip helpers
 
 fn is_false(v: &bool) -> bool {
@@ -380,13 +382,13 @@ pub struct StandardParticleMaterial {
     pub base_color: [f32; 4],
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base_color_texture: Option<String>,
+    pub base_color_texture: Option<TextureRef>,
 
     #[serde(default, skip_serializing_if = "is_default_emissive")]
     pub emissive: [f32; 4],
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub emissive_texture: Option<String>,
+    pub emissive_texture: Option<TextureRef>,
 
     #[serde(default = "default_alpha_mode")]
     pub alpha_mode: SerializableAlphaMode,
@@ -401,10 +403,10 @@ pub struct StandardParticleMaterial {
     pub reflectance: f32,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metallic_roughness_texture: Option<String>,
+    pub metallic_roughness_texture: Option<TextureRef>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub normal_map_texture: Option<String>,
+    pub normal_map_texture: Option<TextureRef>,
 
     #[serde(default, skip_serializing_if = "is_false")]
     pub double_sided: bool,
@@ -457,22 +459,22 @@ impl StandardParticleMaterial {
             base_color_texture: self
                 .base_color_texture
                 .as_ref()
-                .map(|path| asset_server.load(path)),
+                .map(|tex_ref| tex_ref.load(asset_server)),
             emissive: emissive.into(),
             emissive_texture: self
                 .emissive_texture
                 .as_ref()
-                .map(|path| asset_server.load(path)),
+                .map(|tex_ref| tex_ref.load(asset_server)),
             perceptual_roughness: self.perceptual_roughness,
             metallic: self.metallic,
             metallic_roughness_texture: self
                 .metallic_roughness_texture
                 .as_ref()
-                .map(|path| asset_server.load(path)),
+                .map(|tex_ref| tex_ref.load(asset_server)),
             normal_map_texture: self
                 .normal_map_texture
                 .as_ref()
-                .map(|path| asset_server.load(path)),
+                .map(|tex_ref| tex_ref.load(asset_server)),
             alpha_mode: self.alpha_mode.into(),
             double_sided: self.double_sided,
             unlit: self.unlit,

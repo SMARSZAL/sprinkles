@@ -18,6 +18,7 @@ pub use crate::asset::{
     SolidOrGradientColor, CurveEasing, CurveMode, CurvePoint, CurveTexture,
     StandardParticleMaterial,
 };
+pub use crate::textures::builtin::{BuiltinTexture, TextureRef};
 
 // runtime types
 pub use crate::runtime::{
