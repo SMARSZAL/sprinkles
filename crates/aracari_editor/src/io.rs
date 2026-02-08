@@ -34,6 +34,12 @@ impl EditorCache {
         self.recent_projects.truncate(Self::MAX_RECENT_PROJECTS);
         self.last_opened_project = Some(path);
     }
+
+    pub fn remove_recent_project(&mut self, path: &str) {
+        let canonical = canonicalize_path(path);
+        self.recent_projects
+            .retain(|p| canonicalize_path(p) != canonical);
+    }
 }
 
 pub fn working_dir() -> PathBuf {

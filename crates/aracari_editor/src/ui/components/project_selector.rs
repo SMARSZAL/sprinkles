@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use bevy::input_focus::InputFocus;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
 use bevy_ui_text_input::{
@@ -34,12 +35,14 @@ const ICON_CHEVRON_DOWN: &str = "icons/ri-arrow-down-s-line.png";
 const ICON_NEW: &str = "icons/ri-file-add-line.png";
 const ICON_OPEN: &str = "icons/ri-folder-open-line.png";
 const ICON_EXAMPLES: &str = "icons/ri-folder-image-line.png";
+const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_trigger_click)
         .add_observer(handle_new_project_click)
         .add_observer(handle_open_project_click)
         .add_observer(handle_recent_project_click)
+        .add_observer(handle_remove_recent_project_click)
         .add_observer(handle_popover_option_click)
         .add_observer(handle_create_project)
         .add_observer(handle_browse_location_click)
@@ -54,6 +57,7 @@ pub fn plugin(app: &mut App) {
                 update_location_placeholder,
                 poll_browse_location_result,
                 cleanup_new_project_state,
+                update_remove_button_visibility,
             ),
         );
 }
@@ -81,6 +85,12 @@ struct OpenProjectButton;
 
 #[derive(Component)]
 struct RecentProjectButton(String);
+
+#[derive(Component)]
+struct RecentProjectRow;
+
+#[derive(Component)]
+struct RemoveRecentProjectButton(String);
 
 #[derive(Component)]
 struct NewProjectNameInput;
@@ -271,10 +281,12 @@ fn handle_trigger_click(
         Node::default(),
     ));
 
-    let mut recent_wrapper = commands.spawn(Node {
-        flex_direction: FlexDirection::Column,
-        ..default()
-    });
+    let recent_wrapper_id = commands
+        .spawn(Node {
+            flex_direction: FlexDirection::Column,
+            ..default()
+        })
+        .id();
 
     for path_str in &editor_data.cache.recent_projects {
         let full_path = working_dir().join(path_str);
@@ -287,19 +299,62 @@ fn handle_trigger_click(
                     .unwrap_or_else(|| path_str.clone())
             });
 
-        recent_wrapper.with_child((
-            RecentProjectButton(path_str.clone()),
-            button(
-                ButtonProps::new(name)
-                    .with_variant(ButtonVariant::Ghost)
-                    .align_left()
-                    .with_direction(FlexDirection::Column)
-                    .with_subtitle(path_str),
-            ),
-        ));
+        let project_button = commands
+            .spawn((
+                RecentProjectButton(path_str.clone()),
+                button(
+                    ButtonProps::new(name)
+                        .with_variant(ButtonVariant::Ghost)
+                        .align_left()
+                        .with_direction(FlexDirection::Column)
+                        .with_subtitle(path_str),
+                ),
+            ))
+            .id();
+
+        commands
+            .entity(project_button)
+            .entry::<Node>()
+            .and_modify(|mut node| {
+                node.flex_grow = 1.0;
+            });
+
+        let remove_button = commands
+            .spawn((
+                RemoveRecentProjectButton(path_str.clone()),
+                icon_button(
+                    IconButtonProps::new(ICON_CLOSE)
+                        .variant(ButtonVariant::Ghost)
+                        .with_size(ButtonSize::IconSM),
+                    &asset_server,
+                ),
+                Visibility::Hidden,
+            ))
+            .id();
+
+        commands
+            .entity(remove_button)
+            .entry::<Node>()
+            .and_modify(|mut node| {
+                node.flex_shrink = 0.0;
+            });
+
+        let row = commands
+            .spawn((
+                RecentProjectRow,
+                Hovered::default(),
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: px(6.0),
+                    ..default()
+                },
+            ))
+            .add_children(&[project_button, remove_button])
+            .id();
+
+        commands.entity(recent_wrapper_id).add_child(row);
     }
 
-    let recent_wrapper_id = recent_wrapper.id();
     commands.entity(popover_entity).add_child(recent_wrapper_id);
 }
 
@@ -346,15 +401,56 @@ fn handle_recent_project_click(
     commands.trigger(OpenProjectEvent(recent.0.clone()));
 }
 
+fn handle_remove_recent_project_click(
+    trigger: On<ButtonClickEvent>,
+    buttons: Query<&RemoveRecentProjectButton>,
+    mut editor_data: ResMut<EditorData>,
+    parents: Query<&ChildOf>,
+    mut commands: Commands,
+) {
+    let Ok(remove_btn) = buttons.get(trigger.entity) else {
+        return;
+    };
+
+    editor_data.cache.remove_recent_project(&remove_btn.0);
+    save_editor_data(&editor_data);
+
+    if let Ok(child_of) = parents.get(trigger.entity) {
+        commands.entity(child_of.parent()).try_despawn();
+    }
+}
+
+fn update_remove_button_visibility(
+    rows: Query<(&Children, &Hovered), (With<RecentProjectRow>, Changed<Hovered>)>,
+    mut remove_buttons: Query<&mut Visibility, With<RemoveRecentProjectButton>>,
+) {
+    for (children, hovered) in &rows {
+        let visible = hovered.get();
+        for child in children.iter() {
+            if let Ok(mut visibility) = remove_buttons.get_mut(child) {
+                *visibility = if visible {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                };
+            }
+        }
+    }
+}
+
 fn handle_popover_option_click(
     trigger: On<ButtonClickEvent>,
     mut commands: Commands,
     triggers: Query<(), With<ProjectSelectorTrigger>>,
+    remove_buttons: Query<(), With<RemoveRecentProjectButton>>,
     popovers: Query<Entity, With<ProjectSelectorPopover>>,
     parents: Query<&ChildOf>,
     mut states: Query<&mut ProjectSelectorState>,
 ) {
     if triggers.get(trigger.entity).is_ok() {
+        return;
+    }
+    if remove_buttons.get(trigger.entity).is_ok() {
         return;
     }
     for popover_entity in &popovers {
