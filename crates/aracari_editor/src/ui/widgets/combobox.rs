@@ -29,6 +29,7 @@ pub struct ComboBoxPopover(pub Entity);
 #[derive(Component, Default)]
 struct ComboBoxState {
     popover: Option<Entity>,
+    last_synced_selected: Option<usize>,
 }
 
 #[derive(Component, Clone)]
@@ -466,12 +467,12 @@ fn handle_option_click(
 }
 
 fn sync_combobox_selection(
-    configs: Query<(Entity, &ComboBoxConfig), Changed<ComboBoxConfig>>,
+    mut combos: Query<(Entity, &ComboBoxConfig, &mut ComboBoxState)>,
     triggers: Query<(&ComboBoxTrigger, &Children)>,
     mut texts: Query<&mut Text>,
 ) {
-    for (entity, config) in &configs {
-        if !config.initialized {
+    for (entity, config, mut state) in &mut combos {
+        if !config.initialized || state.last_synced_selected == Some(config.selected) {
             continue;
         }
         let Some(option) = config.options.get(config.selected) else {
@@ -484,6 +485,7 @@ fn sync_combobox_selection(
             for child in children.iter() {
                 if let Ok(mut text) = texts.get_mut(child) {
                     **text = option.label.clone();
+                    state.last_synced_selected = Some(config.selected);
                     break;
                 }
             }

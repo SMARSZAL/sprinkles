@@ -7,7 +7,7 @@ use crate::ui::widgets::checkbox::CheckboxState;
 use crate::ui::widgets::color_picker::{
     ColorPickerCommitEvent, ColorPickerState, EditorColorPicker, TriggerSwatchMaterial,
 };
-use crate::ui::widgets::combobox::ComboBoxChangeEvent;
+use crate::ui::widgets::combobox::{ComboBoxChangeEvent, ComboBoxConfig};
 use crate::ui::widgets::text_edit::set_text_input_value;
 use crate::ui::widgets::gradient_edit::{
     EditorGradientEdit, GradientEditCommitEvent, GradientEditState,
@@ -56,7 +56,10 @@ pub(super) fn bind_variant_field_values(
     mut commands: Commands,
     editor_state: Res<EditorState>,
     assets: Res<Assets<ParticleSystemAsset>>,
-    variant_field_bindings: Query<(Entity, &VariantFieldBinding), Without<Bound>>,
+    mut variant_field_bindings: Query<
+        (Entity, &VariantFieldBinding, Option<&mut ComboBoxConfig>),
+        Without<Bound>,
+    >,
     variant_edit_configs: Query<&VariantEditConfig>,
     mut text_edits: Query<
         (Entity, &ChildOf, &mut TextInputQueue),
@@ -70,7 +73,7 @@ pub(super) fn bind_variant_field_values(
         return;
     };
 
-    for (binding_entity, binding) in &variant_field_bindings {
+    for (binding_entity, binding, mut combobox_config) in &mut variant_field_bindings {
         let Ok(config) = variant_edit_configs.get(binding.variant_edit) else {
             continue;
         };
@@ -108,6 +111,15 @@ pub(super) fn bind_variant_field_values(
             }
         }
 
+        if matches!(binding.field_kind, FieldKind::ComboBox { .. }) {
+            if let FieldValue::U32(index) = &value {
+                if let Some(ref mut config) = combobox_config {
+                    config.selected = *index as usize;
+                    bound = true;
+                }
+            }
+        }
+
         if let Some(vec) = value.to_vec3() {
             if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
                 let mut component_index = 0;
@@ -136,6 +148,14 @@ pub(super) fn bind_variant_field_values(
             commands
                 .entity(binding_entity)
                 .try_insert(Bound::variant(binding_entity));
+        } else if !matches!(
+            binding.field_kind,
+            FieldKind::Color | FieldKind::Gradient | FieldKind::Curve | FieldKind::AnimatedVelocity
+        ) {
+            warn!(
+                "bind_variant_field_values: unhandled field kind {:?} for '{}'",
+                binding.field_kind, binding.field_name
+            );
         }
     }
 }
