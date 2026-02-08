@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::textures::builtin::TextureRef;
+use crate::textures::preset::TextureRef;
 
 // serde skip helpers
 

@@ -567,7 +567,7 @@
                 ),
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
-                    base_color_texture: Some(Builtin(Circle)),
+                    base_color_texture: Some(Preset(Circle3)),
                     emissive: (0.0, 0.0, 0.0, 0.0),
                     alpha_mode: Blend,
                     perceptual_roughness: 0.5,
@@ -616,7 +616,7 @@
                 alpha_over_lifetime: Some((
                     points: [
                         (
-                            position: 0.25,
+                            position: 0.12,
                             value: 1.0,
                             mode: DoubleCurve,
                             tension: 0.0,

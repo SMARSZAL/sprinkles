@@ -41,7 +41,8 @@ impl Plugin for AracariPlugin {
         embedded_asset!(app, "shaders/particle_material.wgsl");
         embedded_asset!(app, "shaders/particle_sort.wgsl");
 
-        textures::builtin::register_builtin_textures(app);
+        #[cfg(feature = "preset-textures")]
+        textures::preset::register_preset_textures(app);
 
         app.init_asset::<ParticleSystemAsset>()
             .init_asset_loader::<ParticleSystemAssetLoader>();
@@ -96,7 +97,9 @@ pub use asset::{
     StandardParticleMaterial,
 };
 pub use material::ParticleMaterialExtension;
-pub use textures::builtin::{BuiltinTexture, TextureRef};
+#[cfg(feature = "preset-textures")]
+pub use textures::preset::PresetTexture;
+pub use textures::preset::TextureRef;
 pub use runtime::{
     ColliderEntity, EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle,
     ParticleData, ParticleMaterial, ParticleMaterialHandle, ParticleSystem2D, ParticleSystem3D,

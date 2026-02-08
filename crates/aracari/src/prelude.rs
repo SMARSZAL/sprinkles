@@ -18,7 +18,9 @@ pub use crate::asset::{
     SolidOrGradientColor, CurveEasing, CurveMode, CurvePoint, CurveTexture,
     StandardParticleMaterial,
 };
-pub use crate::textures::builtin::{BuiltinTexture, TextureRef};
+#[cfg(feature = "preset-textures")]
+pub use crate::textures::preset::PresetTexture;
+pub use crate::textures::preset::TextureRef;
 
 // runtime types
 pub use crate::runtime::{
