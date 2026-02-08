@@ -1063,7 +1063,7 @@ fn handle_trigger_click(
             ColorPickerPopover(picker_entity),
             popover(
                 PopoverProps::new(trigger.entity)
-                    .with_placement(PopoverPlacement::LeftStart)
+                    .with_placement(PopoverPlacement::RightStart)
                     .with_padding(0.0)
                     .with_z_index(150),
             ),

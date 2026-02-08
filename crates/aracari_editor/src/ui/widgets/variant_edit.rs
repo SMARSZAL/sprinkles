@@ -559,7 +559,7 @@ fn handle_variant_edit_click(
 
     let default_width = 256.0;
     let popover_props = PopoverProps::new(trigger.entity)
-        .with_placement(PopoverPlacement::Left)
+        .with_placement(PopoverPlacement::Right)
         .with_padding(0.0);
 
     let popover_props = if let Some(width) = config.popover_width {

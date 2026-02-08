@@ -514,7 +514,7 @@ fn handle_velocity_edit(
             VelocityEditPopover(trigger.entity),
             popover(
                 PopoverProps::new(trigger.entity)
-                    .with_placement(PopoverPlacement::Left)
+                    .with_placement(PopoverPlacement::Right)
                     .with_padding(0.0)
                     .with_node(Node {
                         width: px(256.0),

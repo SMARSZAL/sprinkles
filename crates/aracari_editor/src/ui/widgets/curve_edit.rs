@@ -694,7 +694,7 @@ fn handle_trigger_click(
             CurveEditPopover(curve_edit_entity),
             popover(
                 PopoverProps::new(trigger.entity)
-                    .with_placement(PopoverPlacement::Left)
+                    .with_placement(PopoverPlacement::Right)
                     .with_padding(0.0)
                     .with_node(Node {
                         width: px(256.0),
