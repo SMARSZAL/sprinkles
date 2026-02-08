@@ -374,6 +374,7 @@ fn is_default_emissive(v: &[f32; 4]) -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+#[reflect(Clone)]
 pub struct StandardParticleMaterial {
     #[serde(default = "default_base_color")]
     pub base_color: [f32; 4],
