@@ -5,13 +5,15 @@ use bevy::picking::pointer::PointerButton;
 use bevy::picking::hover::Hovered;
 use bevy::picking::prelude::Pickable;
 use bevy::prelude::*;
-use bevy::window::{CursorIcon, SystemCursorIcon};
 use bevy::reflect::{TypePath, Typed};
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
 use inflector::Inflector;
+use bevy::window::SystemCursorIcon;
+
 use crate::ui::tokens::{BACKGROUND_COLOR, BORDER_COLOR, FONT_PATH, PRIMARY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
+use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, IconButtonProps, button, icon_button, set_button_variant,
 };
@@ -54,7 +56,6 @@ pub fn plugin(app: &mut App) {
                 setup_curve_edit_content,
                 update_curve_visuals,
                 respawn_handles_on_point_change,
-                update_handle_cursors,
                 update_handle_colors,
                 handle_popover_closed,
                 sync_trigger_label,
@@ -320,6 +321,7 @@ impl UiMaterial for CurveMaterial {
 trait CurveControl: Component {
     fn curve_edit_entity(&self) -> Entity;
     fn canvas_entity(&self) -> Entity;
+    fn active_cursor(&self) -> SystemCursorIcon;
     fn update_state(&self, state: &mut CurveEditState, normalized: Vec2, delta: Option<Vec2>);
 }
 
@@ -332,6 +334,10 @@ impl CurveControl for CurveCanvas {
         panic!("CurveCanvas should not be used as a control target")
     }
 
+    fn active_cursor(&self) -> SystemCursorIcon {
+        SystemCursorIcon::Default
+    }
+
     fn update_state(&self, _state: &mut CurveEditState, _normalized: Vec2, _delta: Option<Vec2>) {}
 }
 
@@ -342,6 +348,10 @@ impl CurveControl for PointHandle {
 
     fn canvas_entity(&self) -> Entity {
         self.canvas
+    }
+
+    fn active_cursor(&self) -> SystemCursorIcon {
+        SystemCursorIcon::Grabbing
     }
 
     fn update_state(&self, state: &mut CurveEditState, normalized: Vec2, _delta: Option<Vec2>) {
@@ -384,6 +394,10 @@ impl CurveControl for TensionHandle {
 
     fn canvas_entity(&self) -> Entity {
         self.canvas
+    }
+
+    fn active_cursor(&self) -> SystemCursorIcon {
+        SystemCursorIcon::ColResize
     }
 
     fn update_state(&self, state: &mut CurveEditState, _normalized: Vec2, delta: Option<Vec2>) {
@@ -496,7 +510,9 @@ fn on_control_drag_start<C: CurveControl>(
     let curve_edit_entity = control.curve_edit_entity();
     let canvas_entity = control.canvas_entity();
 
-    commands.entity(event.event_target()).insert(Dragging);
+    commands
+        .entity(event.event_target())
+        .insert((Dragging, ActiveCursor(control.active_cursor())));
 
     let Ok((computed, ui_transform)) = canvases.get(canvas_entity) else {
         return;
@@ -571,7 +587,9 @@ fn on_control_drag_end<C: CurveControl>(
     };
     let curve_edit_entity = control.curve_edit_entity();
 
-    commands.entity(event.event_target()).remove::<Dragging>();
+    commands
+        .entity(event.event_target())
+        .remove::<(Dragging, ActiveCursor)>();
 
     if let Ok(state) = states.get(curve_edit_entity) {
         commands.trigger(CurveEditCommitEvent {
@@ -807,6 +825,7 @@ fn spawn_point_handles(parent: &mut ChildSpawnerCommands, curve_edit_entity: Ent
                     canvas: canvas_entity,
                     index: i,
                 },
+                HoverCursor(SystemCursorIcon::Grab),
                 handle_style(x, y, POINT_HANDLE_SIZE),
             ))
             .observe(on_control_press::<PointHandle>)
@@ -840,6 +859,7 @@ fn spawn_tension_handles(parent: &mut ChildSpawnerCommands, curve_edit_entity: E
                     canvas: canvas_entity,
                     index: i,
                 },
+                HoverCursor(SystemCursorIcon::ColResize),
                 handle_style(mid_x, y, TENSION_HANDLE_SIZE),
             ))
             .observe(on_control_press::<TensionHandle>)
@@ -979,42 +999,6 @@ fn respawn_handles_on_point_change(
     }
 }
 
-fn update_handle_cursors(
-    mut commands: Commands,
-    window: Single<(Entity, Option<&CursorIcon>), With<Window>>,
-    point_handles: Query<(&Hovered, Has<Dragging>), With<PointHandle>>,
-    tension_handles: Query<(&Hovered, Has<Dragging>), With<TensionHandle>>,
-) {
-    let (window_entity, current_cursor) = *window;
-
-    let mut new_cursor: Option<SystemCursorIcon> = None;
-
-    for (hovered, is_dragging) in &point_handles {
-        if is_dragging {
-            new_cursor = Some(SystemCursorIcon::Grabbing);
-            break;
-        } else if hovered.get() && new_cursor.is_none() {
-            new_cursor = Some(SystemCursorIcon::Grab);
-        }
-    }
-
-    if new_cursor.is_none() {
-        for (hovered, is_dragging) in &tension_handles {
-            if is_dragging {
-                new_cursor = Some(SystemCursorIcon::Grabbing);
-                break;
-            } else if hovered.get() && new_cursor.is_none() {
-                new_cursor = Some(SystemCursorIcon::NsResize);
-            }
-        }
-    }
-
-    if let Some(cursor) = new_cursor {
-        commands.entity(window_entity).insert(CursorIcon::from(cursor));
-    } else if current_cursor.is_some_and(|c| matches!(c, CursorIcon::System(SystemCursorIcon::Grab | SystemCursorIcon::Grabbing | SystemCursorIcon::NsResize))) {
-        commands.entity(window_entity).remove::<CursorIcon>();
-    }
-}
 
 fn update_handle_colors(
     mut removed_dragging: RemovedComponents<Dragging>,

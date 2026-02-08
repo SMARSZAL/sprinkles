@@ -25,6 +25,7 @@ impl Plugin for EditorUiPlugin {
 
         app.add_plugins(widgets::button::plugin)
             .add_plugins(widgets::checkbox::plugin)
+            .add_plugins(widgets::cursor::plugin)
             .add_plugins(widgets::color_picker::plugin)
             .add_plugins(widgets::combobox::plugin)
             .add_plugins(widgets::curve_edit::plugin)
@@ -67,8 +68,8 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
                 children![
                     data_panel(&asset_server),
-                    viewport_container(),
                     inspector_panel(&asset_server),
+                    viewport_container(),
                 ],
             ),
         ],

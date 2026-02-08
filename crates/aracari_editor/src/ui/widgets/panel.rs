@@ -2,11 +2,13 @@ use bevy::color::palettes::tailwind;
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::{HoverMap, Hovered};
 use bevy::prelude::*;
-use bevy::window::{CursorIcon, SystemCursorIcon};
+use bevy::ui::UiGlobalTransform;
+use bevy::window::SystemCursorIcon;
 
 use crate::ui::tokens::{BACKGROUND_COLOR, BORDER_COLOR};
+use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 
-const RESIZE_HANDLE_WIDTH: u32 = 16;
+const RESIZE_HANDLE_WIDTH: u32 = 12;
 
 const SCROLLBAR_SPEED: f32 = 24.0;
 const SCROLLBAR_MIN_HEIGHT: f32 = 24.0;
@@ -17,7 +19,8 @@ pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
-            handle_resize_hover,
+            spawn_resize_handles,
+            sync_resize_handle_positions,
             handle_resize_drag,
             send_scroll_events,
             update_scrollbar,
@@ -266,66 +269,91 @@ fn update_scrollbar(
     }
 }
 
-pub fn panel_resize_handle(panel: Entity, direction: PanelDirection) -> impl Bundle {
-    let offset = px(-((RESIZE_HANDLE_WIDTH / 2) as f32));
-
-    let (left, right) = match direction {
-        PanelDirection::Left => (Val::Auto, offset),
-        PanelDirection::Right => (offset, Val::Auto),
-    };
-
-    (
-        PanelResizeHandle { panel, direction },
-        ResizeDragState::default(),
-        Hovered::default(),
-        Node {
-            position_type: PositionType::Absolute,
-            width: px(RESIZE_HANDLE_WIDTH),
-            height: percent(100),
-            top: px(0),
-            left,
-            right,
-            ..default()
-        },
-        Pickable {
-            should_block_lower: true,
-            is_hoverable: true,
-        },
-    )
+fn spawn_resize_handles(
+    mut commands: Commands,
+    panels: Query<(Entity, &PanelDirection, &ChildOf), Added<EditorPanel>>,
+) {
+    for (panel_entity, &direction, child_of) in &panels {
+        let handle = commands
+            .spawn((
+                PanelResizeHandle {
+                    panel: panel_entity,
+                    direction,
+                },
+                ResizeDragState::default(),
+                Hovered::default(),
+                HoverCursor(SystemCursorIcon::ColResize),
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: px(RESIZE_HANDLE_WIDTH),
+                    ..default()
+                },
+                ZIndex(10),
+                Pickable {
+                    should_block_lower: true,
+                    is_hoverable: true,
+                },
+            ))
+            .id();
+        commands.entity(child_of.parent()).add_child(handle);
+    }
 }
 
-fn handle_resize_hover(
-    handles: Query<&Hovered, (Changed<Hovered>, With<PanelResizeHandle>)>,
-    window: Single<Entity, With<Window>>,
-    mut commands: Commands,
+fn sync_resize_handle_positions(
+    panels: Query<(&PanelDirection, &UiGlobalTransform, &ComputedNode), With<EditorPanel>>,
+    parents: Query<(&UiGlobalTransform, &ComputedNode), Without<EditorPanel>>,
+    mut handles: Query<(&PanelResizeHandle, &ChildOf, &mut Node)>,
 ) {
-    for hovered in &handles {
-        if hovered.get() {
-            commands
-                .entity(*window)
-                .insert(CursorIcon::from(SystemCursorIcon::ColResize));
-        } else {
-            commands.entity(*window).remove::<CursorIcon>();
-        }
+    let half = (RESIZE_HANDLE_WIDTH / 2) as f32;
+
+    for (handle, child_of, mut node) in &mut handles {
+        let Ok((direction, panel_transform, panel_computed)) = panels.get(handle.panel) else {
+            continue;
+        };
+        let Ok((parent_transform, parent_computed)) = parents.get(child_of.parent()) else {
+            continue;
+        };
+
+        let scale = panel_computed.inverse_scale_factor();
+        let panel_center = panel_transform.translation.x * scale;
+        let parent_center = parent_transform.translation.x * scale;
+        let panel_half_w = panel_computed.size().x * scale / 2.0;
+        let parent_half_w = parent_computed.size().x * scale / 2.0;
+
+        let parent_left = parent_center - parent_half_w;
+
+        let panel_edge = match direction {
+            PanelDirection::Left => panel_center + panel_half_w,
+            PanelDirection::Right => panel_center - panel_half_w,
+        };
+
+        node.left = px(panel_edge - parent_left - half);
+        node.top = px(0.0);
+        node.height = percent(100);
     }
 }
 
 fn handle_resize_drag(
-    mut handles: Query<(&PanelResizeHandle, &mut ResizeDragState, &Hovered)>,
+    mut commands: Commands,
+    mut handles: Query<(Entity, &PanelResizeHandle, &mut ResizeDragState, &Hovered)>,
     mut panels: Query<(&mut Node, &mut PanelWidth), With<EditorPanel>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut mouse_motion: MessageReader<MouseMotion>,
 ) {
     let cursor_delta: f32 = mouse_motion.read().map(|e| e.delta.x).sum();
 
-    for (handle, mut drag_state, hovered) in &mut handles {
+    for (entity, handle, mut drag_state, hovered) in &mut handles {
         if mouse.just_pressed(MouseButton::Left) && hovered.get() {
             drag_state.dragging = true;
             drag_state.accumulated_delta = 0.0;
+            commands
+                .entity(entity)
+                .insert(ActiveCursor(SystemCursorIcon::ColResize));
         }
 
         if mouse.just_released(MouseButton::Left) {
             drag_state.dragging = false;
+            commands.entity(entity).remove::<ActiveCursor>();
         }
 
         if drag_state.dragging && cursor_delta != 0.0 {

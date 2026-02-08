@@ -23,7 +23,7 @@ use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE_LG};
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
 use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
-use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle, panel_scrollbar};
+use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
 use crate::ui::widgets::variant_edit::{VariantEditProps, variant_edit};
 
@@ -104,7 +104,7 @@ pub fn inspector_panel(_asset_server: &AssetServer) -> impl Bundle {
     (
         EditorInspectorPanel,
         panel(
-            PanelProps::new(PanelDirection::Right)
+            PanelProps::new(PanelDirection::Left)
                 .with_width(320)
                 .with_min_width(320)
                 .with_max_width(512),
@@ -120,7 +120,6 @@ fn setup_inspector_panel(
     for panel_entity in &panels {
         commands
             .entity(panel_entity)
-            .with_child(panel_resize_handle(panel_entity, PanelDirection::Right))
             .with_child(panel_scrollbar(panel_entity))
             .with_children(|parent| {
                 parent.spawn(panel_title(&asset_server));

@@ -2,17 +2,19 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::{FontFeatureTag, FontFeatures};
-use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 use bevy_ui_text_input::{
     TextInputBuffer, TextInputFilter, TextInputLayoutInfo, TextInputMode, TextInputNode,
     TextInputPlugin, TextInputPrompt, TextInputQueue, TextInputStyle,
     actions::{TextInputAction, TextInputEdit},
 };
 
+use bevy::window::SystemCursorIcon;
+
 use crate::ui::tokens::{
     BORDER_COLOR, FONT_PATH, PRIMARY_COLOR, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE,
     TEXT_SIZE_SM,
 };
+use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 
 const DEFAULT_DRAG_ICON: &str = "icons/ri-expand-horizontal-s-line.png";
 
@@ -40,7 +42,6 @@ pub fn plugin(app: &mut App) {
                 handle_unfocus,
                 handle_drag_value,
                 handle_click_to_focus,
-                handle_cursor,
                 handle_clamp_on_unfocus,
             ),
         )
@@ -309,6 +310,7 @@ fn setup_text_edit_input(
                 BorderColor::all(BORDER_COLOR),
                 Interaction::None,
                 Hovered::default(),
+                HoverCursor(SystemCursorIcon::Text),
             ))
             .id();
 
@@ -329,6 +331,7 @@ fn setup_text_edit_input(
                     ZIndex(10),
                     Interaction::None,
                     Hovered::default(),
+                    HoverCursor(SystemCursorIcon::ColResize),
                 ))
                 .id();
             commands.entity(wrapper_entity).add_child(hitbox);
@@ -661,10 +664,11 @@ fn handle_numeric_increment(
 }
 
 fn handle_drag_value(
+    mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut drag_hitboxes: Query<(&mut DragHitbox, &Interaction, &ChildOf)>,
+    mut drag_hitboxes: Query<(Entity, &mut DragHitbox, &Interaction, &ChildOf)>,
     wrappers: Query<&TextEditWrapper>,
     mut text_edits: Query<
         (
@@ -680,7 +684,7 @@ fn handle_drag_value(
     let Ok(window) = windows.single() else { return };
     let cursor_pos = window.cursor_position();
 
-    for (mut hitbox, interaction, child_of) in &mut drag_hitboxes {
+    for (entity, mut hitbox, interaction, child_of) in &mut drag_hitboxes {
         let Ok(wrapper) = wrappers.get(child_of.parent()) else {
             continue;
         };
@@ -694,11 +698,15 @@ fn handle_drag_value(
                 hitbox.dragging = true;
                 hitbox.start_x = pos.x;
                 hitbox.start_value = parse_numeric_value(&buffer.get_text(), suffix);
+                commands
+                    .entity(entity)
+                    .insert(ActiveCursor(SystemCursorIcon::ColResize));
             }
         }
 
         if mouse.just_released(MouseButton::Left) {
             hitbox.dragging = false;
+            commands.entity(entity).remove::<ActiveCursor>();
         }
 
         if hitbox.dragging {
@@ -771,32 +779,3 @@ fn update_input_value(
     set_text_input_value(queue, format_numeric_value(clamped, variant));
 }
 
-fn handle_cursor(
-    mut commands: Commands,
-    window: Query<Entity, With<PrimaryWindow>>,
-    wrappers: Query<(&Children, &Hovered), With<TextEditWrapper>>,
-    hitboxes: Query<(&DragHitbox, &Hovered)>,
-) {
-    let Ok(window_entity) = window.single() else {
-        return;
-    };
-
-    let cursor = wrappers.iter().find_map(|(children, wrapper_hovered)| {
-        let hitbox_state = children.iter().find_map(|c| hitboxes.get(c).ok());
-
-        if let Some((hitbox, hitbox_hovered)) = hitbox_state {
-            if hitbox.dragging || hitbox_hovered.get() {
-                return Some(SystemCursorIcon::ColResize);
-            }
-        }
-
-        wrapper_hovered.get().then_some(SystemCursorIcon::Text)
-    });
-
-    match cursor {
-        Some(icon) => commands
-            .entity(window_entity)
-            .insert(CursorIcon::from(icon)),
-        None => commands.entity(window_entity).remove::<CursorIcon>(),
-    };
-}

@@ -12,7 +12,7 @@ use crate::ui::widgets::combobox::{
 };
 use crate::ui::widgets::dialog::{DialogActionEvent, EditorDialog, OpenConfirmationDialogEvent};
 use crate::viewport::{RespawnCollidersEvent, RespawnEmittersEvent};
-use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_resize_handle, panel_scrollbar};
+use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditCommitEvent, text_edit, TextEditProps};
 
@@ -110,7 +110,6 @@ fn setup_data_panel(
     for panel_entity in &panels {
         commands
             .entity(panel_entity)
-            .with_child(panel_resize_handle(panel_entity, PanelDirection::Left))
             .with_child(panel_scrollbar(panel_entity))
             .with_children(|parent| {
                 parent
@@ -133,14 +132,6 @@ fn setup_data_panel(
                     ))
                     .observe(on_add_collider_click);
 
-                parent
-                    .spawn(panel_section(
-                        PanelSectionProps::new("Attractors").with_add_button(),
-                        &asset_server,
-                    ))
-                    .observe(|_: On<ButtonClickEvent>| {
-                        println!("TODO: add attractor");
-                    });
             });
     }
 }

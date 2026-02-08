@@ -8,9 +8,11 @@ use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
-use bevy::window::{CursorIcon, SystemCursorIcon};
+
+use bevy::window::SystemCursorIcon;
 
 use crate::ui::tokens::{BORDER_COLOR, PRIMARY_COLOR};
+use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, IconButtonProps, button, icon_button,
 };
@@ -67,7 +69,6 @@ pub fn plugin(app: &mut App) {
                 fix_stop_row_sizing,
                 update_gradient_visuals,
                 update_handle_positions,
-                update_handle_cursors,
                 update_handle_colors,
                 update_stop_position_inputs,
                 handle_bar_right_click,
@@ -488,6 +489,7 @@ fn spawn_stop_handles(
         parent
             .spawn((
                 StopHandle(StopRef::new(gradient_edit, i)),
+                HoverCursor(SystemCursorIcon::Grab),
                 Pickable::default(),
                 Hovered::default(),
                 Interaction::None,
@@ -640,7 +642,9 @@ fn on_handle_drag_start(
     let Ok(_handle) = handles.get(event.event_target()) else {
         return;
     };
-    commands.entity(event.event_target()).insert(Dragging);
+    commands
+        .entity(event.event_target())
+        .insert((Dragging, ActiveCursor(SystemCursorIcon::Grabbing)));
 }
 
 fn bar_position_from_normalized(normalized_x: f32, bar_width: f32) -> f32 {
@@ -720,7 +724,7 @@ fn on_handle_drag_end(
 
     commands
         .entity(event.event_target())
-        .remove::<Dragging>()
+        .remove::<(Dragging, ActiveCursor)>()
         .insert(JustDragged);
 
     if let Ok(state) = states.get(handle.gradient_edit) {
@@ -870,37 +874,6 @@ fn update_stop_position_inputs(
     }
 }
 
-fn update_handle_cursors(
-    mut commands: Commands,
-    window: Single<(Entity, Option<&CursorIcon>), With<Window>>,
-    handles: Query<(&Hovered, Has<Dragging>), With<StopHandle>>,
-) {
-    let (window_entity, current_cursor) = *window;
-
-    let mut new_cursor: Option<SystemCursorIcon> = None;
-
-    for (hovered, is_dragging) in &handles {
-        if is_dragging {
-            new_cursor = Some(SystemCursorIcon::Grabbing);
-            break;
-        } else if hovered.get() && new_cursor.is_none() {
-            new_cursor = Some(SystemCursorIcon::Grab);
-        }
-    }
-
-    if let Some(cursor) = new_cursor {
-        commands
-            .entity(window_entity)
-            .insert(CursorIcon::from(cursor));
-    } else if current_cursor.is_some_and(|c| {
-        matches!(
-            c,
-            CursorIcon::System(SystemCursorIcon::Grab | SystemCursorIcon::Grabbing)
-        )
-    }) {
-        commands.entity(window_entity).remove::<CursorIcon>();
-    }
-}
 
 fn update_handle_colors(
     mut removed_dragging: RemovedComponents<Dragging>,
