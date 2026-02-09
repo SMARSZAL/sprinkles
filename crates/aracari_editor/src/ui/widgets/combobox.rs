@@ -171,6 +171,26 @@ pub fn combobox_icon(options: Vec<impl Into<ComboBoxOptionData>>) -> impl Bundle
     )
 }
 
+pub fn combobox_icon_with_selected(
+    options: Vec<impl Into<ComboBoxOptionData>>,
+    selected: usize,
+) -> impl Bundle {
+    (
+        EditorComboBox,
+        ComboBoxConfig {
+            options: options.into_iter().map(Into::into).collect(),
+            selected,
+            icon: None,
+            style: ComboBoxStyle::IconOnly,
+            label_override: None,
+            highlight_selected: true,
+            initialized: false,
+        },
+        ComboBoxState::default(),
+        Node::default(),
+    )
+}
+
 fn setup_combobox(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -250,8 +270,14 @@ fn handle_trigger_click(
         if popover_ref.0 == combo_trigger.0 {
             commands.entity(popover_entity).try_despawn();
             state.popover = None;
+            let base = if config.style == ComboBoxStyle::IconOnly {
+                ButtonVariant::Ghost
+            } else {
+                ButtonVariant::Default
+            };
             reset_combobox_trigger_style(
                 trigger.entity,
+                base,
                 &mut button_styles,
                 &children_query,
                 &mut transforms,
@@ -346,6 +372,7 @@ fn handle_trigger_click(
 
 fn reset_combobox_trigger_style(
     trigger_entity: Entity,
+    base_variant: ButtonVariant,
     button_styles: &mut Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
     children_query: &Query<&Children>,
     transforms: &mut Query<&mut UiTransform>,
@@ -353,8 +380,8 @@ fn reset_combobox_trigger_style(
     commands: &mut Commands,
 ) {
     if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger_entity) {
-        *variant = ButtonVariant::Default;
-        set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
+        *variant = base_variant;
+        set_button_variant(base_variant, &mut bg, &mut border);
     }
 
     // reset chevron rotation
@@ -374,7 +401,7 @@ fn reset_combobox_trigger_style(
 
 fn handle_combobox_popover_closed(
     mut commands: Commands,
-    mut states: Query<(&mut ComboBoxState, &Children), With<EditorComboBox>>,
+    mut states: Query<(&mut ComboBoxState, &ComboBoxConfig, &Children), With<EditorComboBox>>,
     popovers: Query<Entity, With<EditorPopover>>,
     triggers: Query<Entity, With<ComboBoxTrigger>>,
     mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
@@ -382,7 +409,7 @@ fn handle_combobox_popover_closed(
     mut transforms: Query<&mut UiTransform>,
     images: Query<(), With<ImageNode>>,
 ) {
-    for (mut state, combobox_children) in &mut states {
+    for (mut state, config, combobox_children) in &mut states {
         let Some(popover_entity) = state.popover else {
             continue;
         };
@@ -393,11 +420,18 @@ fn handle_combobox_popover_closed(
 
         state.popover = None;
 
+        let base = if config.style == ComboBoxStyle::IconOnly {
+            ButtonVariant::Ghost
+        } else {
+            ButtonVariant::Default
+        };
+
         // find the trigger button entity (first child of combobox)
         for child in combobox_children.iter() {
             if triggers.get(child).is_ok() {
                 reset_combobox_trigger_style(
                     child,
+                    base,
                     &mut button_styles,
                     &children_query,
                     &mut transforms,

@@ -13,9 +13,11 @@ use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, button, set_button_variant,
 };
 
-use crate::ui::widgets::combobox::{ComboBoxChangeEvent, combobox_with_selected};
+use crate::ui::tokens::{TEXT_MUTED_COLOR, TEXT_SIZE};
+use crate::ui::widgets::combobox::{ComboBoxChangeEvent, combobox_icon_with_selected};
 use crate::ui::widgets::popover::{
-    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_header,
+    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_content,
+    popover_header,
 };
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditPrefix, TextEditProps, text_edit};
 
@@ -23,14 +25,16 @@ const SHADER_HSV_RECT_PATH: &str = "shaders/color_picker_hsv_rect.wgsl";
 const SHADER_HUE_PATH: &str = "shaders/color_picker_hue.wgsl";
 const SHADER_ALPHA_PATH: &str = "shaders/color_picker_alpha.wgsl";
 const SHADER_CHECKERBOARD_PATH: &str = "shaders/color_picker_checkerboard.wgsl";
-const CONTENT_WIDTH: f32 = 288.0;
-const CONTENT_PADDING: f32 = 12.0;
-const SLIDER_HEIGHT: f32 = 18.0;
-const HANDLE_SIZE: f32 = 12.0;
+const SLIDER_HEIGHT: f32 = 12.0;
+const HSV_RECT_HEIGHT: f32 = 192.0;
+const PREVIEW_SWATCH_SIZE: f32 = 36.0;
+const HANDLE_SIZE: f32 = 14.0;
 const HANDLE_BORDER: f32 = 1.0;
 const SWATCH_SIZE: f32 = 16.0;
 const CHECKERBOARD_SIZE: f32 = 8.0;
+const PREVIEW_CHECKERBOARD_SIZE: f32 = 12.0;
 const BORDER_RADIUS: f32 = 4.0;
+const POPOVER_WIDTH: f32 = 256.0;
 
 pub fn plugin(app: &mut App) {
     app.add_plugins(UiMaterialPlugin::<HsvRectMaterial>::default())
@@ -108,14 +112,19 @@ impl ColorPickerState {
 
     pub fn to_srgba(&self) -> Srgba {
         let rgba = self.to_rgba();
-        Srgba::new(rgba[0], rgba[1], rgba[2], rgba[3])
+        Srgba::new(
+            rgba[0].clamp(0.0, 1.0),
+            rgba[1].clamp(0.0, 1.0),
+            rgba[2].clamp(0.0, 1.0),
+            rgba[3].clamp(0.0, 1.0),
+        )
     }
 
     pub fn to_hex(&self) -> String {
         let rgba = self.to_rgba();
-        let r = (rgba[0] * 255.0).round() as u8;
-        let g = (rgba[1] * 255.0).round() as u8;
-        let b = (rgba[2] * 255.0).round() as u8;
+        let r = (rgba[0].clamp(0.0, 1.0) * 255.0).round() as u8;
+        let g = (rgba[1].clamp(0.0, 1.0) * 255.0).round() as u8;
+        let b = (rgba[2].clamp(0.0, 1.0) * 255.0).round() as u8;
         format!("{:02X}{:02X}{:02X}", r, g, b)
     }
 }
@@ -126,6 +135,7 @@ pub enum ColorInputMode {
     #[default]
     Rgb,
     Hsb,
+    Raw,
 }
 
 impl ColorInputMode {
@@ -134,6 +144,7 @@ impl ColorInputMode {
             Self::Hex => 0,
             Self::Rgb => 1,
             Self::Hsb => 2,
+            Self::Raw => 3,
         }
     }
 
@@ -141,6 +152,7 @@ impl ColorInputMode {
         match index {
             0 => Self::Hex,
             2 => Self::Hsb,
+            3 => Self::Raw,
             _ => Self::Rgb,
         }
     }
@@ -259,6 +271,9 @@ pub struct TriggerSwatchMaterial(pub Entity);
 #[derive(Component)]
 struct TriggerLabel(Entity);
 
+#[derive(Component)]
+struct PreviewSwatchMaterial(Entity);
+
 #[derive(Component, Clone, Copy)]
 enum InputFieldKind {
     Hex,
@@ -269,6 +284,9 @@ enum InputFieldKind {
     Saturation,
     Brightness,
     Alpha,
+    RawRed,
+    RawGreen,
+    RawBlue,
 }
 
 impl InputFieldKind {
@@ -323,6 +341,24 @@ impl InputFieldKind {
                 }
                 true
             }
+            Self::RawRed | Self::RawGreen | Self::RawBlue => {
+                let Ok(v) = text.parse::<f32>() else {
+                    return false;
+                };
+                let channel = v.clamp(0.0, 100.0);
+                let mut rgba = state.to_rgba();
+                match self {
+                    Self::RawRed => rgba[0] = channel,
+                    Self::RawGreen => rgba[1] = channel,
+                    Self::RawBlue => rgba[2] = channel,
+                    _ => unreachable!(),
+                }
+                let (h, s, br) = rgb_to_hsv(rgba[0], rgba[1], rgba[2]);
+                state.hue = h;
+                state.saturation = s;
+                state.brightness = br;
+                true
+            }
         }
     }
 
@@ -337,12 +373,22 @@ impl InputFieldKind {
                     Self::Blue => 2,
                     _ => unreachable!(),
                 };
-                ((rgba[index] * 255.0).round() as i32).to_string()
+                ((rgba[index].clamp(0.0, 1.0) * 255.0).round() as i32).to_string()
             }
             Self::Hue => (state.hue.round() as i32).to_string(),
             Self::Saturation => ((state.saturation * 100.0).round() as i32).to_string(),
             Self::Brightness => ((state.brightness * 100.0).round() as i32).to_string(),
             Self::Alpha => ((state.alpha * 100.0).round() as i32).to_string(),
+            Self::RawRed | Self::RawGreen | Self::RawBlue => {
+                let rgba = state.to_rgba();
+                let index = match self {
+                    Self::RawRed => 0,
+                    Self::RawGreen => 1,
+                    Self::RawBlue => 2,
+                    _ => unreachable!(),
+                };
+                format!("{:.1}", rgba[index])
+            }
         }
     }
 }
@@ -586,8 +632,8 @@ fn setup_color_picker(
                 ColorPickerContent(entity),
                 Node {
                     flex_direction: FlexDirection::Column,
-                    row_gap: px(CONTENT_PADDING),
-                    width: px(CONTENT_WIDTH),
+                    row_gap: px(12.0),
+                    width: percent(100),
                     ..default()
                 },
             ));
@@ -682,17 +728,17 @@ fn setup_trigger_swatch(
     }
 }
 
-fn handle_style(left: f32, top: f32, color: Option<Srgba>) -> impl Bundle {
+fn handle_style(left: f32, top: f32, color: Option<Srgba>, size: f32) -> impl Bundle {
     (
         Pickable::IGNORE,
         Node {
             position_type: PositionType::Absolute,
-            width: px(HANDLE_SIZE),
-            height: px(HANDLE_SIZE),
+            width: px(size),
+            height: px(size),
             left: px(left),
             top: px(top),
             border: UiRect::all(px(HANDLE_BORDER)),
-            border_radius: BorderRadius::all(px(HANDLE_SIZE / 2.0)),
+            border_radius: BorderRadius::all(px(size / 2.0)),
             ..default()
         },
         BackgroundColor(color.unwrap_or(Srgba::NONE).into()),
@@ -741,12 +787,13 @@ fn setup_color_picker_content(
             let current_color = state.to_srgba();
             let current_rgb = hsv_to_rgb(state.hue, state.saturation, state.brightness);
 
+            // hsv rectangle
             parent
                 .spawn((
                     HsvRectangle(picker_entity),
                     Node {
                         width: percent(100.0),
-                        aspect_ratio: Some(1.0),
+                        height: px(HSV_RECT_HEIGHT),
                         ..default()
                     },
                 ))
@@ -763,11 +810,7 @@ fn setup_color_picker_content(
 
                     hsv_rect_parent.spawn((
                         HsvRectHandle(picker_entity),
-                        handle_style(
-                            state.saturation * CONTENT_WIDTH - HANDLE_SIZE / 2.0,
-                            (1.0 - state.brightness) * CONTENT_WIDTH - HANDLE_SIZE / 2.0,
-                            Some(current_color.with_alpha(1.0)),
-                        ),
+                        handle_style(0.0, 0.0, Some(current_color.with_alpha(1.0)), HANDLE_SIZE),
                     ));
                 })
                 .observe(on_control_press::<HsvRectangle>)
@@ -776,117 +819,179 @@ fn setup_color_picker_content(
                 .observe(on_control_drag::<HsvRectangle>)
                 .observe(on_control_drag_end::<HsvRectangle>);
 
+            // slider row: [slider column | preview swatch]
             parent
-                .spawn((HueSlider(picker_entity), slider_node()))
-                .with_children(|hue_parent| {
-                    hue_parent.spawn((
-                        Pickable::IGNORE,
-                        MaterialNode(hue_materials.add(HueSliderMaterial {
-                            border_radius: BORDER_RADIUS,
-                        })),
-                        fullsize_absolute_node(),
-                    ));
-
-                    let hue_color = hsv_to_rgb(state.hue, 1.0, 1.0);
-                    hue_parent.spawn((
-                        HueHandle(picker_entity),
-                        handle_style(
-                            (state.hue / 360.0) * CONTENT_WIDTH - HANDLE_SIZE / 2.0,
-                            (SLIDER_HEIGHT - HANDLE_SIZE) / 2.0,
-                            Some(Srgba::new(hue_color.0, hue_color.1, hue_color.2, 1.0)),
-                        ),
-                    ));
+                .spawn(Node {
+                    column_gap: px(12.0),
+                    align_items: AlignItems::Center,
+                    ..default()
                 })
-                .observe(on_control_press::<HueSlider>)
-                .observe(on_control_release::<HueSlider>)
-                .observe(on_control_drag_start::<HueSlider>)
-                .observe(on_control_drag::<HueSlider>)
-                .observe(on_control_drag_end::<HueSlider>);
-
-            parent
-                .spawn((AlphaSlider(picker_entity), slider_node()))
-                .with_children(|alpha_parent| {
-                    alpha_parent.spawn((
-                        AlphaMaterialNode(picker_entity),
-                        Pickable::IGNORE,
-                        MaterialNode(alpha_materials.add(AlphaSliderMaterial {
-                            color: Vec4::new(current_rgb.0, current_rgb.1, current_rgb.2, 1.0),
-                            checkerboard_size: CHECKERBOARD_SIZE,
-                            border_radius: BORDER_RADIUS,
-                        })),
-                        fullsize_absolute_node(),
-                    ));
-
-                    let inner_size = HANDLE_SIZE - HANDLE_BORDER * 2.0;
-                    let inner_radius = inner_size / 2.0;
-                    alpha_parent
-                        .spawn((
-                            AlphaHandle(picker_entity),
-                            handle_style(
-                                state.alpha * CONTENT_WIDTH - HANDLE_SIZE / 2.0,
-                                (SLIDER_HEIGHT - HANDLE_SIZE) / 2.0,
-                                None,
-                            ),
-                        ))
-                        .with_children(|handle| {
-                            handle
-                                .spawn((
-                                    Pickable::IGNORE,
-                                    Node {
-                                        width: px(inner_size),
-                                        height: px(inner_size),
-                                        border_radius: BorderRadius::all(px(inner_radius)),
-                                        overflow: Overflow::clip(),
-                                        ..default()
-                                    },
-                                ))
-                                .with_children(|swatch| {
-                                    swatch.spawn((
-                                        AlphaHandleMaterial(picker_entity),
+                .with_children(|slider_row| {
+                    // slider column (hue + alpha)
+                    slider_row
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(6.0),
+                            flex_grow: 1.0,
+                            ..default()
+                        })
+                        .with_children(|slider_col| {
+                            // hue slider
+                            slider_col
+                                .spawn((HueSlider(picker_entity), slider_node()))
+                                .with_children(|hue_parent| {
+                                    hue_parent.spawn((
                                         Pickable::IGNORE,
-                                        MaterialNode(checkerboard_materials.add(
-                                            CheckerboardMaterial {
-                                                color: Vec4::new(
-                                                    current_color.red,
-                                                    current_color.green,
-                                                    current_color.blue,
-                                                    current_color.alpha,
-                                                ),
-                                                size: CHECKERBOARD_SIZE,
-                                                border_radius: inner_size,
-                                            },
-                                        )),
-                                        Node {
-                                            position_type: PositionType::Absolute,
-                                            width: percent(100.0),
-                                            height: percent(100.0),
-                                            ..default()
-                                        },
+                                        MaterialNode(hue_materials.add(HueSliderMaterial {
+                                            border_radius: BORDER_RADIUS,
+                                        })),
+                                        fullsize_absolute_node(),
                                     ));
-                                });
+
+                                    let hue_color = hsv_to_rgb(state.hue, 1.0, 1.0);
+                                    hue_parent.spawn((
+                                        HueHandle(picker_entity),
+                                        handle_style(
+                                            0.0,
+                                            (SLIDER_HEIGHT - HANDLE_SIZE) / 2.0,
+                                            Some(Srgba::new(
+                                                hue_color.0,
+                                                hue_color.1,
+                                                hue_color.2,
+                                                1.0,
+                                            )),
+                                            HANDLE_SIZE,
+                                        ),
+                                    ));
+                                })
+                                .observe(on_control_press::<HueSlider>)
+                                .observe(on_control_release::<HueSlider>)
+                                .observe(on_control_drag_start::<HueSlider>)
+                                .observe(on_control_drag::<HueSlider>)
+                                .observe(on_control_drag_end::<HueSlider>);
+
+                            // alpha slider
+                            slider_col
+                                .spawn((AlphaSlider(picker_entity), slider_node()))
+                                .with_children(|alpha_parent| {
+                                    alpha_parent.spawn((
+                                        AlphaMaterialNode(picker_entity),
+                                        Pickable::IGNORE,
+                                        MaterialNode(alpha_materials.add(AlphaSliderMaterial {
+                                            color: Vec4::new(
+                                                current_rgb.0,
+                                                current_rgb.1,
+                                                current_rgb.2,
+                                                1.0,
+                                            ),
+                                            checkerboard_size: CHECKERBOARD_SIZE,
+                                            border_radius: BORDER_RADIUS,
+                                        })),
+                                        fullsize_absolute_node(),
+                                    ));
+
+                                    let inner_size = HANDLE_SIZE - HANDLE_BORDER * 2.0;
+                                    let inner_radius = inner_size / 2.0;
+                                    alpha_parent
+                                        .spawn((
+                                            AlphaHandle(picker_entity),
+                                            handle_style(
+                                                0.0,
+                                                (SLIDER_HEIGHT - HANDLE_SIZE) / 2.0,
+                                                None,
+                                                HANDLE_SIZE,
+                                            ),
+                                        ))
+                                        .with_children(|handle| {
+                                            handle
+                                                .spawn((
+                                                    Pickable::IGNORE,
+                                                    Node {
+                                                        width: px(inner_size),
+                                                        height: px(inner_size),
+                                                        border_radius: BorderRadius::all(px(
+                                                            inner_radius,
+                                                        )),
+                                                        overflow: Overflow::clip(),
+                                                        ..default()
+                                                    },
+                                                ))
+                                                .with_children(|swatch| {
+                                                    swatch.spawn((
+                                                        AlphaHandleMaterial(picker_entity),
+                                                        Pickable::IGNORE,
+                                                        MaterialNode(checkerboard_materials.add(
+                                                            CheckerboardMaterial {
+                                                                color: Vec4::new(
+                                                                    current_color.red,
+                                                                    current_color.green,
+                                                                    current_color.blue,
+                                                                    current_color.alpha,
+                                                                ),
+                                                                size: CHECKERBOARD_SIZE,
+                                                                border_radius: inner_size,
+                                                            },
+                                                        )),
+                                                        Node {
+                                                            position_type: PositionType::Absolute,
+                                                            width: percent(100.0),
+                                                            height: percent(100.0),
+                                                            ..default()
+                                                        },
+                                                    ));
+                                                });
+                                        });
+                                })
+                                .observe(on_control_press::<AlphaSlider>)
+                                .observe(on_control_release::<AlphaSlider>)
+                                .observe(on_control_drag_start::<AlphaSlider>)
+                                .observe(on_control_drag::<AlphaSlider>)
+                                .observe(on_control_drag_end::<AlphaSlider>);
                         });
-                })
-                .observe(on_control_press::<AlphaSlider>)
-                .observe(on_control_release::<AlphaSlider>)
-                .observe(on_control_drag_start::<AlphaSlider>)
-                .observe(on_control_drag::<AlphaSlider>)
-                .observe(on_control_drag_end::<AlphaSlider>);
 
-            parent.spawn((
-                ColorInputField {
-                    picker: picker_entity,
-                    kind: InputFieldKind::Hex,
-                },
-                combobox_with_selected(vec!["Hex", "RGB", "HSB"], state.input_mode.index()),
-            ));
+                    // preview swatch
+                    slider_row
+                        .spawn((
+                            Pickable::IGNORE,
+                            Node {
+                                width: px(PREVIEW_SWATCH_SIZE),
+                                height: px(PREVIEW_SWATCH_SIZE),
+                                border_radius: BorderRadius::all(px(BORDER_RADIUS)),
+                                overflow: Overflow::clip(),
+                                ..default()
+                            },
+                        ))
+                        .with_children(|swatch| {
+                            swatch.spawn((
+                                PreviewSwatchMaterial(picker_entity),
+                                Pickable::IGNORE,
+                                MaterialNode(checkerboard_materials.add(CheckerboardMaterial {
+                                    color: Vec4::new(
+                                        current_color.red,
+                                        current_color.green,
+                                        current_color.blue,
+                                        current_color.alpha,
+                                    ),
+                                    size: PREVIEW_CHECKERBOARD_SIZE,
+                                    border_radius: BORDER_RADIUS,
+                                })),
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    width: percent(100.0),
+                                    height: percent(100.0),
+                                    ..default()
+                                },
+                            ));
+                        });
+                });
 
+            // color input row
             parent
                 .spawn((
                     ColorInputRow(picker_entity),
                     Node {
                         width: percent(100),
-                        column_gap: px(12.0),
-                        align_items: AlignItems::Center,
+                        column_gap: px(6.0),
                         ..default()
                     },
                 ))
@@ -902,10 +1007,7 @@ struct InputFieldConfig {
     label: &'static str,
     min: f64,
     max: f64,
-    suffix: Option<&'static str>,
 }
-
-const INPUT_FIELD_PREFIX_SIZE: f32 = 12.0;
 
 fn spawn_input_fields(
     parent: &mut ChildSpawnerCommands,
@@ -916,10 +1018,9 @@ fn spawn_input_fields(
     let fields: &[InputFieldConfig] = match mode {
         ColorInputMode::Hex => &[InputFieldConfig {
             kind: InputFieldKind::Hex,
-            label: "#",
+            label: "Hex",
             min: 0.0,
             max: 0.0,
-            suffix: None,
         }],
         ColorInputMode::Rgb => &[
             InputFieldConfig {
@@ -927,21 +1028,18 @@ fn spawn_input_fields(
                 label: "R",
                 min: 0.0,
                 max: 255.0,
-                suffix: None,
             },
             InputFieldConfig {
                 kind: InputFieldKind::Green,
                 label: "G",
                 min: 0.0,
                 max: 255.0,
-                suffix: None,
             },
             InputFieldConfig {
                 kind: InputFieldKind::Blue,
                 label: "B",
                 min: 0.0,
                 max: 255.0,
-                suffix: None,
             },
         ],
         ColorInputMode::Hsb => &[
@@ -950,27 +1048,44 @@ fn spawn_input_fields(
                 label: "H",
                 min: 0.0,
                 max: 360.0,
-                suffix: None,
             },
             InputFieldConfig {
                 kind: InputFieldKind::Saturation,
                 label: "S",
                 min: 0.0,
                 max: 100.0,
-                suffix: None,
             },
             InputFieldConfig {
                 kind: InputFieldKind::Brightness,
                 label: "B",
                 min: 0.0,
                 max: 100.0,
-                suffix: None,
+            },
+        ],
+        ColorInputMode::Raw => &[
+            InputFieldConfig {
+                kind: InputFieldKind::RawRed,
+                label: "R",
+                min: 0.0,
+                max: 100.0,
+            },
+            InputFieldConfig {
+                kind: InputFieldKind::RawGreen,
+                label: "G",
+                min: 0.0,
+                max: 100.0,
+            },
+            InputFieldConfig {
+                kind: InputFieldKind::RawBlue,
+                label: "B",
+                min: 0.0,
+                max: 100.0,
             },
         ],
     };
 
     for config in fields {
-        spawn_single_input_field(parent, picker_entity, config, state);
+        spawn_single_input_field(parent, picker_entity, config, state, false);
     }
 
     spawn_single_input_field(
@@ -981,10 +1096,27 @@ fn spawn_input_fields(
             label: "A",
             min: 0.0,
             max: 100.0,
-            suffix: Some("%"),
         },
         state,
+        true,
     );
+
+    // icon-only mode selector combobox
+    parent
+        .spawn((
+            ColorInputField {
+                picker: picker_entity,
+                kind: InputFieldKind::Hex,
+            },
+            Node {
+                flex_shrink: 0.0,
+                ..default()
+            },
+        ))
+        .with_child(combobox_icon_with_selected(
+            vec!["Hex", "RGB", "HSB", "RAW"],
+            state.input_mode.index(),
+        ));
 }
 
 fn spawn_single_input_field(
@@ -992,35 +1124,79 @@ fn spawn_single_input_field(
     picker_entity: Entity,
     config: &InputFieldConfig,
     state: &ColorPickerState,
+    fixed_width: bool,
 ) {
     let value = config.kind.format_value(state);
     let is_hex = matches!(config.kind, InputFieldKind::Hex);
 
-    let mut props = TextEditProps::default()
-        .with_prefix(TextEditPrefix::Label {
-            label: config.label.to_string(),
-            size: INPUT_FIELD_PREFIX_SIZE,
-        })
-        .with_default_value(value);
+    let mut props = TextEditProps::default().with_default_value(value);
+
+    if is_hex {
+        props = props.with_prefix(TextEditPrefix::Icon {
+            path: crate::ui::icons::ICON_HASHTAG.to_string(),
+        });
+    }
+
+    let is_raw = matches!(
+        config.kind,
+        InputFieldKind::RawRed | InputFieldKind::RawGreen | InputFieldKind::RawBlue
+    );
+
+    let is_alpha = matches!(config.kind, InputFieldKind::Alpha);
 
     if !is_hex {
-        props = props
-            .numeric_i32()
-            .with_min(config.min)
-            .with_max(config.max);
+        props = if is_raw {
+            props.numeric_f32()
+        } else {
+            props.numeric_i32()
+        }
+        .with_min(config.min)
+        .with_max(config.max)
+        .drag_bottom();
+        props.prefix = None;
     }
 
-    if let Some(suffix) = config.suffix {
-        props = props.with_suffix(suffix);
+    if is_alpha {
+        props = props.with_suffix("%");
     }
 
-    parent.spawn((
-        ColorInputField {
-            picker: picker_entity,
-            kind: config.kind,
-        },
-        text_edit(props),
-    ));
+    let mut column_node = Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: px(6.0),
+        flex_grow: if fixed_width { 0.0 } else { 1.0 },
+        flex_shrink: 1.0,
+        flex_basis: px(0),
+        ..default()
+    };
+
+    if fixed_width {
+        column_node.width = px(48.0);
+        column_node.flex_basis = Val::Auto;
+    }
+
+    parent
+        .spawn((
+            ColorInputField {
+                picker: picker_entity,
+                kind: config.kind,
+            },
+            column_node,
+        ))
+        .with_children(|col| {
+            col.spawn(text_edit(props));
+            col.spawn((
+                Text::new(config.label),
+                TextFont {
+                    font_size: TEXT_SIZE,
+                    ..default()
+                },
+                TextColor(TEXT_MUTED_COLOR.into()),
+                Node {
+                    align_self: AlignSelf::Center,
+                    ..default()
+                },
+            ));
+        });
 }
 
 fn handle_trigger_click(
@@ -1065,7 +1241,11 @@ fn handle_trigger_click(
                 PopoverProps::new(trigger.entity)
                     .with_placement(PopoverPlacement::RightStart)
                     .with_padding(0.0)
-                    .with_z_index(150),
+                    .with_z_index(150)
+                    .with_node(Node {
+                        width: px(POPOVER_WIDTH),
+                        ..default()
+                    }),
             ),
         ))
         .id();
@@ -1078,16 +1258,7 @@ fn handle_trigger_click(
             &asset_server,
         ));
 
-        parent.spawn((
-            ColorPickerContent(picker_entity),
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(CONTENT_PADDING),
-                padding: UiRect::all(px(CONTENT_PADDING)),
-                width: px(CONTENT_WIDTH + 2.0 * CONTENT_PADDING),
-                ..default()
-            },
-        ));
+        parent.spawn((ColorPickerContent(picker_entity), popover_content()));
     });
 }
 
@@ -1121,7 +1292,8 @@ fn handle_popover_closed(
 }
 
 fn update_color_picker_visuals(
-    pickers: Query<&ColorPickerState, Changed<ColorPickerState>>,
+    changed_pickers: Query<Entity, Changed<ColorPickerState>>,
+    all_pickers: Query<&ColorPickerState>,
     mut hsv_rect_handles: Query<
         (&HsvRectHandle, &mut Node, &mut BackgroundColor),
         (Without<HueHandle>, Without<AlphaHandle>),
@@ -1137,31 +1309,63 @@ fn update_color_picker_visuals(
     alpha_handle_material_nodes: Query<(&AlphaHandleMaterial, &MaterialNode<CheckerboardMaterial>)>,
     hsv_rect_material_nodes: Query<(&HsvRectMaterialNode, &MaterialNode<HsvRectMaterial>)>,
     alpha_material_nodes: Query<(&AlphaMaterialNode, &MaterialNode<AlphaSliderMaterial>)>,
+    preview_swatch_nodes: Query<(&PreviewSwatchMaterial, &MaterialNode<CheckerboardMaterial>)>,
+    hsv_rects: Query<(&HsvRectangle, &ComputedNode), Changed<ComputedNode>>,
+    all_hsv_rects: Query<(&HsvRectangle, &ComputedNode)>,
+    hue_sliders: Query<(&HueSlider, &ComputedNode)>,
+    alpha_sliders: Query<(&AlphaSlider, &ComputedNode)>,
     mut hsv_rect_materials: ResMut<Assets<HsvRectMaterial>>,
     mut alpha_materials: ResMut<Assets<AlphaSliderMaterial>>,
     mut checkerboard_materials: ResMut<Assets<CheckerboardMaterial>>,
 ) {
-    for state in &pickers {
-        let picker_entity = match hsv_rect_handles
-            .iter()
-            .find(|(h, _, _)| pickers.get(h.0).is_ok())
-        {
-            Some((h, _, _)) => h.0,
-            None => continue,
-        };
-
-        if pickers.get(picker_entity).is_err() {
-            continue;
+    // collect pickers needing update: state changed OR layout just resolved
+    let mut needs_update = Vec::new();
+    for entity in &changed_pickers {
+        if let Ok(state) = all_pickers.get(entity) {
+            needs_update.push((entity, state));
         }
+    }
+    for (rect, _) in &hsv_rects {
+        if !needs_update.iter().any(|(e, _)| *e == rect.0) {
+            if let Ok(state) = all_pickers.get(rect.0) {
+                needs_update.push((rect.0, state));
+            }
+        }
+    }
 
-        let current_color = state.to_srgba();
+    for (picker_entity, state) in needs_update {
+        let clamped_rgba = state.to_rgba().map(|c| c.clamp(0.0, 1.0));
+        let current_color = Srgba::new(
+            clamped_rgba[0],
+            clamped_rgba[1],
+            clamped_rgba[2],
+            clamped_rgba[3],
+        );
+
+        // get computed sizes for dynamic handle positioning (convert physical to logical pixels)
+        let hsv_size = all_hsv_rects
+            .iter()
+            .find(|(r, _)| r.0 == picker_entity)
+            .map(|(_, c)| c.size() * c.inverse_scale_factor());
+        let hue_size = hue_sliders
+            .iter()
+            .find(|(s, _)| s.0 == picker_entity)
+            .map(|(_, c)| c.size() * c.inverse_scale_factor());
+        let alpha_size = alpha_sliders
+            .iter()
+            .find(|(s, _)| s.0 == picker_entity)
+            .map(|(_, c)| c.size() * c.inverse_scale_factor());
 
         for (hsv_rect_handle, mut node, mut bg) in &mut hsv_rect_handles {
             if hsv_rect_handle.0 != picker_entity {
                 continue;
             }
-            node.left = px(state.saturation * CONTENT_WIDTH - HANDLE_SIZE / 2.0);
-            node.top = px((1.0 - state.brightness) * CONTENT_WIDTH - HANDLE_SIZE / 2.0);
+            if let Some(size) = hsv_size {
+                if size.x > 0.0 && size.y > 0.0 {
+                    node.left = px(state.saturation * size.x - HANDLE_SIZE / 2.0);
+                    node.top = px((1.0 - state.brightness.min(1.0)) * size.y - HANDLE_SIZE / 2.0);
+                }
+            }
             bg.0 = current_color.with_alpha(1.0).into();
         }
 
@@ -1169,7 +1373,11 @@ fn update_color_picker_visuals(
             if hue_handle.0 != picker_entity {
                 continue;
             }
-            node.left = px((state.hue / 360.0) * CONTENT_WIDTH - HANDLE_SIZE / 2.0);
+            if let Some(size) = hue_size {
+                if size.x > 0.0 {
+                    node.left = px((state.hue / 360.0) * size.x - HANDLE_SIZE / 2.0);
+                }
+            }
             let hue_color = hsv_to_rgb(state.hue, 1.0, 1.0);
             bg.0 = Srgba::new(hue_color.0, hue_color.1, hue_color.2, 1.0).into();
         }
@@ -1178,11 +1386,29 @@ fn update_color_picker_visuals(
             if alpha_handle.0 != picker_entity {
                 continue;
             }
-            node.left = px(state.alpha * CONTENT_WIDTH - HANDLE_SIZE / 2.0);
+            if let Some(size) = alpha_size {
+                if size.x > 0.0 {
+                    node.left = px(state.alpha * size.x - HANDLE_SIZE / 2.0);
+                }
+            }
         }
 
         for (alpha_handle_mat, material_node) in &alpha_handle_material_nodes {
             if alpha_handle_mat.0 != picker_entity {
+                continue;
+            }
+            if let Some(material) = checkerboard_materials.get_mut(&material_node.0) {
+                material.color = Vec4::new(
+                    current_color.red,
+                    current_color.green,
+                    current_color.blue,
+                    current_color.alpha,
+                );
+            }
+        }
+
+        for (preview_mat, material_node) in &preview_swatch_nodes {
+            if preview_mat.0 != picker_entity {
                 continue;
             }
             if let Some(material) = checkerboard_materials.get_mut(&material_node.0) {
@@ -1209,7 +1435,7 @@ fn update_color_picker_visuals(
                 continue;
             }
             if let Some(material) = alpha_materials.get_mut(&material_node.0) {
-                let (r, g, b) = hsv_to_rgb(state.hue, state.saturation, state.brightness);
+                let (r, g, b) = hsv_to_rgb(state.hue, state.saturation, state.brightness.min(1.0));
                 material.color = Vec4::new(r, g, b, 1.0);
             }
         }

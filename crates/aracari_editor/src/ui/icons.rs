@@ -14,6 +14,7 @@ pub const ICON_FCURVE: &str = "icons/blender-fcurve.png";
 pub const ICON_FILE_ADD: &str = "icons/ri-file-add-line.png";
 pub const ICON_FOLDER_IMAGE: &str = "icons/ri-folder-image-line.png";
 pub const ICON_FOLDER_OPEN: &str = "icons/ri-folder-open-line.png";
+pub const ICON_HASHTAG: &str = "icons/ri-hashtag.png";
 pub const ICON_HEART: &str = "icons/ri-heart-3-fill.png";
 pub const ICON_INFORMATION: &str = "icons/ri-information-fill.png";
 pub const ICON_MESH_CYLINDER: &str = "icons/blender-mesh-cylinder.png";

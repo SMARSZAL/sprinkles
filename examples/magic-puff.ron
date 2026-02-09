@@ -109,6 +109,120 @@
             particle_flags: "",
         ),
         (
+            name: "Debris",
+            time: (
+                lifetime: 2.2,
+                lifetime_randomness: 0.3,
+                one_shot: true,
+                explosiveness: 0.95,
+                fixed_fps: 60,
+            ),
+            draw_pass: (
+                mesh: Prism(
+                    left_to_right: 0.5,
+                    size: (1.0, 1.0, 1.5),
+                ),
+                material: Standard((
+                    base_color: (0.0, 1.0, 1.0, 1.0),
+                    emissive: (0.0, 10.000002, 9.999999, 1.0),
+                    alpha_mode: Opaque,
+                    perceptual_roughness: 0.5,
+                    reflectance: 0.5,
+                )),
+                shadow_caster: false,
+                transform_align: Some(YToVelocity),
+            ),
+            emission: (
+                shape: Sphere(
+                    radius: 0.5,
+                ),
+                particles_amount: 24,
+            ),
+            scale: (
+                range: (
+                    min: 0.02,
+                    max: 0.08,
+                ),
+                scale_over_lifetime: Some((
+                    points: [
+                        (
+                            position: 0.5,
+                            value: 1.0,
+                            mode: DoubleCurve,
+                            tension: 0.0,
+                            easing: Power,
+                        ),
+                        (
+                            position: 1.0,
+                            value: 0.0,
+                            mode: SingleCurve,
+                            tension: -0.8008008008,
+                            easing: Power,
+                        ),
+                    ],
+                    range: (
+                        min: 0.0,
+                        max: 1.0,
+                    ),
+                )),
+            ),
+            angle: (
+                range: (
+                    min: 0.0,
+                    max: 360.0,
+                ),
+            ),
+            colors: (
+                initial_color: Solid(
+                    color: (1.0, 1.0, 1.0, 1.0),
+                ),
+                color_over_lifetime: (
+                    stops: [
+                        (
+                            color: (1.0, 1.0, 1.0, 1.0),
+                            position: 0.0,
+                        ),
+                        (
+                            color: (1.0, 1.0, 1.0, 1.0),
+                            position: 1.0,
+                        ),
+                    ],
+                ),
+            ),
+            velocities: (
+                initial_direction: (0.0, 1.0, 0.0),
+                spread: 90.0,
+                initial_velocity: (
+                    min: 1.0,
+                    max: 3.0,
+                ),
+                radial_velocity: (
+                    velocity: (
+                        min: 0.0,
+                        max: 2.0,
+                    ),
+                ),
+                angular_velocity: (
+                    velocity: (
+                        min: 5.0,
+                        max: 10.0,
+                    ),
+                ),
+            ),
+            accelerations: (
+                gravity: (0.0, -9.8, 0.0),
+            ),
+            collision: (
+                mode: Some(Rigid(
+                    friction: 0.2,
+                    bounce: 0.15,
+                )),
+                use_scale: true,
+                base_size: 0.2,
+            ),
+            particle_flags: "",
+        ),
+        (
             name: "Magic",
             time: (
                 lifetime: 1.2,
@@ -124,7 +238,7 @@
                 material: Standard((
                     base_color: (1.0, 1.0, 1.0, 1.0),
                     base_color_texture: Some(Preset(Flame1)),
-                    emissive: (0.0, 1.0, 1.0, 1.0),
+                    emissive: (0.0, 10.000002, 9.999999, 1.0),
                     alpha_mode: Add,
                     perceptual_roughness: 0.5,
                     reflectance: 0.5,
@@ -452,7 +566,7 @@
                 material: Standard((
                     base_color: (0.0, 1.0, 1.0, 1.0),
                     base_color_texture: Some(Preset(Fire2)),
-                    emissive: (0.0, 1.0, 1.0, 1.0),
+                    emissive: (0.0, 50.0, 50.0, 1.0),
                     alpha_mode: Add,
                     perceptual_roughness: 0.5,
                     reflectance: 0.5,
@@ -564,7 +678,7 @@
                 material: Standard((
                     base_color: (0.0, 1.0, 1.0, 1.0),
                     base_color_texture: Some(Preset(Trace1)),
-                    emissive: (0.0, 1.0, 1.0, 1.0),
+                    emissive: (0.0, 50.0, 50.0, 1.0),
                     alpha_mode: Add,
                     perceptual_roughness: 0.5,
                     reflectance: 0.5,
@@ -665,120 +779,6 @@
             ),
             collision: (
                 base_size: 0.01,
-            ),
-            particle_flags: "",
-        ),
-        (
-            name: "Debris",
-            time: (
-                lifetime: 2.2,
-                lifetime_randomness: 0.3,
-                one_shot: true,
-                explosiveness: 0.95,
-                fixed_fps: 60,
-            ),
-            draw_pass: (
-                mesh: Prism(
-                    left_to_right: 0.5,
-                    size: (1.0, 1.0, 1.5),
-                ),
-                material: Standard((
-                    base_color: (0.0, 1.0, 1.0, 1.0),
-                    emissive: (0.0, 1.0, 1.0, 1.0),
-                    alpha_mode: Opaque,
-                    perceptual_roughness: 0.5,
-                    reflectance: 0.5,
-                )),
-                shadow_caster: false,
-                transform_align: Some(YToVelocity),
-            ),
-            emission: (
-                shape: Sphere(
-                    radius: 0.5,
-                ),
-                particles_amount: 24,
-            ),
-            scale: (
-                range: (
-                    min: 0.02,
-                    max: 0.08,
-                ),
-                scale_over_lifetime: Some((
-                    points: [
-                        (
-                            position: 0.5,
-                            value: 1.0,
-                            mode: DoubleCurve,
-                            tension: 0.0,
-                            easing: Power,
-                        ),
-                        (
-                            position: 1.0,
-                            value: 0.0,
-                            mode: SingleCurve,
-                            tension: -0.8008008008,
-                            easing: Power,
-                        ),
-                    ],
-                    range: (
-                        min: 0.0,
-                        max: 1.0,
-                    ),
-                )),
-            ),
-            angle: (
-                range: (
-                    min: 0.0,
-                    max: 360.0,
-                ),
-            ),
-            colors: (
-                initial_color: Solid(
-                    color: (1.0, 1.0, 1.0, 1.0),
-                ),
-                color_over_lifetime: (
-                    stops: [
-                        (
-                            color: (1.0, 1.0, 1.0, 1.0),
-                            position: 0.0,
-                        ),
-                        (
-                            color: (1.0, 1.0, 1.0, 1.0),
-                            position: 1.0,
-                        ),
-                    ],
-                ),
-            ),
-            velocities: (
-                initial_direction: (0.0, 1.0, 0.0),
-                spread: 90.0,
-                initial_velocity: (
-                    min: 1.0,
-                    max: 3.0,
-                ),
-                radial_velocity: (
-                    velocity: (
-                        min: 0.0,
-                        max: 2.0,
-                    ),
-                ),
-                angular_velocity: (
-                    velocity: (
-                        min: 5.0,
-                        max: 10.0,
-                    ),
-                ),
-            ),
-            accelerations: (
-                gravity: (0.0, -9.8, 0.0),
-            ),
-            collision: (
-                mode: Some(Rigid(
-                    friction: 0.2,
-                    bounce: 0.15,
-                )),
-                use_scale: true,
-                base_size: 0.2,
             ),
             particle_flags: "",
         ),

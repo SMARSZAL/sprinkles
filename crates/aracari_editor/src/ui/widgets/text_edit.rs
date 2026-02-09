@@ -88,6 +88,7 @@ struct TextEditSuffix(String);
 #[derive(Component)]
 struct TextEditSuffixNode(Entity);
 
+
 #[derive(Component)]
 struct TextEditDefaultValue(String);
 
@@ -127,6 +128,7 @@ struct TextEditConfig {
     min: f64,
     max: f64,
     allow_empty: bool,
+    drag_bottom: bool,
     initialized: bool,
 }
 
@@ -141,6 +143,7 @@ pub struct TextEditProps {
     pub min: f64,
     pub max: f64,
     pub allow_empty: bool,
+    pub drag_bottom: bool,
 }
 
 impl Default for TextEditProps {
@@ -156,6 +159,7 @@ impl Default for TextEditProps {
             min: f64::MIN,
             max: f64::MAX,
             allow_empty: false,
+            drag_bottom: false,
         }
     }
 }
@@ -199,6 +203,11 @@ impl TextEditProps {
         self
     }
 
+    pub fn drag_bottom(mut self) -> Self {
+        self.drag_bottom = true;
+        self
+    }
+
     pub fn numeric_f32(mut self) -> Self {
         self.variant = TextEditVariant::NumericF32;
         self.filter = Some(FilterType::Decimal);
@@ -230,6 +239,7 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
         min,
         max,
         allow_empty,
+        drag_bottom,
     } = props;
 
     (
@@ -252,6 +262,7 @@ pub fn text_edit(props: TextEditProps) -> impl Bundle {
             min,
             max,
             allow_empty,
+            drag_bottom,
             initialized: false,
         },
     )
@@ -316,7 +327,7 @@ fn setup_text_edit_input(
 
         commands.entity(entity).add_child(wrapper_entity);
 
-        if is_numeric {
+        if is_numeric && !config.drag_bottom {
             const HITBOX_WIDTH: f32 = INPUT_HEIGHT * 0.9;
             let hitbox = commands
                 .spawn((
@@ -329,6 +340,28 @@ fn setup_text_edit_input(
                         ..default()
                     },
                     ZIndex(10),
+                    Interaction::None,
+                    Hovered::default(),
+                    HoverCursor(SystemCursorIcon::ColResize),
+                ))
+                .id();
+            commands.entity(wrapper_entity).add_child(hitbox);
+        }
+
+        if is_numeric && config.drag_bottom {
+            let hitbox = commands
+                .spawn((
+                    DragHitbox::default(),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        width: percent(50),
+                        height: px(INPUT_HEIGHT / 2.0),
+                        left: percent(25),
+                        top: px(INPUT_HEIGHT + 6.0),
+                        border: UiRect::all(px(1.0)),
+                        ..default()
+                    },
+                    ZIndex(50),
                     Interaction::None,
                     Hovered::default(),
                     HoverCursor(SystemCursorIcon::ColResize),
@@ -508,16 +541,28 @@ fn apply_default_value(
 
 fn handle_suffix(
     focus: Res<InputFocus>,
-    text_edits: Query<(Entity, &TextInputBuffer, &TextInputLayoutInfo), With<TextEditSuffix>>,
+    text_edits: Query<(Entity, &TextInputBuffer, &TextInputLayoutInfo, &ChildOf), With<TextEditSuffix>>,
     mut suffix_nodes: Query<(&TextEditSuffixNode, &mut Node), Without<TextEditWrapper>>,
+    parents: Query<&ChildOf>,
+    configs: Query<&TextEditConfig>,
 ) {
-    const SUFFIX_LEFT_OFFSET: f32 = 30.0;
-    for (entity, buffer, layout_info) in &text_edits {
+    const WRAPPER_PADDING: f32 = 8.0;
+    const PREFIX_EXTRA: f32 = AFFIX_SIZE as f32 + 6.0;
+    for (entity, buffer, layout_info, child_of) in &text_edits {
         let Some((_, mut node)) = suffix_nodes.iter_mut().find(|(link, _)| link.0 == entity) else {
             continue;
         };
+
+        let has_prefix = parents
+            .get(child_of.parent())
+            .ok()
+            .and_then(|wrapper_parent| configs.get(wrapper_parent.parent()).ok())
+            .is_some_and(|config| config.prefix.is_some());
+
+        let offset = WRAPPER_PADDING + if has_prefix { PREFIX_EXTRA } else { 0.0 };
+
         let show = focus.0 != Some(entity) && !buffer.get_text().is_empty();
-        node.left = px(layout_info.size.x + SUFFIX_LEFT_OFFSET);
+        node.left = px(layout_info.size.x + offset);
         node.display = if show { Display::Flex } else { Display::None };
     }
 }
