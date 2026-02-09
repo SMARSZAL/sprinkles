@@ -7,6 +7,9 @@ use crate::state::{DirtyState, EditorState};
 use crate::ui::widgets::checkbox::{CheckboxCommitEvent, CheckboxState};
 use crate::ui::widgets::combobox::ComboBoxChangeEvent;
 use crate::ui::widgets::curve_edit::{CurveEditCommitEvent, CurveEditState, EditorCurveEdit};
+use crate::ui::widgets::gradient_edit::{
+    EditorGradientEdit, GradientEditCommitEvent, GradientEditState,
+};
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditCommitEvent, set_text_input_value};
 use crate::ui::widgets::variant_edit::{
     EditorVariantEdit, VariantComboBox, VariantEditConfig, VariantFieldBinding,
@@ -18,9 +21,9 @@ use super::{
     Bound, Field, FieldKind, FieldValue, InspectedEmitterTracker, MAX_ANCESTOR_DEPTH, ReflectPath,
     find_ancestor, find_ancestor_entity, find_ancestor_field, find_field_for_entity, format_f32,
     get_field_value_by_reflection, get_inspecting_emitter, get_inspecting_emitter_mut,
-    get_vec3_component, label_to_variant_name, mark_dirty_and_restart, parse_field_value,
-    set_field_enum_by_name, set_field_value_by_reflection, set_variant_field_enum_by_name,
-    set_vec3_component,
+    get_vec2_component, get_vec3_component, label_to_variant_name, mark_dirty_and_restart,
+    parse_field_value, set_field_enum_by_name, set_field_value_by_reflection,
+    set_variant_field_enum_by_name, set_vec2_component, set_vec3_component,
 };
 
 fn is_descendant_of_variant_edit(
@@ -87,6 +90,7 @@ pub(super) fn bind_values_to_inputs(
                     for (idx, vec_child) in vec_children.iter().enumerate().take(component_count) {
                         if find_ancestor_entity(child_of.parent(), vec_child, &parents) {
                             let component_value = match &value {
+                                FieldValue::Vec2(vec) => Some(get_vec2_component(*vec, idx)),
                                 FieldValue::Vec3(vec) => Some(get_vec3_component(*vec, idx)),
                                 FieldValue::Range(min, max) => match idx {
                                     0 => Some(*min),
@@ -96,7 +100,12 @@ pub(super) fn bind_values_to_inputs(
                                 _ => None,
                             };
                             if let Some(v) = component_value {
-                                set_text_input_value(&mut queue, format_f32(v));
+                                let text = if suffixes.is_integer() {
+                                    (v as i32).to_string()
+                                } else {
+                                    format_f32(v)
+                                };
+                                set_text_input_value(&mut queue, text);
                                 commands
                                     .entity(entity)
                                     .try_insert(Bound::direct(field_entity));
@@ -313,6 +322,98 @@ pub(super) fn handle_curve_edit_commit(
     }
 }
 
+pub(super) fn bind_gradient_edit_values(
+    mut commands: Commands,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    tracker: Res<InspectedEmitterTracker>,
+    new_gradient_edits: Query<Entity, Added<EditorGradientEdit>>,
+    mut gradient_edits: Query<
+        (Entity, Option<&ChildOf>, &mut GradientEditState),
+        With<EditorGradientEdit>,
+    >,
+    fields: Query<&Field>,
+    parents: Query<&ChildOf>,
+    variant_edit_query: Query<(), With<EditorVariantEdit>>,
+) {
+    if !tracker.is_changed() && new_gradient_edits.is_empty() {
+        return;
+    }
+
+    let Some((_, emitter)) = get_inspecting_emitter(&editor_state, &assets) else {
+        return;
+    };
+
+    for (entity, child_of, mut state) in &mut gradient_edits {
+        let Some((field_entity, field)) = find_field_for_entity(entity, &fields, &parents) else {
+            continue;
+        };
+
+        if let Some(child_of) = child_of {
+            if is_descendant_of_variant_edit(child_of.parent(), &variant_edit_query, &parents) {
+                continue;
+            }
+        }
+
+        if field.kind != FieldKind::Gradient {
+            continue;
+        }
+
+        let reflect_path = ReflectPath::new(&field.path);
+        let Ok(value) = emitter.reflect_path(reflect_path.as_str()) else {
+            continue;
+        };
+
+        if let Some(gradient) = value.try_downcast_ref::<ParticleGradient>() {
+            state.gradient = gradient.clone();
+            commands
+                .entity(entity)
+                .try_insert(Bound::direct(field_entity));
+        }
+    }
+}
+
+pub(super) fn handle_gradient_edit_commit(
+    trigger: On<GradientEditCommitEvent>,
+    editor_state: Res<EditorState>,
+    mut assets: ResMut<Assets<ParticleSystemAsset>>,
+    mut dirty_state: ResMut<DirtyState>,
+    gradient_edits: Query<&Bound, With<EditorGradientEdit>>,
+    fields: Query<&Field>,
+    parents: Query<&ChildOf>,
+    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+) {
+    let Ok(bound) = gradient_edits.get(trigger.entity) else {
+        return;
+    };
+
+    if bound.is_variant_field {
+        return;
+    }
+
+    let Some((_, field)) = find_field_for_entity(trigger.entity, &fields, &parents) else {
+        return;
+    };
+
+    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
+        return;
+    };
+
+    let reflect_path = ReflectPath::new(&field.path);
+    let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
+        return;
+    };
+
+    if let Some(gradient) = target.try_downcast_mut::<ParticleGradient>() {
+        *gradient = trigger.gradient.clone();
+        mark_dirty_and_restart(
+            &mut dirty_state,
+            &mut emitter_runtimes,
+            emitter.time.fixed_seed,
+        );
+    }
+}
+
 pub(super) fn handle_text_edit_commit(
     trigger: On<TextEditCommitEvent>,
     editor_state: Res<EditorState>,
@@ -410,6 +511,10 @@ fn handle_direct_text_commit(
         };
 
         let new_value = match current_value {
+            FieldValue::Vec2(mut vec) => {
+                set_vec2_component(&mut vec, idx, v);
+                FieldValue::Vec2(vec)
+            }
             FieldValue::Vec3(mut vec) => {
                 set_vec3_component(&mut vec, idx, v);
                 FieldValue::Vec3(vec)

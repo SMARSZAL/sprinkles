@@ -9,7 +9,9 @@ pub struct EditorVectorEdit;
 pub enum VectorSuffixes {
     #[default]
     XYZ,
+    XY,
     WHD,
+    WD,
     Range,
 }
 
@@ -17,7 +19,9 @@ impl VectorSuffixes {
     fn get(&self, index: usize) -> &'static str {
         match self {
             Self::XYZ => ["X", "Y", "Z"].get(index).unwrap_or(&""),
+            Self::XY => ["X", "Y"].get(index).unwrap_or(&""),
             Self::WHD => ["W", "H", "D"].get(index).unwrap_or(&""),
+            Self::WD => ["W", "D"].get(index).unwrap_or(&""),
             Self::Range => ["min", "max"].get(index).unwrap_or(&""),
         }
     }
@@ -31,9 +35,13 @@ impl VectorSuffixes {
 
     pub fn vector_size(&self) -> VectorSize {
         match self {
-            Self::Range => VectorSize::Vec2,
+            Self::Range | Self::XY | Self::WD => VectorSize::Vec2,
             Self::XYZ | Self::WHD => VectorSize::Vec3,
         }
+    }
+
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Self::WD)
     }
 }
 
@@ -58,6 +66,9 @@ pub struct VectorEditProps {
     pub size: VectorSize,
     pub suffixes: VectorSuffixes,
     pub default_values: Vec<f32>,
+    pub suffix: Option<String>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
 }
 
 impl Default for VectorEditProps {
@@ -67,6 +78,9 @@ impl Default for VectorEditProps {
             size: VectorSize::Vec3,
             suffixes: VectorSuffixes::XYZ,
             default_values: Vec::new(),
+            suffix: None,
+            min: None,
+            max: None,
         }
     }
 }
@@ -92,6 +106,21 @@ impl VectorEditProps {
         self
     }
 
+    pub fn with_suffix(mut self, suffix: impl Into<String>) -> Self {
+        self.suffix = Some(suffix.into());
+        self
+    }
+
+    pub fn with_min(mut self, min: f64) -> Self {
+        self.min = Some(min);
+        self
+    }
+
+    pub fn with_max(mut self, max: f64) -> Self {
+        self.max = Some(max);
+        self
+    }
+
     pub fn vec2(mut self) -> Self {
         self.size = VectorSize::Vec2;
         self
@@ -109,17 +138,24 @@ pub fn vector_edit(props: VectorEditProps) -> impl Bundle {
         size,
         suffixes,
         default_values,
+        suffix,
+        min,
+        max,
     } = props;
+
+    let is_integer = suffixes.is_integer();
 
     let children: Vec<_> = (0..size.count())
         .map(|i| {
-            let mut text_edit_props =
-                TextEditProps::default()
-                    .numeric_f32()
-                    .with_prefix(TextEditPrefix::Label {
-                        label: suffixes.get(i).to_string(),
-                        size: suffixes.text_size(),
-                    });
+            let mut text_edit_props = if is_integer {
+                TextEditProps::default().numeric_i32()
+            } else {
+                TextEditProps::default().numeric_f32()
+            }
+            .with_prefix(TextEditPrefix::Label {
+                label: suffixes.get(i).to_string(),
+                size: suffixes.text_size(),
+            });
 
             if i == 0 {
                 if let Some(ref label) = label {
@@ -129,6 +165,18 @@ pub fn vector_edit(props: VectorEditProps) -> impl Bundle {
 
             if let Some(&value) = default_values.get(i) {
                 text_edit_props = text_edit_props.with_default_value(value.to_string());
+            }
+
+            if let Some(ref suffix) = suffix {
+                text_edit_props = text_edit_props.with_suffix(suffix);
+            }
+
+            if let Some(min) = min {
+                text_edit_props = text_edit_props.with_min(min);
+            }
+
+            if let Some(max) = max {
+                text_edit_props = text_edit_props.with_max(max);
             }
 
             text_edit(text_edit_props)

@@ -5,7 +5,7 @@ struct Particle {
     velocity: vec4<f32>,       // xyz, lifetime
     color: vec4<f32>,
     custom: vec4<f32>,         // age, spawn_index, seed, flags
-    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w = angle (radians)
 }
 
 struct CurveUniform {
@@ -19,8 +19,16 @@ struct CurveUniform {
 const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 
 // emitter-level particle flags (from EmitterParams.particle_flags)
-const EMITTER_FLAG_ALIGN_Y_TO_VELOCITY: u32 = 1u;
+const EMITTER_FLAG_ROTATE_Y: u32 = 2u;
 const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
+
+// transform align mode (2-bit value stored in bits 3-4 of particle_flags)
+const TRANSFORM_ALIGN_SHIFT: u32 = 3u;
+const TRANSFORM_ALIGN_MASK: u32 = 3u;
+const TRANSFORM_ALIGN_DISABLED: u32 = 0u;
+const TRANSFORM_ALIGN_BILLBOARD: u32 = 1u;
+const TRANSFORM_ALIGN_Y_TO_VELOCITY: u32 = 2u;
+const TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY: u32 = 3u;
 
 fn hash(n: u32) -> u32 {
     var x = n;

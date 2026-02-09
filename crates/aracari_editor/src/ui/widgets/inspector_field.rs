@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use super::checkbox::{CheckboxProps, checkbox};
 use super::combobox::{ComboBoxOptionData, combobox};
 use super::curve_edit::{CurveEditProps, curve_edit};
+use super::gradient_edit::{GradientEditProps, gradient_edit};
 use super::text_edit::{TextEditPrefix, TextEditProps, text_edit};
 use super::vector_edit::{VectorEditProps, VectorSuffixes, vector_edit};
 use crate::ui::components::binding::Field;
@@ -71,6 +72,11 @@ impl InspectorFieldProps {
 
     pub fn curve(mut self) -> Self {
         self.kind = FieldKind::Curve;
+        self
+    }
+
+    pub fn gradient(mut self) -> Self {
+        self.kind = FieldKind::Gradient;
         self
     }
 
@@ -178,20 +184,32 @@ pub fn spawn_inspector_field(
     }
 
     if let FieldKind::Vector(suffixes) = props.kind {
-        spawner.spawn((
-            field,
-            vector_edit(
-                VectorEditProps::default()
-                    .with_label(label)
-                    .with_size(suffixes.vector_size())
-                    .with_suffixes(suffixes),
-            ),
-        ));
+        let mut vec_props = VectorEditProps::default()
+            .with_label(label)
+            .with_size(suffixes.vector_size())
+            .with_suffixes(suffixes);
+
+        if let Some(suffix) = props.inferred_suffix() {
+            vec_props = vec_props.with_suffix(suffix);
+        }
+        if let Some(min) = props.inferred_min() {
+            vec_props = vec_props.with_min(min as f64);
+        }
+        if let Some(max) = props.inferred_max() {
+            vec_props = vec_props.with_max(max as f64);
+        }
+
+        spawner.spawn((field, vector_edit(vec_props)));
         return;
     }
 
     if props.kind == FieldKind::Curve {
         spawner.spawn((field, curve_edit(CurveEditProps::new().with_label(label))));
+        return;
+    }
+
+    if props.kind == FieldKind::Gradient {
+        spawner.spawn((field, gradient_edit(GradientEditProps::new().with_label(label))));
         return;
     }
 

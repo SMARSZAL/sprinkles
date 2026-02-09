@@ -1,4 +1,5 @@
 mod accelerations;
+mod angle;
 mod collider_properties;
 mod collision;
 mod colors;
@@ -38,6 +39,7 @@ pub fn plugin(app: &mut App) {
             emission::plugin,
             draw_pass::plugin,
             scale::plugin,
+            angle::plugin,
             colors::plugin,
             velocities::plugin,
             accelerations::plugin,
@@ -177,6 +179,7 @@ fn setup_inspector_panel(
                                 emitter_content.spawn(colors::colors_section(&asset_server));
                                 emitter_content
                                     .spawn(velocities::velocities_section(&asset_server));
+                                emitter_content.spawn(angle::angle_section(&asset_server));
                                 emitter_content
                                     .spawn(accelerations::accelerations_section(&asset_server));
                                 emitter_content

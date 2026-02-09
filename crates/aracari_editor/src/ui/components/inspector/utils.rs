@@ -253,6 +253,10 @@ pub fn field_from_type_path(
         path if path.contains("Gradient") && !path.contains("Interpolation") => {
             Some(VariantField::gradient(name))
         }
+        path if path.contains("Vec2") => Some(VariantField::vector(
+            name,
+            suffixes.unwrap_or(VectorSuffixes::XY),
+        )),
         path if path.contains("Vec3") => Some(VariantField::vector(
             name,
             suffixes.unwrap_or(VectorSuffixes::XYZ),

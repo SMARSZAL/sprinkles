@@ -139,6 +139,7 @@ pub fn prepare_gradient_textures(
             if let SolidOrGradientColor::Gradient { gradient } = &emitter.colors.initial_color {
                 cache.get_or_create(gradient, &mut images);
             }
+            cache.get_or_create(&emitter.colors.color_over_lifetime, &mut images);
         }
     }
 }

@@ -8,7 +8,7 @@ use bevy::{
 };
 
 use crate::{
-    asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset, QuadOrientation},
+    asset::{DrawPassMaterial, EmitterData, ParticleMesh, ParticleSystemAsset, QuadOrientation},
     material::ParticleMaterialExtension,
     runtime::{
         ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterMeshEntity,
@@ -456,10 +456,66 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
     mesh
 }
 
+fn create_subdivided_quad(size: Vec2, subdivisions_x: u32, subdivisions_y: u32) -> Mesh {
+    let cols = subdivisions_x + 1;
+    let rows = subdivisions_y + 1;
+    let vertex_count = ((cols + 1) * (rows + 1)) as usize;
+    let index_count = (cols * rows * 6) as usize;
+
+    let mut positions = Vec::with_capacity(vertex_count);
+    let mut normals = Vec::with_capacity(vertex_count);
+    let mut uvs = Vec::with_capacity(vertex_count);
+    let mut indices = Vec::with_capacity(index_count);
+
+    let half_w = size.x * 0.5;
+    let half_d = size.y * 0.5;
+
+    for iy in 0..=rows {
+        let ty = iy as f32 / rows as f32;
+        let y = -half_d + ty * size.y;
+        for ix in 0..=cols {
+            let tx = ix as f32 / cols as f32;
+            let x = -half_w + tx * size.x;
+            positions.push([x, y, 0.0]);
+            normals.push([0.0, 0.0, 1.0]);
+            uvs.push([tx, 1.0 - ty]);
+        }
+    }
+
+    let stride = cols + 1;
+    for iy in 0..rows {
+        for ix in 0..cols {
+            let i00 = iy * stride + ix;
+            let i10 = i00 + 1;
+            let i01 = i00 + stride;
+            let i11 = i01 + 1;
+            indices.push(i00);
+            indices.push(i10);
+            indices.push(i11);
+            indices.push(i00);
+            indices.push(i11);
+            indices.push(i01);
+        }
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
 fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     match config {
-        ParticleMesh::Quad { orientation } => {
-            let mut mesh = Mesh::from(Rectangle::new(1.0, 1.0));
+        ParticleMesh::Quad {
+            orientation,
+            size,
+            subdivide,
+        } => {
+            let subdivisions_x = subdivide.x as u32;
+            let subdivisions_y = subdivide.y as u32;
+            let mut mesh = create_subdivided_quad(*size, subdivisions_x, subdivisions_y);
 
             let rotation = match orientation {
                 QuadOrientation::FaceZ => None,
@@ -591,6 +647,19 @@ fn create_particle_mesh(
     meshes.add(mesh)
 }
 
+fn combined_particle_flags(emitter: &EmitterData) -> u32 {
+    use crate::asset::TransformAlign;
+    let mut flags = emitter.particle_flags.bits();
+    let transform_align_bits = match emitter.draw_pass.transform_align {
+        None => 0u32,
+        Some(TransformAlign::Billboard) => 1,
+        Some(TransformAlign::YToVelocity) => 2,
+        Some(TransformAlign::BillboardYToVelocity) => 3,
+    };
+    flags |= transform_align_bits << 3;
+    flags
+}
+
 // material creation
 
 fn create_particle_material_from_config(
@@ -666,7 +735,7 @@ pub fn setup_particle_systems(
                 &current_material,
                 sorted_particles_buffer_handle.clone(),
                 amount,
-                emitter.particle_flags.bits(),
+                combined_particle_flags(emitter),
                 &asset_server,
             ));
 
@@ -914,7 +983,7 @@ pub fn sync_particle_material(
                 &new_material,
                 sorted_particles_handle,
                 buffer_handle.max_particles,
-                emitter_data.particle_flags.bits(),
+                combined_particle_flags(emitter_data),
                 &asset_server,
             ));
 
@@ -927,7 +996,7 @@ pub fn sync_particle_material(
             current_config.0 = new_material;
             material_handle.0 = new_material_handle;
         } else {
-            let new_flags = emitter_data.particle_flags.bits();
+            let new_flags = combined_particle_flags(emitter_data);
             if let Some(material) = materials.get_mut(&material_handle.0) {
                 if material.extension.particle_flags != new_flags {
                     material.extension.particle_flags = new_flags;

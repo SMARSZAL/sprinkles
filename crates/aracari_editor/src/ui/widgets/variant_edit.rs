@@ -833,7 +833,7 @@ fn spawn_field_widget(
             asset_server,
             &label,
             binding,
-            gradient_edit(GradientEditProps::new()),
+            gradient_edit(GradientEditProps::new().inline()),
         ),
 
         FieldKind::TextureRef => {

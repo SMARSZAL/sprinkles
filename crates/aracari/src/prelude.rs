@@ -16,7 +16,7 @@ pub use crate::asset::{
     ParticleFlags, ParticleMesh, ParticleSystemAsset, ParticleSystemDimension,
     ParticlesColliderShape3D, QuadOrientation, Range as ParticleRange, SerializableAlphaMode,
     SolidOrGradientColor, CurveEasing, CurveMode, CurvePoint, CurveTexture,
-    StandardParticleMaterial,
+    StandardParticleMaterial, TransformAlign,
 };
 #[cfg(feature = "preset-textures")]
 pub use crate::textures::preset::PresetTexture;

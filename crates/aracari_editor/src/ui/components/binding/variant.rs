@@ -23,8 +23,9 @@ use super::{
     Bound, Field, FieldKind, FieldValue, InspectedEmitterTracker, MAX_ANCESTOR_DEPTH, ReflectPath,
     create_variant_from_definition, find_ancestor, find_ancestor_entity, format_f32,
     get_inspecting_emitter, get_inspecting_emitter_mut, get_variant_field_value_by_reflection,
-    get_variant_index_by_reflection, get_vec3_component, mark_dirty_and_restart,
-    resolve_variant_field_ref, set_variant_field_value_by_reflection, set_vec3_component,
+    get_variant_index_by_reflection, get_vec2_component, get_vec3_component,
+    mark_dirty_and_restart, resolve_variant_field_ref, set_variant_field_value_by_reflection,
+    set_vec2_component, set_vec3_component,
     with_variant_field_mut,
 };
 
@@ -125,26 +126,66 @@ pub(super) fn bind_variant_field_values(
             }
         }
 
-        if let Some(vec) = value.to_vec3() {
-            if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
-                let mut component_index = 0;
+        if let FieldKind::Vector(suffixes) = &binding.field_kind {
+            let is_integer = suffixes.is_integer();
 
-                for vec_child in vec_children.iter().take(3) {
-                    for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
-                        if find_ancestor_entity(text_edit_parent.parent(), vec_child, &parents) {
-                            let text = format_f32(get_vec3_component(vec, component_index));
-                            set_text_input_value(&mut queue, text);
-                            commands
-                                .entity(text_edit_entity)
-                                .try_insert(Bound::variant(binding_entity));
-                            component_index += 1;
-                            break;
+            if let Some(vec) = value.to_vec2() {
+                if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
+                    let mut component_index = 0;
+
+                    for vec_child in vec_children.iter().take(2) {
+                        for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
+                            if find_ancestor_entity(text_edit_parent.parent(), vec_child, &parents)
+                            {
+                                let v = get_vec2_component(vec, component_index);
+                                let text = if is_integer {
+                                    (v as i32).to_string()
+                                } else {
+                                    format_f32(v)
+                                };
+                                set_text_input_value(&mut queue, text);
+                                commands
+                                    .entity(text_edit_entity)
+                                    .try_insert(Bound::variant(binding_entity));
+                                component_index += 1;
+                                break;
+                            }
                         }
                     }
-                }
 
-                if component_index == 3 {
-                    bound = true;
+                    if component_index == 2 {
+                        bound = true;
+                    }
+                }
+            }
+
+            if let Some(vec) = value.to_vec3() {
+                if let Ok(vec_children) = vector_edit_children.get(binding_entity) {
+                    let mut component_index = 0;
+
+                    for vec_child in vec_children.iter().take(3) {
+                        for (text_edit_entity, text_edit_parent, mut queue) in &mut text_edits {
+                            if find_ancestor_entity(text_edit_parent.parent(), vec_child, &parents)
+                            {
+                                let v = get_vec3_component(vec, component_index);
+                                let text = if is_integer {
+                                    (v as i32).to_string()
+                                } else {
+                                    format_f32(v)
+                                };
+                                set_text_input_value(&mut queue, text);
+                                commands
+                                    .entity(text_edit_entity)
+                                    .try_insert(Bound::variant(binding_entity));
+                                component_index += 1;
+                                break;
+                            }
+                        }
+                    }
+
+                    if component_index == 3 {
+                        bound = true;
+                    }
                 }
             }
         }
@@ -269,24 +310,39 @@ pub(super) fn handle_variant_text_commit(
                 return;
             };
             let kind = FieldKind::Vector(*suffixes);
-            let Some(FieldValue::Vec3(mut vec)) = get_variant_field_value_by_reflection(
+            let current = get_variant_field_value_by_reflection(
                 emitter,
                 &config.path,
                 &binding.field_name,
                 &kind,
-            ) else {
-                return;
-            };
+            );
+            let component_count = suffixes.vector_size().count();
 
-            for (idx, vec_child) in vec_children.iter().enumerate().take(3) {
-                if find_ancestor_entity(child_of.parent(), vec_child, parents) {
-                    if let Ok(v) = text.trim().parse::<f32>() {
-                        set_vec3_component(&mut vec, idx, v);
+            match current {
+                Some(FieldValue::Vec2(mut vec)) => {
+                    for (idx, vec_child) in vec_children.iter().enumerate().take(component_count) {
+                        if find_ancestor_entity(child_of.parent(), vec_child, parents) {
+                            if let Ok(v) = text.trim().parse::<f32>() {
+                                set_vec2_component(&mut vec, idx, v);
+                            }
+                            break;
+                        }
                     }
-                    break;
+                    FieldValue::Vec2(vec)
                 }
+                Some(FieldValue::Vec3(mut vec)) => {
+                    for (idx, vec_child) in vec_children.iter().enumerate().take(component_count) {
+                        if find_ancestor_entity(child_of.parent(), vec_child, parents) {
+                            if let Ok(v) = text.trim().parse::<f32>() {
+                                set_vec3_component(&mut vec, idx, v);
+                            }
+                            break;
+                        }
+                    }
+                    FieldValue::Vec3(vec)
+                }
+                _ => return,
             }
-            FieldValue::Vec3(vec)
         }
         FieldKind::ComboBox { .. }
         | FieldKind::Color

@@ -103,6 +103,16 @@ struct EmitterParams {
     collider_count: u32,
     _collision_pad0: f32,
     _collision_pad1: f32,
+
+    // angle
+    angle_min: f32,
+    angle_max: f32,
+    _angle_pad0: f32,
+    _angle_pad1: f32,
+
+    angle_over_lifetime: CurveUniform,
+
+    angular_velocity: AnimatedVelocity,
 }
 
 struct Collider {
@@ -146,7 +156,13 @@ const COLLISION_EPSILON: f32 = 0.001;
 @group(0) @binding(11) var turbulence_influence_over_lifetime_sampler: sampler;
 @group(0) @binding(12) var radial_velocity_curve_texture: texture_2d<f32>;
 @group(0) @binding(13) var radial_velocity_curve_sampler: sampler;
-@group(0) @binding(14) var<storage, read> colliders: ColliderArray;
+@group(0) @binding(14) var angle_over_lifetime_texture: texture_2d<f32>;
+@group(0) @binding(15) var angle_over_lifetime_sampler: sampler;
+@group(0) @binding(16) var angular_velocity_curve_texture: texture_2d<f32>;
+@group(0) @binding(17) var angular_velocity_curve_sampler: sampler;
+@group(0) @binding(18) var color_over_lifetime_texture: texture_2d<f32>;
+@group(0) @binding(19) var color_over_lifetime_sampler: sampler;
+@group(0) @binding(20) var<storage, read> colliders: ColliderArray;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -363,6 +379,54 @@ fn get_initial_scale(seed: u32) -> f32 {
     return mix(params.scale_min, params.scale_max, t);
 }
 
+fn get_initial_angle(seed: u32) -> f32 {
+    let t = hash_to_float(seed);
+    return mix(params.angle_min, params.angle_max, t);
+}
+
+fn get_initial_angular_velocity(seed: u32) -> f32 {
+    let t = hash_to_float(seed);
+    return mix(params.angular_velocity.min, params.angular_velocity.max, t);
+}
+
+// computes the final angle in radians based on initial angle, angular velocity,
+// and lifetime curves (following godot's approach)
+fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
+    let lifetime_frac = clamp(age / lifetime, 0.0, 1.0);
+
+    // base angle from initial randomization
+    var base_angle = get_initial_angle(seed);
+
+    // apply angle_over_lifetime curve as a multiplier to the initial angle
+    if (params.angle_over_lifetime.enabled != 0u) {
+        let curve_value = sample_spline_curve(
+            angle_over_lifetime_texture,
+            angle_over_lifetime_sampler,
+            params.angle_over_lifetime,
+            lifetime_frac
+        );
+        base_angle *= curve_value;
+    }
+
+    // accumulate angular velocity over time
+    let angular_vel = get_initial_angular_velocity(seed + 1u);
+    if (abs(angular_vel) > 0.0001) {
+        if (params.angular_velocity.curve.enabled != 0u) {
+            let vel_curve = sample_spline_curve(
+                angular_velocity_curve_texture,
+                angular_velocity_curve_sampler,
+                params.angular_velocity.curve,
+                lifetime_frac
+            );
+            base_angle += age * angular_vel * vel_curve;
+        } else {
+            base_angle += age * angular_vel;
+        }
+    }
+
+    return radians(base_angle);
+}
+
 // turbulence noise functions (based on godot's implementation)
 fn grad(p: vec4<f32>) -> vec4<f32> {
     let frac_p = fract(vec4(
@@ -554,6 +618,11 @@ fn get_emission_at_lifetime(age: f32, lifetime: f32) -> f32 {
         t
     );
     return 1.0 + curve_value;
+}
+
+fn get_color_over_lifetime(age: f32, lifetime: f32) -> vec4<f32> {
+    let t = clamp(age / lifetime, 0.0, 1.0);
+    return textureSampleLevel(color_over_lifetime_texture, color_over_lifetime_sampler, vec2(t, 0.5), 0.0);
 }
 
 fn get_initial_radial_velocity(seed: u32) -> f32 {
@@ -833,9 +902,10 @@ fn spawn_particle(idx: u32) -> Particle {
     let initial_alpha = p.color.a;
     p.color.a = get_alpha_at_lifetime(initial_alpha, 0.0, 1.0);
 
-    // apply emission curve at spawn (t=0)
+    // apply emission curve and color over lifetime at spawn (t=0)
     let emission = get_emission_at_lifetime(0.0, 1.0);
-    p.color = vec4(p.color.rgb * emission, p.color.a);
+    let col_life = get_color_over_lifetime(0.0, 1.0);
+    p.color = vec4(p.color.rgb * emission * col_life.rgb, p.color.a * col_life.a);
 
     // spawn_index tracks total spawns across all cycles for depth ordering
     // only set when draw_order is Index, otherwise use 0
@@ -845,12 +915,16 @@ fn spawn_particle(idx: u32) -> Particle {
     }
     p.custom = vec4(0.0, spawn_index, bitcast<f32>(seed), bitcast<f32>(PARTICLE_FLAG_ACTIVE));
 
+    // compute angle at spawn (t=0)
+    let angle = compute_angle(seed + 70u, 0.0, lifetime);
+
     // initialize alignment direction for ALIGN_Y_TO_VELOCITY (like godot)
     // if velocity > 0, use normalized velocity; otherwise use default up
+    // w component stores the computed angle in radians
     if length(vel) > 0.0 {
-        p.alignment_dir = vec4(normalize(vel), 0.0);
+        p.alignment_dir = vec4(normalize(vel), angle);
     } else {
-        p.alignment_dir = vec4(0.0, 1.0, 0.0, 0.0);
+        p.alignment_dir = vec4(0.0, 1.0, 0.0, angle);
     }
 
     return p;
@@ -945,10 +1019,16 @@ fn update_particle(p_in: Particle) -> Particle {
 
     p.velocity = vec4(effective_velocity, lifetime);
 
+    // recompute angle at current lifetime
+    let angle = compute_angle(seed + 70u, age, lifetime);
+
     // update alignment direction only when velocity > 0 (like godot)
     // if velocity is zero, keep the existing alignment direction
+    // w component stores the computed angle in radians
     if length(effective_velocity) > 0.0 {
-        p.alignment_dir = vec4(normalize(effective_velocity), 0.0);
+        p.alignment_dir = vec4(normalize(effective_velocity), angle);
+    } else {
+        p.alignment_dir.w = angle;
     }
 
     // update position
@@ -1006,8 +1086,9 @@ fn update_particle(p_in: Particle) -> Particle {
             p.velocity = vec4(col_velocity, lifetime);
 
             // update alignment direction only when velocity > 0 (like godot)
+            // preserve angle in w component
             if length(col_velocity) > 0.0 {
-                p.alignment_dir = vec4(normalize(col_velocity), 0.0);
+                p.alignment_dir = vec4(normalize(col_velocity), p.alignment_dir.w);
             }
         }
     }
@@ -1016,10 +1097,11 @@ fn update_particle(p_in: Particle) -> Particle {
     let initial_alpha = get_initial_alpha(seed);
     p.color.a = get_alpha_at_lifetime(initial_alpha, age, lifetime);
 
-    // update color based on emission curve
+    // update color based on emission curve and color over lifetime
     let initial_rgb = get_initial_color_rgb(seed);
     let emission = get_emission_at_lifetime(age, lifetime);
-    p.color = vec4(initial_rgb * emission, p.color.a);
+    let col_life = get_color_over_lifetime(age, lifetime);
+    p.color = vec4(initial_rgb * emission * col_life.rgb, p.color.a * col_life.a);
 
     return p;
 }

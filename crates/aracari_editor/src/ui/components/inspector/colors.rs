@@ -52,12 +52,17 @@ pub fn colors_section(asset_server: &AssetServer) -> impl Bundle {
             InspectorSection::new(
                 "Colors",
                 vec![
-                    vec![InspectorItem::Variant {
-                        path: "colors.initial_color".into(),
-                        props: VariantEditProps::new("colors.initial_color")
-                            .with_variants(color_variants())
-                            .with_swatch_slot(true),
-                    }],
+                    vec![
+                        InspectorItem::Variant {
+                            path: "colors.initial_color".into(),
+                            props: VariantEditProps::new("colors.initial_color")
+                                .with_variants(color_variants())
+                                .with_swatch_slot(true),
+                        },
+                        InspectorFieldProps::new("colors.color_over_lifetime")
+                            .gradient()
+                            .into(),
+                    ],
                     vec![
                         InspectorFieldProps::new("colors.alpha_over_lifetime")
                             .curve()

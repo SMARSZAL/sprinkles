@@ -168,6 +168,16 @@ pub struct EmitterUniforms {
     pub collider_count: u32,
     pub _collision_pad0: f32,
     pub _collision_pad1: f32,
+
+    // angle
+    pub angle_min: f32,
+    pub angle_max: f32,
+    pub _angle_pad0: f32,
+    pub _angle_pad1: f32,
+
+    pub angle_over_lifetime: CurveUniform,
+
+    pub angular_velocity: AnimatedVelocityUniform,
 }
 
 #[derive(Resource, Default)]
@@ -191,11 +201,14 @@ pub struct ExtractedEmitterData {
     pub camera_forward: [f32; 3],
     pub emitter_transform: Mat4,
     pub gradient_texture_handle: Option<Handle<Image>>,
+    pub color_over_lifetime_texture_handle: Option<Handle<Image>>,
     pub scale_over_lifetime_texture_handle: Option<Handle<Image>>,
     pub alpha_over_lifetime_texture_handle: Option<Handle<Image>>,
     pub emission_over_lifetime_texture_handle: Option<Handle<Image>>,
     pub turbulence_influence_over_lifetime_texture_handle: Option<Handle<Image>>,
     pub radial_velocity_curve_texture_handle: Option<Handle<Image>>,
+    pub angle_over_lifetime_texture_handle: Option<Handle<Image>>,
+    pub angular_velocity_curve_texture_handle: Option<Handle<Image>>,
 }
 
 pub fn extract_particle_systems(
@@ -402,6 +415,31 @@ pub fn extract_particle_systems(
             collider_count: 0,
             _collision_pad0: 0.0,
             _collision_pad1: 0.0,
+
+            angle_min: emitter.angle.range.min,
+            angle_max: emitter.angle.range.max,
+            _angle_pad0: 0.0,
+            _angle_pad1: 0.0,
+
+            angle_over_lifetime: match &emitter.angle.angle_over_lifetime {
+                Some(c) if !c.is_constant() => {
+                    CurveUniform::enabled(c.range.min, c.range.max)
+                }
+                _ => CurveUniform::disabled(),
+            },
+
+            angular_velocity: AnimatedVelocityUniform {
+                min: emitter.velocities.angular_velocity.velocity.min,
+                max: emitter.velocities.angular_velocity.velocity.max,
+                _pad0: 0.0,
+                _pad1: 0.0,
+                curve: match &emitter.velocities.angular_velocity.velocity_over_lifetime {
+                    Some(c) if !c.is_constant() => {
+                        CurveUniform::enabled(c.range.min, c.range.max)
+                    }
+                    _ => CurveUniform::disabled(),
+                },
+            },
         };
 
         let uniform_steps: Vec<EmitterUniforms> = runtime
@@ -426,6 +464,9 @@ pub fn extract_particle_systems(
             SolidOrGradientColor::Gradient { gradient } => gradient_cache.get(gradient),
             SolidOrGradientColor::Solid { .. } => None,
         };
+
+        let color_over_lifetime_texture_handle =
+            gradient_cache.get(&emitter.colors.color_over_lifetime);
 
         let scale_over_lifetime_texture_handle = emitter
             .scale
@@ -462,6 +503,21 @@ pub fn extract_particle_systems(
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(c));
 
+        let angle_over_lifetime_texture_handle = emitter
+            .angle
+            .angle_over_lifetime
+            .as_ref()
+            .filter(|c| !c.is_constant())
+            .and_then(|c| curve_cache.get(c));
+
+        let angular_velocity_curve_texture_handle = emitter
+            .velocities
+            .angular_velocity
+            .velocity_over_lifetime
+            .as_ref()
+            .filter(|c| !c.is_constant())
+            .and_then(|c| curve_cache.get(c));
+
         extracted.emitters.push((
             entity,
             ExtractedEmitterData {
@@ -475,11 +531,14 @@ pub fn extract_particle_systems(
                 camera_forward: camera_forward.into(),
                 emitter_transform: global_transform.to_matrix(),
                 gradient_texture_handle,
+                color_over_lifetime_texture_handle,
                 scale_over_lifetime_texture_handle,
                 alpha_over_lifetime_texture_handle,
                 emission_over_lifetime_texture_handle,
                 turbulence_influence_over_lifetime_texture_handle,
                 radial_velocity_curve_texture_handle,
+                angle_over_lifetime_texture_handle,
+                angular_velocity_curve_texture_handle,
             },
         ));
     }

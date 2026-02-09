@@ -23,7 +23,7 @@ use crate::ui::components::binding::{
 };
 use crate::ui::icons::{ICON_CLOSE, ICON_MORE};
 
-const ANIMATED_VELOCITY_FIELDS: &[&str] = &["radial_velocity"];
+const ANIMATED_VELOCITY_FIELDS: &[&str] = &["radial_velocity", "angular_velocity"];
 
 pub fn plugin(app: &mut App) {
     app.add_systems(

@@ -95,6 +95,7 @@ pub fn plugin(app: &mut App) {
         .add_observer(direct::handle_combobox_change)
         .add_observer(variant::handle_variant_color_commit)
         .add_observer(direct::handle_curve_edit_commit)
+        .add_observer(direct::handle_gradient_edit_commit)
         .add_observer(variant::handle_variant_gradient_commit)
         .add_observer(variant::handle_variant_texture_commit)
         .add_observer(swatch::sync_variant_swatch_from_color)
@@ -103,6 +104,7 @@ pub fn plugin(app: &mut App) {
             (
                 direct::bind_values_to_inputs,
                 direct::bind_curve_edit_values,
+                direct::bind_gradient_edit_values,
                 variant::bind_variant_edits,
                 variant::bind_variant_field_values,
                 variant::bind_variant_color_pickers,
@@ -178,6 +180,7 @@ pub(super) enum FieldValue {
     U32(u32),
     OptionalU32(Option<u32>),
     Bool(bool),
+    Vec2(Vec2),
     Vec3(Vec3),
     Range(f32, f32),
     Color([f32; 4]),
@@ -189,6 +192,13 @@ impl FieldValue {
             FieldValue::F32(v) => f32::to_display_string(*v, kind),
             FieldValue::U32(v) => u32::to_display_string(*v, kind),
             FieldValue::OptionalU32(v) => Option::<u32>::to_display_string(*v, kind),
+            _ => None,
+        }
+    }
+
+    pub(super) fn to_vec2(&self) -> Option<Vec2> {
+        match self {
+            FieldValue::Vec2(v) => Some(*v),
             _ => None,
         }
     }
@@ -353,6 +363,30 @@ impl Bindable for bool {
     }
 }
 
+impl Bindable for Vec2 {
+    fn try_from_reflected(value: &dyn PartialReflect) -> Option<Self> {
+        value.try_downcast_ref::<Vec2>().copied()
+    }
+
+    fn apply_to_reflect(&self, target: &mut dyn PartialReflect) -> bool {
+        if let Some(field) = target.try_downcast_mut::<Vec2>() {
+            if (*field - *self).length() > f32::EPSILON {
+                *field = *self;
+                return true;
+            }
+        }
+        false
+    }
+
+    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
+        None
+    }
+
+    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
+        None
+    }
+}
+
 impl Bindable for Vec3 {
     fn try_from_reflected(value: &dyn PartialReflect) -> Option<Self> {
         value.try_downcast_ref::<Vec3>().copied()
@@ -436,6 +470,22 @@ pub(super) fn format_f32(v: f32) -> String {
     text
 }
 
+pub(super) fn set_vec2_component(vec: &mut Vec2, index: usize, value: f32) {
+    match index {
+        0 => vec.x = value,
+        1 => vec.y = value,
+        _ => {}
+    }
+}
+
+pub(super) fn get_vec2_component(vec: Vec2, index: usize) -> f32 {
+    match index {
+        0 => vec.x,
+        1 => vec.y,
+        _ => 0.0,
+    }
+}
+
 pub(super) fn set_vec3_component(vec: &mut Vec3, index: usize, value: f32) {
     match index {
         0 => vec.x = value,
@@ -510,6 +560,9 @@ fn reflect_to_field_value(value: &dyn PartialReflect, _kind: &FieldKind) -> Fiel
     if let Some(v) = bool::try_from_reflected(value) {
         return FieldValue::Bool(v);
     }
+    if let Some(v) = Vec2::try_from_reflected(value) {
+        return FieldValue::Vec2(v);
+    }
     if let Some(v) = Vec3::try_from_reflected(value) {
         return FieldValue::Vec3(v);
     }
@@ -534,6 +587,7 @@ fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldVa
         FieldValue::U32(v) => v.apply_to_reflect(target),
         FieldValue::OptionalU32(v) => v.apply_to_reflect(target),
         FieldValue::Bool(v) => v.apply_to_reflect(target),
+        FieldValue::Vec2(v) => v.apply_to_reflect(target),
         FieldValue::Vec3(v) => v.apply_to_reflect(target),
         FieldValue::Range(min, max) => ParticleRange {
             min: *min,

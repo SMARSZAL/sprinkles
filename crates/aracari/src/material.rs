@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            AsBindGroup, BlendState, CompareFunction, RenderPipelineDescriptor,
+            AsBindGroup, CompareFunction, RenderPipelineDescriptor,
             SpecializedMeshPipelineError,
         },
         storage::ShaderStorageBuffer,
@@ -61,17 +61,6 @@ impl MaterialExtension for ParticleMaterialExtension {
             // transparent particles skip depth write for cross-emitter transparency.
             depth_stencil.depth_write_enabled = !is_transparent;
             depth_stencil.depth_compare = CompareFunction::GreaterEqual;
-        }
-
-        // only enable alpha blending for transparent materials
-        if is_transparent {
-            if let Some(fragment) = &mut descriptor.fragment {
-                for target in &mut fragment.targets {
-                    if let Some(target) = target {
-                        target.blend = Some(BlendState::ALPHA_BLENDING);
-                    }
-                }
-            }
         }
 
         Ok(())

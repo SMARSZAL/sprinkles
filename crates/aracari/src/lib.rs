@@ -92,7 +92,7 @@ pub use asset::{
     EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission,
     EmitterScale, EmitterTime, EmitterTurbulence, EmitterVelocities, ParticleFlags, ParticleMesh,
     ParticleSystemDimension, ParticlesColliderShape3D, QuadOrientation, SerializableAlphaMode,
-    StandardParticleMaterial,
+    StandardParticleMaterial, TransformAlign,
 };
 pub use material::ParticleMaterialExtension;
 #[cfg(feature = "preset-textures")]

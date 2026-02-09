@@ -29,6 +29,10 @@ fn is_zero_u32(v: &u32) -> bool {
     *v == 0
 }
 
+fn is_zero_vec2(v: &Vec2) -> bool {
+    *v == Vec2::ZERO
+}
+
 fn is_zero_vec3(v: &Vec3) -> bool {
     *v == Vec3::ZERO
 }
@@ -79,11 +83,7 @@ bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
     #[serde(transparent)]
     pub struct ParticleFlags: u32 {
-        const ALIGN_Y_TO_VELOCITY = 1 << 0;
-
-        // TODO: requires implementing angular velocity
-        // const ROTATE_Y = 1 << 1;
-
+        const ROTATE_Y = 1 << 1;
         const DISABLE_Z = 1 << 2;
 
         // TODO: requires implementing damping
@@ -179,6 +179,9 @@ pub struct EmitterData {
     #[serde(default)]
     pub scale: EmitterScale,
 
+    #[serde(default, skip_serializing_if = "EmitterAngle::should_skip")]
+    pub angle: EmitterAngle,
+
     #[serde(default)]
     pub colors: EmitterColors,
 
@@ -213,6 +216,7 @@ impl Default for EmitterData {
             draw_pass: EmitterDrawPass::default(),
             emission: EmitterEmission::default(),
             scale: EmitterScale::default(),
+            angle: EmitterAngle::default(),
             colors: EmitterColors::default(),
             velocities: EmitterVelocities::default(),
             accelerations: EmitterAccelerations::default(),
@@ -221,6 +225,14 @@ impl Default for EmitterData {
             particle_flags: ParticleFlags::empty(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Reflect)]
+pub enum TransformAlign {
+    #[default]
+    Billboard,
+    YToVelocity,
+    BillboardYToVelocity,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
@@ -232,6 +244,8 @@ pub struct EmitterDrawPass {
     pub material: DrawPassMaterial,
     #[serde(default = "default_shadow_caster", skip_serializing_if = "is_true")]
     pub shadow_caster: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform_align: Option<TransformAlign>,
 }
 
 fn default_shadow_caster() -> bool {
@@ -245,6 +259,7 @@ impl Default for EmitterDrawPass {
             mesh: ParticleMesh::default(),
             material: DrawPassMaterial::default(),
             shadow_caster: true,
+            transform_align: None,
         }
     }
 }
@@ -262,6 +277,10 @@ pub enum ParticleMesh {
     Quad {
         #[serde(default)]
         orientation: QuadOrientation,
+        #[serde(default = "default_quad_size")]
+        size: Vec2,
+        #[serde(default, skip_serializing_if = "is_zero_vec2")]
+        subdivide: Vec2,
     },
     Sphere {
         #[serde(default = "default_sphere_radius")]
@@ -287,6 +306,10 @@ pub enum ParticleMesh {
         #[serde(default, skip_serializing_if = "is_zero_vec3")]
         subdivide: Vec3,
     },
+}
+
+fn default_quad_size() -> Vec2 {
+    Vec2::ONE
 }
 
 fn default_sphere_radius() -> f32 {
@@ -693,6 +716,8 @@ impl Default for EmitterScale {
 pub struct EmitterColors {
     #[serde(default)]
     pub initial_color: SolidOrGradientColor,
+    #[serde(default = "Gradient::white")]
+    pub color_over_lifetime: Gradient,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alpha_over_lifetime: Option<CurveTexture>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -703,6 +728,7 @@ impl Default for EmitterColors {
     fn default() -> Self {
         Self {
             initial_color: SolidOrGradientColor::default(),
+            color_over_lifetime: Gradient::white(),
             alpha_over_lifetime: None,
             emission_over_lifetime: None,
         }
@@ -734,6 +760,35 @@ impl Default for AnimatedVelocity {
     }
 }
 
+impl AnimatedVelocity {
+    fn is_default(&self) -> bool {
+        self.velocity.is_zero() && self.velocity_over_lifetime.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterAngle {
+    #[serde(default = "Range::zero", skip_serializing_if = "Range::is_zero")]
+    pub range: Range,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_over_lifetime: Option<CurveTexture>,
+}
+
+impl Default for EmitterAngle {
+    fn default() -> Self {
+        Self {
+            range: Range::zero(),
+            angle_over_lifetime: None,
+        }
+    }
+}
+
+impl EmitterAngle {
+    fn should_skip(&self) -> bool {
+        self.range.is_zero() && self.angle_over_lifetime.is_none()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterVelocities {
     #[serde(default = "default_direction")]
@@ -746,6 +801,8 @@ pub struct EmitterVelocities {
     pub initial_velocity: Range,
     #[serde(default)]
     pub radial_velocity: AnimatedVelocity,
+    #[serde(default)]
+    pub angular_velocity: AnimatedVelocity,
     #[serde(default, skip_serializing_if = "is_zero_vec3")]
     pub pivot: Vec3,
     #[serde(default, skip_serializing_if = "is_zero_f32")]
@@ -760,6 +817,7 @@ impl Default for EmitterVelocities {
             flatness: 0.0,
             initial_velocity: Range::zero(),
             radial_velocity: AnimatedVelocity::default(),
+            angular_velocity: AnimatedVelocity::default(),
             pivot: Vec3::ZERO,
             inherit_ratio: 0.0,
         }
@@ -1230,6 +1288,22 @@ impl Default for Gradient {
 }
 
 impl Gradient {
+    pub fn white() -> Self {
+        Self {
+            stops: vec![
+                GradientStop {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    position: 0.0,
+                },
+                GradientStop {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    position: 1.0,
+                },
+            ],
+            interpolation: GradientInterpolation::Linear,
+        }
+    }
+
     pub fn cache_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();

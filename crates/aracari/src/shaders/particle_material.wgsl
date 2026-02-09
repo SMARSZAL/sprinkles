@@ -1,10 +1,16 @@
 #import aracari::common::{
     Particle,
     PARTICLE_FLAG_ACTIVE,
-    EMITTER_FLAG_ALIGN_Y_TO_VELOCITY,
+    EMITTER_FLAG_ROTATE_Y,
+    TRANSFORM_ALIGN_SHIFT,
+    TRANSFORM_ALIGN_MASK,
+    TRANSFORM_ALIGN_BILLBOARD,
+    TRANSFORM_ALIGN_Y_TO_VELOCITY,
+    TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY,
 }
 #import bevy_pbr::{
     mesh_functions,
+    mesh_view_bindings::view,
     view_transformations::position_world_to_clip,
 }
 
@@ -81,9 +87,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var rotated_normal = vertex.normal;
 #endif
 
-    // use alignment_dir for ALIGN_Y_TO_VELOCITY (like godot)
-    // alignment_dir is updated only when velocity > 0, preserving direction when stopped
-    if (particle_flags & EMITTER_FLAG_ALIGN_Y_TO_VELOCITY) != 0u {
+    let transform_align = (particle_flags >> TRANSFORM_ALIGN_SHIFT) & TRANSFORM_ALIGN_MASK;
+
+    // align Y axis to velocity direction (TransformAlign::YToVelocity)
+    if transform_align == TRANSFORM_ALIGN_Y_TO_VELOCITY {
         let alignment_dir = particle.alignment_dir.xyz;
         let dir_length = length(alignment_dir);
         if dir_length > 0.0 {
@@ -95,25 +102,102 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     }
 
-    // scale vertex position by particle scale
-    let scaled_position = rotated_position * particle_scale;
+    // apply angle rotation (stored in alignment_dir.w as radians)
+    let angle = particle.alignment_dir.w;
+    if abs(angle) > 0.0001 {
+        let cos_a = cos(angle);
+        let sin_a = sin(angle);
+        if (particle_flags & EMITTER_FLAG_ROTATE_Y) != 0u {
+            let angle_matrix = mat3x3<f32>(
+                vec3(cos_a, 0.0, sin_a),
+                vec3(0.0, 1.0, 0.0),
+                vec3(-sin_a, 0.0, cos_a),
+            );
+            rotated_position = angle_matrix * rotated_position;
+#ifdef VERTEX_NORMALS
+            rotated_normal = angle_matrix * rotated_normal;
+#endif
+        } else {
+            let angle_matrix = mat3x3<f32>(
+                vec3(cos_a, sin_a, 0.0),
+                vec3(-sin_a, cos_a, 0.0),
+                vec3(0.0, 0.0, 1.0),
+            );
+            rotated_position = angle_matrix * rotated_position;
+#ifdef VERTEX_NORMALS
+            rotated_normal = angle_matrix * rotated_normal;
+#endif
+        }
+    }
 
-    // translate to particle position
-    let local_position = scaled_position + particle_position;
-
-    // get world transform matrix using the mesh's instance index
     var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
 
-    // compute world position
-    out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4(local_position, 1.0));
+    if transform_align == TRANSFORM_ALIGN_BILLBOARD || transform_align == TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY {
+        let cam_right = normalize(view.world_from_view[0].xyz);
+        let cam_up = normalize(view.world_from_view[1].xyz);
+        let cam_forward = normalize(view.world_from_view[2].xyz);
 
-    // compute clip position
-    out.position = position_world_to_clip(out.world_position.xyz);
+        let particle_world_pos = (world_from_local * vec4(particle_position, 1.0)).xyz;
 
-    // transform normal to world space (use rotated normal if ALIGN_Y_TO_VELOCITY)
+        let scale = vec3(particle_scale) * vec3(
+            length(world_from_local[0].xyz),
+            length(world_from_local[1].xyz),
+            length(world_from_local[2].xyz),
+        );
+
+        if transform_align == TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY {
+            let v = particle.alignment_dir.xyz;
+            // project velocity direction onto the screen plane
+            var sv = v - cam_forward * dot(cam_forward, v);
+            if length(sv) < 0.001 {
+                sv = cam_up;
+            }
+            sv = normalize(sv);
+
+            let right = normalize(cross(sv, cam_forward));
+
+            let scaled_vertex = rotated_position * scale;
+            let pos = particle_world_pos
+                + right * scaled_vertex.x
+                + sv * scaled_vertex.y
+                + cam_forward * scaled_vertex.z;
+
+            out.world_position = vec4(pos, 1.0);
+            out.position = position_world_to_clip(pos);
+
 #ifdef VERTEX_NORMALS
-    out.world_normal = mesh_functions::mesh_normal_local_to_world(rotated_normal, vertex.instance_index);
+            out.world_normal = right * rotated_normal.x
+                + sv * rotated_normal.y
+                + cam_forward * rotated_normal.z;
 #endif
+        } else {
+            // standard billboard
+            let scaled_vertex = rotated_position * scale;
+            let billboard_pos = particle_world_pos
+                + cam_right * scaled_vertex.x
+                + cam_up * scaled_vertex.y
+                + cam_forward * scaled_vertex.z;
+
+            out.world_position = vec4(billboard_pos, 1.0);
+            out.position = position_world_to_clip(billboard_pos);
+
+#ifdef VERTEX_NORMALS
+            out.world_normal = cam_right * rotated_normal.x
+                + cam_up * rotated_normal.y
+                + cam_forward * rotated_normal.z;
+#endif
+        }
+    } else {
+        let scaled_position = rotated_position * particle_scale;
+        let local_position = scaled_position + particle_position;
+
+        out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4(local_position, 1.0));
+        out.position = position_world_to_clip(out.world_position.xyz);
+
+#ifdef VERTEX_NORMALS
+        out.world_normal = mesh_functions::mesh_normal_local_to_world(rotated_normal, vertex.instance_index);
+#endif
+    }
 
 #ifdef VERTEX_UVS_A
     out.uv = vertex.uv;
@@ -234,7 +318,9 @@ fn fragment(
     }
 
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+#ifndef PREMULTIPLY_ALPHA
     out.color.a = particle_alpha;
+#endif
 
     return out;
 }

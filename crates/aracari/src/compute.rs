@@ -67,6 +67,13 @@ pub fn init_particle_compute_pipeline(
                 sampler(SamplerBindingType::Filtering),
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+                // color_over_lifetime gradient
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
                 // colliders storage buffer (read-only)
                 storage_buffer_read_only::<ColliderArray>(false),
             ),
@@ -177,6 +184,12 @@ pub fn prepare_particle_compute_bind_groups(
             .and_then(|h| gpu_images.get(h))
             .or(fallback_gradient_gpu_image);
 
+        let color_over_lifetime_gpu_image = emitter_data
+            .color_over_lifetime_texture_handle
+            .as_ref()
+            .and_then(|h| gpu_images.get(h))
+            .or(fallback_gradient_gpu_image);
+
         let scale_over_lifetime_gpu_image = emitter_data
             .scale_over_lifetime_texture_handle
             .as_ref()
@@ -207,7 +220,23 @@ pub fn prepare_particle_compute_bind_groups(
             .and_then(|h| gpu_images.get(h))
             .or(fallback_curve_gpu_image);
 
+        let angle_over_lifetime_gpu_image = emitter_data
+            .angle_over_lifetime_texture_handle
+            .as_ref()
+            .and_then(|h| gpu_images.get(h))
+            .or(fallback_curve_gpu_image);
+
+        let angular_velocity_curve_gpu_image = emitter_data
+            .angular_velocity_curve_texture_handle
+            .as_ref()
+            .and_then(|h| gpu_images.get(h))
+            .or(fallback_curve_gpu_image);
+
         let Some(gradient_image) = gradient_gpu_image else {
+            continue;
+        };
+
+        let Some(color_over_lifetime_image) = color_over_lifetime_gpu_image else {
             continue;
         };
 
@@ -228,6 +257,14 @@ pub fn prepare_particle_compute_bind_groups(
         };
 
         let Some(radial_velocity_curve_image) = radial_velocity_curve_gpu_image else {
+            continue;
+        };
+
+        let Some(angle_over_lifetime_image) = angle_over_lifetime_gpu_image else {
+            continue;
+        };
+
+        let Some(angular_velocity_curve_image) = angular_velocity_curve_gpu_image else {
             continue;
         };
 
@@ -266,6 +303,12 @@ pub fn prepare_particle_compute_bind_groups(
                         &curve_sampler.0,
                         &radial_velocity_curve_image.texture_view,
                         &curve_sampler.0,
+                        &angle_over_lifetime_image.texture_view,
+                        &curve_sampler.0,
+                        &angular_velocity_curve_image.texture_view,
+                        &curve_sampler.0,
+                        &color_over_lifetime_image.texture_view,
+                        &gradient_sampler.0,
                         colliders_buffer.as_entire_binding(),
                     )),
                 )
