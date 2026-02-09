@@ -9,7 +9,6 @@ use crate::ui::tokens::{
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
 
 const POPOVER_GAP: f32 = 4.0;
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_popover_close_click)
@@ -402,6 +401,7 @@ pub fn popover_content() -> impl Bundle {
 }
 
 use crate::ui::widgets::button::ButtonClickEvent;
+use crate::ui::icons::{ICON_CLOSE};
 
 fn handle_popover_close_click(
     trigger: On<ButtonClickEvent>,

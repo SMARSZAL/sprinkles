@@ -26,11 +26,10 @@ use crate::ui::widgets::variant_edit::{
 use crate::ui::components::inspector::FieldKind;
 use crate::ui::widgets::alert::{alert, AlertSpan, AlertVariant};
 use crate::ui::widgets::link::spawn_link_hitbox;
+use crate::ui::icons::{ICON_FOLDER_OPEN, ICON_HEART};
 
 const PRESET_GRID_MAX_HEIGHT: f32 = 256.0;
 const PREVIEW_SIZE: f32 = 96.0;
-const ICON_FOLDER: &str = "icons/ri-folder-open-line.png";
-const ICON_HEART: &str = "icons/ri-heart-3-fill.png";
 
 const SCROLLBAR_WIDTH: f32 = 3.0;
 const SCROLLBAR_MARGIN: f32 = 3.0;
@@ -529,7 +528,7 @@ fn spawn_file_content(
             SelectFileButton(variant_edit),
             button(
                 ButtonProps::new("Select file...")
-                    .with_left_icon(ICON_FOLDER),
+                    .with_left_icon(ICON_FOLDER_OPEN),
             ),
         ))
         .id();

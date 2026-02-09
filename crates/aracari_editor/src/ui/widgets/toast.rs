@@ -6,14 +6,11 @@ use bevy::prelude::*;
 use crate::ui::tokens::{CORNER_RADIUS, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
 use crate::ui::widgets::separator::{SeparatorProps, separator};
+use crate::ui::icons::{ICON_CHECKBOX_CIRCLE, ICON_CLOSE, ICON_CLOSE_CIRCLE, ICON_INFORMATION};
 
 pub const TOAST_BOTTOM_OFFSET: f32 = 12.0;
 pub const DEFAULT_TOAST_DURATION: Duration = Duration::from_millis(3000);
 
-const ICON_INFO: &str = "icons/ri-information-fill.png";
-const ICON_SUCCESS: &str = "icons/ri-checkbox-circle-fill.png";
-const ICON_ERROR: &str = "icons/ri-close-circle-fill.png";
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 
 #[derive(Component)]
 pub struct EditorToast;
@@ -46,9 +43,9 @@ impl ToastVariant {
 
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Info => ICON_INFO,
-            Self::Success => ICON_SUCCESS,
-            Self::Error => ICON_ERROR,
+            Self::Info => ICON_INFORMATION,
+            Self::Success => ICON_CHECKBOX_CIRCLE,
+            Self::Error => ICON_CLOSE_CIRCLE,
         }
     }
 }

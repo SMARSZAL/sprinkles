@@ -23,11 +23,11 @@ use crate::ui::widgets::color_picker::{
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::popover::{EditorPopover, PopoverPlacement, PopoverProps, popover};
 use crate::ui::widgets::text_edit::{TextEditCommitEvent, TextEditProps, text_edit};
+use crate::ui::icons::{ICON_CLOSE};
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
 const SHADER_GRADIENT_PATH: &str = "shaders/gradient_edit.wgsl";
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 const BAR_HEIGHT: f32 = 24.0;
 const HANDLE_SIZE: f32 = 24.0;
 const HANDLE_ARROW_WIDTH: f32 = 8.0;

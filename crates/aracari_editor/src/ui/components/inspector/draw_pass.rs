@@ -7,6 +7,7 @@ use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::utils::{VariantConfig, combobox_options_from_reflect, variants_from_reflect};
 use super::{InspectorItem, InspectorSection, inspector_section};
+use crate::ui::icons::{ICON_CONE, ICON_CUBE, ICON_MESH_CYLINDER, ICON_MESH_PLANE, ICON_MESH_UVSPHERE};
 
 pub fn plugin(_app: &mut App) {}
 
@@ -39,18 +40,13 @@ pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {
     )
 }
 
-const ICON_MESH_QUAD: &str = "icons/blender_mesh_plane.png";
-const ICON_MESH_SPHERE: &str = "icons/blender_mesh_uvsphere.png";
-const ICON_MESH_CUBOID: &str = "icons/blender_cube.png";
-const ICON_MESH_CYLINDER: &str = "icons/blender_mesh_cylinder.png";
-const ICON_MESH_PRISM: &str = "icons/blender_cone.png";
 
 fn mesh_variants() -> Vec<VariantDefinition> {
     variants_from_reflect::<ParticleMesh>(&[
         (
             "Quad",
             VariantConfig::default()
-                .icon(ICON_MESH_QUAD)
+                .icon(ICON_MESH_PLANE)
                 .override_combobox::<QuadOrientation>("orientation")
                 .default_value(ParticleMesh::Quad {
                     orientation: QuadOrientation::default(),
@@ -59,13 +55,13 @@ fn mesh_variants() -> Vec<VariantDefinition> {
         (
             "Sphere",
             VariantConfig::default()
-                .icon(ICON_MESH_SPHERE)
+                .icon(ICON_MESH_UVSPHERE)
                 .default_value(ParticleMesh::Sphere { radius: 1.0 }),
         ),
         (
             "Cuboid",
             VariantConfig::default()
-                .icon(ICON_MESH_CUBOID)
+                .icon(ICON_CUBE)
                 .default_value(ParticleMesh::Cuboid {
                     half_size: Vec3::splat(0.5),
                 }),
@@ -94,7 +90,7 @@ fn mesh_variants() -> Vec<VariantDefinition> {
         (
             "Prism",
             VariantConfig::default()
-                .icon(ICON_MESH_PRISM)
+                .icon(ICON_CONE)
                 .override_suffixes("subdivide", VectorSuffixes::WHD)
                 .default_value(ParticleMesh::Prism {
                     left_to_right: 0.5,

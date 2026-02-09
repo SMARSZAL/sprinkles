@@ -7,9 +7,8 @@ use crate::ui::widgets::button::{
 };
 use crate::ui::widgets::popover::{EditorPopover, PopoverPlacement, PopoverProps, popover};
 use crate::ui::widgets::utils::is_descendant_of;
+use crate::ui::icons::{ICON_ARROW_DOWN, ICON_MORE};
 
-const ICON_CHEVRON_DOWN: &str = "icons/ri-arrow-down-s-line.png";
-const ICON_MORE: &str = "icons/ri-more-fill.png";
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_trigger_click)
@@ -200,7 +199,7 @@ fn setup_combobox(
                 let mut button_props = ButtonProps::new(label)
                     .with_size(ButtonSize::MD)
                     .align_left()
-                    .with_right_icon(ICON_CHEVRON_DOWN);
+                    .with_right_icon(ICON_ARROW_DOWN);
 
                 if let Some(icon_path) = icon_to_show {
                     button_props = button_props.with_left_icon(icon_path);

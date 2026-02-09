@@ -30,12 +30,8 @@ use crate::ui::widgets::dialog::{
 use crate::ui::widgets::popover::{EditorPopover, PopoverPlacement, PopoverProps, popover};
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditProps, text_edit};
 use crate::ui::widgets::utils::is_descendant_of;
+use crate::ui::icons::{ICON_ARROW_DOWN, ICON_CLOSE, ICON_FILE_ADD, ICON_FOLDER_IMAGE, ICON_FOLDER_OPEN};
 
-const ICON_CHEVRON_DOWN: &str = "icons/ri-arrow-down-s-line.png";
-const ICON_NEW: &str = "icons/ri-file-add-line.png";
-const ICON_OPEN: &str = "icons/ri-folder-open-line.png";
-const ICON_EXAMPLES: &str = "icons/ri-folder-image-line.png";
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_trigger_click)
@@ -137,7 +133,7 @@ fn setup_project_selector(
                 button(
                     ButtonProps::new("Untitled")
                         .with_variant(ButtonVariant::Ghost)
-                        .with_right_icon(ICON_CHEVRON_DOWN),
+                        .with_right_icon(ICON_ARROW_DOWN),
                 ),
             ))
             .id();
@@ -238,7 +234,7 @@ fn handle_trigger_click(
                 ButtonProps::new("New project...")
                     .with_variant(ButtonVariant::Ghost)
                     .align_left()
-                    .with_left_icon(ICON_NEW),
+                    .with_left_icon(ICON_FILE_ADD),
             ),
         ))
         .with_child((
@@ -247,14 +243,14 @@ fn handle_trigger_click(
                 ButtonProps::new("Open...")
                     .with_variant(ButtonVariant::Ghost)
                     .align_left()
-                    .with_left_icon(ICON_OPEN),
+                    .with_left_icon(ICON_FOLDER_OPEN),
             ),
         ))
         .with_child(button(
             ButtonProps::new("Examples")
                 .with_variant(ButtonVariant::Ghost)
                 .align_left()
-                .with_left_icon(ICON_EXAMPLES),
+                .with_left_icon(ICON_FOLDER_IMAGE),
         ))
         .id();
 
@@ -592,7 +588,7 @@ fn setup_new_project_dialog_content(
         .spawn((
             BrowseLocationButton,
             icon_button(
-                IconButtonProps::new(ICON_OPEN)
+                IconButtonProps::new(ICON_FOLDER_OPEN)
                     .variant(ButtonVariant::Ghost)
                     .with_size(ButtonSize::IconSM),
                 &asset_server,

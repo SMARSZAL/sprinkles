@@ -7,6 +7,7 @@ use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::utils::{VariantConfig, variants_from_reflect};
 use super::{InspectorItem, InspectorSection, inspector_section};
+use crate::ui::icons::{ICON_CUBE, ICON_EMPTY_AXIS, ICON_MESH_TORUS, ICON_MESH_UVSPHERE, ICON_SPHERE};
 
 pub fn plugin(_app: &mut App) {}
 
@@ -37,18 +38,13 @@ pub fn emission_section(asset_server: &AssetServer) -> impl Bundle {
     )
 }
 
-const ICON_POINT: &str = "icons/blender_empty_axis.png";
-const ICON_SPHERE: &str = "icons/blender_sphere.png";
-const ICON_SPHERE_SURFACE: &str = "icons/blender_mesh_uvsphere.png";
-const ICON_BOX: &str = "icons/blender_cube.png";
-const ICON_RING: &str = "icons/blender_mesh_torus.png";
 
 fn emission_shape_variants() -> Vec<VariantDefinition> {
     variants_from_reflect::<EmissionShape>(&[
         (
             "Point",
             VariantConfig::default()
-                .icon(ICON_POINT)
+                .icon(ICON_EMPTY_AXIS)
                 .default_value(EmissionShape::Point),
         ),
         (
@@ -60,19 +56,19 @@ fn emission_shape_variants() -> Vec<VariantDefinition> {
         (
             "SphereSurface",
             VariantConfig::default()
-                .icon(ICON_SPHERE_SURFACE)
+                .icon(ICON_MESH_UVSPHERE)
                 .default_value(EmissionShape::SphereSurface { radius: 1.0 }),
         ),
         (
             "Box",
             VariantConfig::default()
-                .icon(ICON_BOX)
+                .icon(ICON_CUBE)
                 .default_value(EmissionShape::Box { extents: Vec3::ONE }),
         ),
         (
             "Ring",
             VariantConfig::default()
-                .icon(ICON_RING)
+                .icon(ICON_MESH_TORUS)
                 .override_rows(vec![
                     vec!["axis"],
                     vec!["height"],

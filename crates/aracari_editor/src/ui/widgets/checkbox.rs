@@ -2,8 +2,8 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
 use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE};
+use crate::ui::icons::{ICON_CHECK};
 
-const ICON_CHECK: &str = "icons/ri-check-fill.png";
 
 #[derive(Event)]
 pub struct CheckboxCommitEvent {

@@ -27,12 +27,10 @@ use crate::ui::widgets::popover::{
 use crate::ui::widgets::text_edit::EditorTextEdit;
 use crate::ui::widgets::utils::is_descendant_of;
 use crate::ui::widgets::vector_edit::{EditorVectorEdit, VectorEditProps, VectorSize, VectorSuffixes, vector_edit};
+use crate::ui::icons::{ICON_ARROW_LEFT_RIGHT, ICON_FCURVE, ICON_MORE};
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
-const ICON_CURVE: &str = "icons/blender_fcurve.png";
-const ICON_MORE: &str = "icons/ri-more-fill.png";
-const ICON_FLIP: &str = "icons/ri-arrow-left-right-fill.png";
 const SHADER_CURVE_PATH: &str = "shaders/curve_edit.wgsl";
 const CANVAS_SIZE: f32 = 232.0;
 const CONTENT_PADDING: f32 = 12.0;
@@ -630,7 +628,7 @@ fn setup_curve_edit(
                 button(
                     ButtonProps::new(state.label())
                         .align_left()
-                        .with_left_icon(ICON_CURVE)
+                        .with_left_icon(ICON_FCURVE)
                         .with_right_icon(ICON_MORE),
                 ),
             ))
@@ -738,7 +736,7 @@ fn handle_trigger_click(
                     )).with_child((
                         FlipButton(curve_edit_entity),
                         icon_button(
-                            IconButtonProps::new(ICON_FLIP).variant(ButtonVariant::Default),
+                            IconButtonProps::new(ICON_ARROW_LEFT_RIGHT).variant(ButtonVariant::Default),
                             &asset_server,
                         ),
                     ));

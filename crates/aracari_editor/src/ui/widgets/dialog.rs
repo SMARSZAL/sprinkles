@@ -5,6 +5,7 @@ use bevy_easings::{CustomComponentEase, EaseFunction, EasingComponent, EasingTyp
 
 use bevy_ui_text_input::TextInputPrompt;
 
+use crate::ui::icons::ICON_CLOSE;
 use crate::ui::tokens::{
     BACKGROUND_COLOR, BORDER_COLOR, FONT_PATH, TEXT_DISPLAY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_LG,
     TEXT_SIZE_XL,
@@ -14,7 +15,6 @@ use crate::ui::widgets::button::{
     icon_button,
 };
 
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
 const ANIMATION_DURATION: Duration = Duration::from_millis(200);
 const DIALOG_ANIMATION_OFFSET: f32 = 12.0;
 const BACKDROP_TARGET_OPACITY: f32 = 0.8;
@@ -253,11 +253,7 @@ fn on_open_confirmation_dialog(
     spawn_dialog(&mut commands, &asset_server, &dialog_event);
 }
 
-fn spawn_dialog(
-    commands: &mut Commands,
-    asset_server: &AssetServer,
-    event: &OpenDialogEvent,
-) {
+fn spawn_dialog(commands: &mut Commands, asset_server: &AssetServer, event: &OpenDialogEvent) {
     let font: Handle<Font> = asset_server.load(FONT_PATH);
 
     let start_visual = DialogVisual {
@@ -348,8 +344,7 @@ fn spawn_dialog(
             footer.with_child((
                 DialogActionButton,
                 button(
-                    ButtonProps::new(action)
-                        .with_variant(event.variant.action_button_variant()),
+                    ButtonProps::new(action).with_variant(event.variant.action_button_variant()),
                 ),
             ));
         }
@@ -715,7 +710,10 @@ fn handle_backdrop_click(
 
 fn handle_esc_key(
     keyboard: Res<ButtonInput<KeyCode>>,
-    dialogs: Query<(Entity, &DialogConfig, &DialogVisual), (With<EditorDialog>, Without<DespawningDialog>)>,
+    dialogs: Query<
+        (Entity, &DialogConfig, &DialogVisual),
+        (With<EditorDialog>, Without<DespawningDialog>),
+    >,
     mut commands: Commands,
 ) {
     if !keyboard.just_pressed(KeyCode::Escape) {

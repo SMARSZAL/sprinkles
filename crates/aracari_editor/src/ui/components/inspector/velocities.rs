@@ -19,10 +19,9 @@ use crate::ui::widgets::vector_edit::VectorSuffixes;
 use crate::ui::components::binding::{get_inspecting_emitter, get_inspecting_emitter_mut, mark_dirty_and_restart};
 use super::utils::name_to_label;
 use super::InspectorSection;
+use crate::ui::icons::{ICON_CLOSE, ICON_MORE};
 
 const ANIMATED_VELOCITY_FIELDS: &[&str] = &["radial_velocity"];
-const ICON_CLOSE: &str = "icons/ri-close-fill.png";
-const ICON_MORE: &str = "icons/ri-more-fill.png";
 
 pub fn plugin(app: &mut App) {
     app.add_systems(
