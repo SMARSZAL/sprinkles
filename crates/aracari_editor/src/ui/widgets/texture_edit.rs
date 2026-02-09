@@ -558,7 +558,7 @@ fn spawn_local_texture_alert(commands: &mut Commands, parent: Entity, variant_ed
                     AlertSpan::Link {
                         text: "Learn more.".into(),
                         // TODO: link to TextureRef::Local docs
-                        url: "https://github.com/doceazedo/aracari/issues/new?title=hey+dumbass&body=you+made+the+repo+public+and+forgot+to+add+the+link+to+the+AlertVariant%3A%3AImportant+docs".into(),
+                        url: "https://github.com/doceazedo/aracari/issues/new?title=hey+dumbass&body=you+made+the+repo+public+and+forgot+to+add+the+link+to+the+TextureRef%3A%3ALocal+docs".into(),
                     },
                 ],
             ),
