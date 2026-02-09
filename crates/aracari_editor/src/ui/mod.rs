@@ -25,6 +25,7 @@ impl Plugin for EditorUiPlugin {
 
         app.add_plugins(widgets::alert::plugin)
             .add_plugins(widgets::button::plugin)
+            .add_plugins(widgets::link::plugin)
             .add_plugins(widgets::checkbox::plugin)
             .add_plugins(widgets::cursor::plugin)
             .add_plugins(widgets::color_picker::plugin)

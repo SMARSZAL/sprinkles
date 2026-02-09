@@ -12,7 +12,9 @@ use aracari::textures::preset::{PresetTexture, TextureRef};
 
 use crate::state::EditorState;
 use crate::ui::components::binding::{get_inspecting_emitter, resolve_variant_field_ref};
-use crate::ui::tokens::{BORDER_COLOR, CORNER_RADIUS, FONT_PATH, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
+use crate::ui::tokens::{
+    BORDER_COLOR, CORNER_RADIUS, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM,
+};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, button, button_base, ButtonSize,
     set_button_variant,
@@ -23,10 +25,12 @@ use crate::ui::widgets::variant_edit::{
 
 use crate::ui::components::inspector::FieldKind;
 use crate::ui::widgets::alert::{alert, AlertSpan, AlertVariant};
+use crate::ui::widgets::link::spawn_link_hitbox;
 
 const PRESET_GRID_MAX_HEIGHT: f32 = 256.0;
 const PREVIEW_SIZE: f32 = 96.0;
 const ICON_FOLDER: &str = "icons/ri-folder-open-line.png";
+const ICON_HEART: &str = "icons/ri-heart-3-fill.png";
 
 const SCROLLBAR_WIDTH: f32 = 3.0;
 const SCROLLBAR_MARGIN: f32 = 3.0;
@@ -340,6 +344,100 @@ fn spawn_preset_grid(
     commands.entity(scroll_container).add_child(grid);
     commands.entity(scroll_container).add_child(scrollbar);
     commands.entity(container).add_child(scroll_container);
+
+    spawn_footnote(commands, container, asset_server);
+}
+
+fn spawn_footnote(
+    commands: &mut Commands,
+    parent: Entity,
+    asset_server: &AssetServer,
+) {
+    let font: Handle<Font> = asset_server.load(FONT_PATH);
+    let text_color: Color = TEXT_MUTED_COLOR.into();
+    let link_color: Color = TEXT_BODY_COLOR.into();
+
+    let row = commands
+        .spawn(Node {
+            align_items: AlignItems::Center,
+            column_gap: px(3),
+            ..default()
+        })
+        .id();
+
+    let icon = commands
+        .spawn((
+            ImageNode::new(asset_server.load(ICON_HEART))
+                .with_color(tailwind::PINK_600.into()),
+            Node {
+                width: px(14),
+                height: px(14),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(icon);
+
+    let text_id = commands
+        .spawn((
+            Text::new("Textures by "),
+            TextFont {
+                font: font.clone(),
+                font_size: TEXT_SIZE_SM,
+                ..default()
+            },
+            TextColor(text_color),
+        ))
+        .id();
+
+    let link_span = commands
+        .spawn((
+            TextSpan::new("Kenney"),
+            TextFont {
+                font: font.clone(),
+                font_size: TEXT_SIZE_SM,
+                weight: FontWeight::MEDIUM,
+                ..default()
+            },
+            TextColor(link_color),
+            Underline,
+        ))
+        .id();
+    commands.entity(text_id).add_child(link_span);
+
+    let suffix = commands
+        .spawn((
+            TextSpan::new(" under CC0 license."),
+            TextFont {
+                font,
+                font_size: TEXT_SIZE_SM,
+                ..default()
+            },
+            TextColor(text_color),
+        ))
+        .id();
+    commands.entity(text_id).add_child(suffix);
+
+    let text_wrapper = commands
+        .spawn(Node {
+            position_type: PositionType::Relative,
+            ..default()
+        })
+        .id();
+
+    let hitbox = spawn_link_hitbox(
+        commands,
+        text_id,
+        1,
+        link_span,
+        "https://kenney.nl".to_string(),
+        link_color,
+    );
+
+    commands.entity(text_wrapper).add_child(text_id);
+    commands.entity(text_wrapper).add_child(hitbox);
+    commands.entity(row).add_child(text_wrapper);
+    commands.entity(parent).add_child(row);
 }
 
 fn spawn_file_content(
