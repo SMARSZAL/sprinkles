@@ -10,8 +10,8 @@ use crate::{
         ParticlesColliderShape3D, SolidOrGradientColor,
     },
     runtime::{
-        EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D,
-        ParticleSystemRuntime, ParticlesCollider3D,
+        compute_phase, is_past_delay, EmitterEntity, EmitterRuntime, ParticleBufferHandle,
+        ParticleSystem3D, ParticleSystemRuntime, ParticlesCollider3D,
     },
     textures::{CurveTextureCache, GradientTextureCache},
 };
@@ -181,7 +181,7 @@ pub struct ExtractedParticleSystem {
 }
 
 pub struct ExtractedEmitterData {
-    pub uniforms: EmitterUniforms,
+    pub uniform_steps: Vec<EmitterUniforms>,
     pub particle_buffer_handle: Handle<ShaderStorageBuffer>,
     pub indices_buffer_handle: Handle<ShaderStorageBuffer>,
     pub sorted_particles_buffer_handle: Handle<ShaderStorageBuffer>,
@@ -214,7 +214,6 @@ pub fn extract_particle_systems(
     assets: Extract<Res<Assets<ParticleSystemAsset>>>,
     gradient_cache: Extract<Res<GradientTextureCache>>,
     curve_cache: Extract<Res<CurveTextureCache>>,
-    time: Extract<Res<Time>>,
 ) {
     let mut extracted = ExtractedParticleSystem::default();
 
@@ -225,7 +224,7 @@ pub fn extract_particle_systems(
         .unwrap_or((Vec3::ZERO, Vec3::NEG_Z));
 
     for (entity, emitter_entity, runtime, buffer_handle, global_transform) in emitter_query.iter() {
-        let Ok((particle_system, system_runtime)) = system_query.get(emitter_entity.parent_system)
+        let Ok((particle_system, _system_runtime)) = system_query.get(emitter_entity.parent_system)
         else {
             continue;
         };
@@ -241,14 +240,6 @@ pub fn extract_particle_systems(
         if !emitter.enabled {
             continue;
         }
-
-        let delta_time = if system_runtime.paused {
-            0.0
-        } else {
-            time.delta_secs()
-        };
-
-        let should_emit = runtime.emitting && runtime.is_past_delay(&emitter.time);
 
         let draw_order = match emitter.draw_pass.draw_order {
             DrawOrder::Index => 0,
@@ -278,16 +269,17 @@ pub fn extract_particle_systems(
 
         let turbulence = &emitter.turbulence;
 
-        let uniforms = EmitterUniforms {
-            delta_time,
-            system_phase: runtime.system_phase(&emitter.time),
-            prev_system_phase: runtime.prev_system_phase(&emitter.time),
-            cycle: runtime.cycle,
+        // build base uniform with timing fields zeroed (filled per step below)
+        let base_uniforms = EmitterUniforms {
+            delta_time: 0.0,
+            system_phase: 0.0,
+            prev_system_phase: 0.0,
+            cycle: 0,
 
             amount: emitter.emission.particles_amount,
             lifetime: emitter.time.lifetime,
             lifetime_randomness: emitter.time.lifetime_randomness,
-            emitting: if should_emit { 1 } else { 0 },
+            emitting: 0,
 
             gravity: emitter.accelerations.gravity.into(),
             random_seed: runtime.random_seed,
@@ -326,7 +318,7 @@ pub fn extract_particle_systems(
             _pad6: 0.0,
 
             draw_order,
-            clear_particles: if runtime.clear_requested { 1 } else { 0 },
+            clear_particles: 0,
             scale_min: emitter.scale.range.min,
             scale_max: emitter.scale.range.max,
 
@@ -407,10 +399,28 @@ pub fn extract_particle_systems(
                 Some(EmitterCollisionMode::Rigid { bounce, .. }) => *bounce,
                 _ => 0.0,
             },
-            collider_count: 0, // will be set from ExtractedColliders
+            collider_count: 0,
             _collision_pad0: 0.0,
             _collision_pad1: 0.0,
         };
+
+        let uniform_steps: Vec<EmitterUniforms> = runtime
+            .simulation_steps
+            .iter()
+            .map(|step| {
+                let should_emit =
+                    runtime.emitting && is_past_delay(step.system_time, &emitter.time);
+                EmitterUniforms {
+                    delta_time: step.delta_time,
+                    system_phase: compute_phase(step.system_time, &emitter.time),
+                    prev_system_phase: compute_phase(step.prev_system_time, &emitter.time),
+                    cycle: step.cycle,
+                    emitting: if should_emit { 1 } else { 0 },
+                    clear_particles: if step.clear_requested { 1 } else { 0 },
+                    ..base_uniforms
+                }
+            })
+            .collect();
 
         let gradient_texture_handle = match &emitter.colors.initial_color {
             SolidOrGradientColor::Gradient { gradient } => gradient_cache.get(gradient),
@@ -455,7 +465,7 @@ pub fn extract_particle_systems(
         extracted.emitters.push((
             entity,
             ExtractedEmitterData {
-                uniforms,
+                uniform_steps,
                 particle_buffer_handle: buffer_handle.particle_buffer.clone(),
                 indices_buffer_handle: buffer_handle.indices_buffer.clone(),
                 sorted_particles_buffer_handle: buffer_handle.sorted_particles_buffer.clone(),

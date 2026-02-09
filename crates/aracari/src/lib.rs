@@ -22,8 +22,8 @@ use compute::ParticleComputePlugin;
 use extract::{extract_colliders, extract_particle_systems};
 use sort::ParticleSortPlugin;
 use spawning::{
-    cleanup_particle_entities, clear_particle_clear_requests, setup_particle_systems,
-    sync_collider_data, sync_emitter_mesh_transforms, sync_particle_material, sync_particle_mesh,
+    cleanup_particle_entities, setup_particle_systems, sync_collider_data,
+    sync_emitter_mesh_transforms, sync_particle_material, sync_particle_mesh,
     update_particle_time,
 };
 use textures::{
@@ -69,8 +69,6 @@ impl Plugin for AracariPlugin {
                 cleanup_particle_entities,
             ),
         );
-
-        app.add_systems(First, clear_particle_clear_requests);
 
         app.add_plugins((
             ParticleComputePlugin,

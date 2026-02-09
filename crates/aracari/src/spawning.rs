@@ -14,19 +14,13 @@ use crate::{
         ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterMeshEntity,
         EmitterRuntime, ParticleBufferHandle, ParticleData, ParticleMaterial,
         ParticleMaterialHandle, ParticleMeshHandle, ParticleSystem3D, ParticleSystemRuntime,
-        ParticlesCollider3D,
+        ParticlesCollider3D, SimulationStep,
     },
 };
 
 // time systems
 
-pub fn clear_particle_clear_requests(mut query: Query<&mut EmitterRuntime>) {
-    for mut runtime in query.iter_mut() {
-        if runtime.clear_requested {
-            runtime.clear_requested = false;
-        }
-    }
-}
+const MAX_FRAME_DELTA: f32 = 0.1;
 
 pub fn update_particle_time(
     time: Res<Time>,
@@ -39,10 +33,6 @@ pub fn update_particle_time(
             continue;
         };
 
-        if system_runtime.paused {
-            continue;
-        }
-
         let Some(asset) = assets.get(&particle_system.handle) else {
             continue;
         };
@@ -51,31 +41,86 @@ pub fn update_particle_time(
             continue;
         };
 
+        runtime.simulation_steps.clear();
+
+        // consume clear_requested flag here (like godot clearing it inside _particles_process)
+        let clear_requested = runtime.clear_requested;
+        runtime.clear_requested = false;
+
+        if system_runtime.paused {
+            // when paused, only dispatch if a clear is needed
+            if clear_requested {
+                let step = SimulationStep {
+                    prev_system_time: runtime.system_time,
+                    system_time: runtime.system_time,
+                    cycle: runtime.cycle,
+                    delta_time: 0.0,
+                    clear_requested: true,
+                };
+                runtime.simulation_steps.push(step);
+            }
+            continue;
+        }
+
         let fixed_fps = emitter_data.time.fixed_fps;
         let total_duration = emitter_data.time.total_duration();
 
-        runtime.prev_system_time = runtime.system_time;
-
         if fixed_fps > 0 {
             let fixed_delta = 1.0 / fixed_fps as f32;
-            runtime.accumulated_delta += time.delta_secs();
+            let frame_delta = time.delta_secs().min(MAX_FRAME_DELTA);
+            runtime.accumulated_delta += frame_delta;
 
-            while runtime.accumulated_delta >= fixed_delta {
+            // like godot: force at least one dispatch when clear is requested
+            // (godot: `while (todo >= frame_time || particles->clear)`)
+            while runtime.accumulated_delta >= fixed_delta
+                || (clear_requested && runtime.simulation_steps.is_empty())
+            {
                 runtime.accumulated_delta -= fixed_delta;
+
+                let prev_time = runtime.system_time;
                 runtime.system_time += fixed_delta;
 
                 if runtime.system_time >= total_duration && total_duration > 0.0 {
                     runtime.system_time = runtime.system_time % total_duration;
                     runtime.cycle += 1;
                 }
+
+                let step = SimulationStep {
+                    prev_system_time: prev_time,
+                    system_time: runtime.system_time,
+                    cycle: runtime.cycle,
+                    delta_time: fixed_delta,
+                    clear_requested: if runtime.simulation_steps.is_empty() {
+                        clear_requested
+                    } else {
+                        false
+                    },
+                };
+                runtime.simulation_steps.push(step);
+            }
+
+            if !runtime.simulation_steps.is_empty() {
+                runtime.prev_system_time = runtime.simulation_steps[0].prev_system_time;
             }
         } else {
-            runtime.system_time += time.delta_secs();
+            let delta = time.delta_secs();
+            let prev_time = runtime.system_time;
+            runtime.prev_system_time = runtime.system_time;
+            runtime.system_time += delta;
 
             if runtime.system_time >= total_duration && total_duration > 0.0 {
                 runtime.system_time = runtime.system_time % total_duration;
                 runtime.cycle += 1;
             }
+
+            let step = SimulationStep {
+                prev_system_time: prev_time,
+                system_time: runtime.system_time,
+                cycle: runtime.cycle,
+                delta_time: delta,
+                clear_requested,
+            };
+            runtime.simulation_steps.push(step);
         }
 
         if emitter_data.time.one_shot && runtime.cycle > 0 && !runtime.one_shot_completed {

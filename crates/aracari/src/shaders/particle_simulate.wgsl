@@ -155,15 +155,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    // handle clear request - deactivate all particles
+    var p = particles[idx];
+
+    // handle clear request: fully reset particle data, then continue to
+    // emission/update (like godot, clear does not skip the rest of the step)
     if (params.clear_particles != 0u) {
-        var p = particles[idx];
-        p.custom.w = bitcast<f32>(0u);
+        p.position = vec4(0.0, 0.0, 0.0, 1.0);
+        p.velocity = vec4(0.0);
+        p.color = vec4(1.0);
+        p.custom = vec4(0.0);
+        p.alignment_dir = vec4(0.0, 1.0, 0.0, 0.0);
+    }
+
+    // when delta is zero (paused clear), write the cleared data and stop
+    if (params.delta_time <= 0.0) {
         particles[idx] = p;
         return;
     }
 
-    var p = particles[idx];
     let flags = bitcast<u32>(p.custom.w);
     let is_active = (flags & PARTICLE_FLAG_ACTIVE) != 0u;
 

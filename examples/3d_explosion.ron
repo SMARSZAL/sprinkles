@@ -8,7 +8,7 @@
                 lifetime: 0.3,
                 one_shot: true,
                 explosiveness: 0.9,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Cylinder(
@@ -155,7 +155,7 @@
                 delay: 0.3,
                 one_shot: true,
                 explosiveness: 0.9,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Sphere(
@@ -312,7 +312,7 @@
                 delay: 0.3,
                 one_shot: true,
                 explosiveness: 0.9,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Sphere(
@@ -433,7 +433,7 @@
                 delay: 0.3,
                 one_shot: true,
                 explosiveness: 0.9,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Cylinder(
@@ -559,7 +559,7 @@
                 lifetime: 0.5,
                 delay: 0.3,
                 one_shot: true,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Quad(
@@ -657,7 +657,7 @@
                 delay: 0.3,
                 one_shot: true,
                 explosiveness: 0.95,
-                fixed_fps: 30,
+                fixed_fps: 60,
             ),
             draw_pass: (
                 mesh: Prism(

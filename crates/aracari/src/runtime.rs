@@ -73,6 +73,15 @@ impl ParticleSystemRuntime {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct SimulationStep {
+    pub prev_system_time: f32,
+    pub system_time: f32,
+    pub cycle: u32,
+    pub delta_time: f32,
+    pub clear_requested: bool,
+}
+
 /// per-emitter runtime state
 #[derive(Component)]
 pub struct EmitterRuntime {
@@ -90,6 +99,8 @@ pub struct EmitterRuntime {
     pub clear_requested: bool,
     /// index into the asset's emitters array
     pub emitter_index: usize,
+    /// simulation steps for this frame (populated by update_particle_time)
+    pub simulation_steps: Vec<SimulationStep>,
 }
 
 impl EmitterRuntime {
@@ -105,6 +116,7 @@ impl EmitterRuntime {
             one_shot_completed: false,
             clear_requested: false,
             emitter_index,
+            simulation_steps: Vec::new(),
         }
     }
 
@@ -167,6 +179,7 @@ impl EmitterRuntime {
         self.random_seed = fixed_seed.unwrap_or_else(rand_seed);
         self.one_shot_completed = false;
         self.clear_requested = true;
+        self.simulation_steps.clear();
     }
 
     /// Restart playback from the beginning.
@@ -181,6 +194,30 @@ impl EmitterRuntime {
         self.system_time = time;
         self.prev_system_time = time;
     }
+}
+
+pub fn compute_phase(time: f32, emitter_time: &crate::asset::EmitterTime) -> f32 {
+    if emitter_time.lifetime <= 0.0 {
+        return 0.0;
+    }
+    let total_duration = emitter_time.total_duration();
+    if total_duration <= 0.0 {
+        return 0.0;
+    }
+    let time_in_cycle = time % total_duration;
+    if time_in_cycle < emitter_time.delay {
+        return 0.0;
+    }
+    (time_in_cycle - emitter_time.delay) / emitter_time.lifetime
+}
+
+pub fn is_past_delay(time: f32, emitter_time: &crate::asset::EmitterTime) -> bool {
+    let total_duration = emitter_time.total_duration();
+    if total_duration <= 0.0 {
+        return true;
+    }
+    let time_in_cycle = time % total_duration;
+    time_in_cycle >= emitter_time.delay
 }
 
 /// marker component for emitter child entities

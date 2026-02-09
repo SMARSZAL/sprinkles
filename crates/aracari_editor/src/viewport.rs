@@ -520,7 +520,11 @@ pub fn sync_playback_state(
             if system_runtime.force_loop {
                 for (emitter, mut runtime) in emitter_query.iter_mut() {
                     if emitter.parent_system == system_entity {
-                        runtime.restart(None);
+                        let fixed_seed = asset
+                            .emitters
+                            .get(runtime.emitter_index)
+                            .and_then(|e| e.time.fixed_seed);
+                        runtime.restart(fixed_seed);
                     }
                 }
             } else {
