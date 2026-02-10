@@ -1,5 +1,5 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::EditorState;
 use crate::ui::widgets::color_picker::{CheckerboardMaterial, ColorPickerChangeEvent};

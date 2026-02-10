@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use sprinkles::prelude::*;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use sprinkles::prelude::*;
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<EditorState>()

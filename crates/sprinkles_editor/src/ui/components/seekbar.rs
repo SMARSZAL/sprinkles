@@ -1,7 +1,7 @@
-use sprinkles::prelude::*;
 use bevy::color::palettes::tailwind;
 use bevy::prelude::*;
 use bevy::text::{FontFeatureTag, FontFeatures};
+use sprinkles::prelude::*;
 
 use crate::state::PlaybackSeekEvent;
 use crate::ui::tokens::{FONT_PATH, TEXT_MUTED_COLOR};
@@ -188,8 +188,7 @@ fn update_seekbar(
         emitter_query
             .iter()
             .filter(|(e, r)| {
-                e.parent_system == system_entity
-                    && !sub_target_indices.contains(&r.emitter_index)
+                e.parent_system == system_entity && !sub_target_indices.contains(&r.emitter_index)
             })
             .map(|(_, r)| r.system_time)
             .fold(0.0_f32, |a, b| a.max(b))

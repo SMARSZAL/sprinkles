@@ -14,7 +14,6 @@ use crate::runtime::ParticleSystem3D;
 
 const TEXTURE_WIDTH: u32 = 256;
 
-
 #[derive(Resource, Default)]
 pub struct GradientTextureCache {
     cache: HashMap<u64, Handle<Image>>,
@@ -143,7 +142,6 @@ pub fn prepare_gradient_textures(
     }
 }
 
-
 #[derive(Resource, Default)]
 pub struct CurveTextureCache {
     cache: HashMap<u64, Handle<Image>>,
@@ -229,7 +227,6 @@ pub fn prepare_curve_textures(
         }
     }
 }
-
 
 fn create_1d_texture(data: Vec<u8>, format: TextureFormat) -> Image {
     let mut image = Image::new(

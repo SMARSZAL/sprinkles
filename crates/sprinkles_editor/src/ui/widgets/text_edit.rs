@@ -88,7 +88,6 @@ struct TextEditSuffix(String);
 #[derive(Component)]
 struct TextEditSuffixNode(Entity);
 
-
 #[derive(Component)]
 struct TextEditDefaultValue(String);
 
@@ -540,7 +539,10 @@ fn apply_default_value(
 
 fn handle_suffix(
     focus: Res<InputFocus>,
-    text_edits: Query<(Entity, &TextInputBuffer, &TextInputLayoutInfo, &ChildOf), With<TextEditSuffix>>,
+    text_edits: Query<
+        (Entity, &TextInputBuffer, &TextInputLayoutInfo, &ChildOf),
+        With<TextEditSuffix>,
+    >,
     mut suffix_nodes: Query<(&TextEditSuffixNode, &mut Node), Without<TextEditWrapper>>,
     parents: Query<&ChildOf>,
     configs: Query<&TextEditConfig>,

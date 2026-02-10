@@ -1,17 +1,17 @@
 use bevy::{
     prelude::*,
     render::{
+        Render, RenderApp, RenderStartup, RenderSystems,
         render_asset::RenderAssets,
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::{
-            binding_types::{storage_buffer, uniform_buffer},
             BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, Buffer,
             CachedComputePipelineId, CachedPipelineState, ComputePassDescriptor,
             ComputePipelineDescriptor, PipelineCache, ShaderStages, ShaderType, UniformBuffer,
+            binding_types::{storage_buffer, uniform_buffer},
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         storage::GpuShaderStorageBuffer,
-        Render, RenderApp, RenderStartup, RenderSystems,
     },
 };
 use std::borrow::Cow;
@@ -250,12 +250,13 @@ impl render_graph::Node for ParticleSortNode {
                     )),
                 );
 
-                let mut pass = render_context
-                    .command_encoder()
-                    .begin_compute_pass(&ComputePassDescriptor {
-                        label: Some("particle_sort_init_pass"),
-                        ..default()
-                    });
+                let mut pass =
+                    render_context
+                        .command_encoder()
+                        .begin_compute_pass(&ComputePassDescriptor {
+                            label: Some("particle_sort_init_pass"),
+                            ..default()
+                        });
 
                 pass.set_pipeline(init_pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);
@@ -294,12 +295,12 @@ impl render_graph::Node for ParticleSortNode {
                             )),
                         );
 
-                        let mut pass = render_context
-                            .command_encoder()
-                            .begin_compute_pass(&ComputePassDescriptor {
+                        let mut pass = render_context.command_encoder().begin_compute_pass(
+                            &ComputePassDescriptor {
                                 label: Some("particle_sort_pass"),
                                 ..default()
-                            });
+                            },
+                        );
 
                         pass.set_pipeline(sort_pipeline);
                         pass.set_bind_group(0, &bind_group, &[]);
@@ -335,12 +336,13 @@ impl render_graph::Node for ParticleSortNode {
                     )),
                 );
 
-                let mut pass = render_context
-                    .command_encoder()
-                    .begin_compute_pass(&ComputePassDescriptor {
-                        label: Some("particle_sort_copy_pass"),
-                        ..default()
-                    });
+                let mut pass =
+                    render_context
+                        .command_encoder()
+                        .begin_compute_pass(&ComputePassDescriptor {
+                            label: Some("particle_sort_copy_pass"),
+                            ..default()
+                        });
 
                 pass.set_pipeline(copy_pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);

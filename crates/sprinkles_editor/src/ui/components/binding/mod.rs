@@ -2,9 +2,9 @@ mod direct;
 mod swatch;
 mod variant;
 
-use sprinkles::prelude::*;
 use bevy::prelude::*;
 use bevy::reflect::{DynamicEnum, DynamicVariant, PartialReflect, ReflectMut, ReflectRef};
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState, Inspectable};
 use crate::ui::widgets::variant_edit::VariantDefinition;

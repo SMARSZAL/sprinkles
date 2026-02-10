@@ -1,4 +1,3 @@
-use sprinkles::prelude::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
 use bevy::input_focus::InputFocus;
 use bevy::picking::events::{Press, Release};
 use bevy::picking::hover::Hovered;
@@ -11,6 +10,7 @@ use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
 use bevy::window::SystemCursorIcon;
 use inflector::Inflector;
+use sprinkles::prelude::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
 
 use crate::ui::icons::{ICON_ARROW_LEFT_RIGHT, ICON_FCURVE, ICON_MORE};
 use crate::ui::tokens::{

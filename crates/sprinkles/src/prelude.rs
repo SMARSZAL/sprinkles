@@ -1,15 +1,14 @@
-
 pub use crate::SprinklesPlugin;
 
 pub use crate::asset::{
-    AnimatedVelocity, ColliderData, DrawOrder, DrawPassMaterial, EmissionShape,
-    EmitterAccelerations, EmitterCollision, EmitterCollisionMode, EmitterColors, EmitterData,
-    EmitterDrawPass, EmitterEmission, EmitterScale, EmitterTime, EmitterTurbulence,
-    EmitterVelocities, Gradient as ParticleGradient, GradientInterpolation, GradientStop,
-    ParticleFlags, ParticleMesh, ParticleSystemAsset, ParticleSystemDimension,
+    AnimatedVelocity, ColliderData, CurveEasing, CurveMode, CurvePoint, CurveTexture, DrawOrder,
+    DrawPassMaterial, EmissionShape, EmitterAccelerations, EmitterCollision, EmitterCollisionMode,
+    EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission, EmitterScale, EmitterTime,
+    EmitterTurbulence, EmitterVelocities, Gradient as ParticleGradient, GradientInterpolation,
+    GradientStop, ParticleFlags, ParticleMesh, ParticleSystemAsset, ParticleSystemDimension,
     ParticlesColliderShape3D, QuadOrientation, Range as ParticleRange, SerializableAlphaMode,
-    SolidOrGradientColor, SubEmitterConfig, SubEmitterMode, CurveEasing, CurveMode, CurvePoint,
-    CurveTexture, StandardParticleMaterial, TransformAlign,
+    SolidOrGradientColor, StandardParticleMaterial, SubEmitterConfig, SubEmitterMode,
+    TransformAlign,
 };
 #[cfg(feature = "preset-textures")]
 pub use crate::textures::preset::PresetTexture;

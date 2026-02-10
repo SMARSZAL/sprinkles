@@ -209,7 +209,10 @@ pub fn spawn_inspector_field(
     }
 
     if props.kind == FieldKind::Gradient {
-        spawner.spawn((field, gradient_edit(GradientEditProps::new().with_label(label))));
+        spawner.spawn((
+            field,
+            gradient_edit(GradientEditProps::new().with_label(label)),
+        ));
         return;
     }
 

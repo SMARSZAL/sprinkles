@@ -3,9 +3,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use sprinkles::prelude::*;
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
+use sprinkles::prelude::*;
 
 use crate::io::{EditorData, project_path, save_editor_data, working_dir};
 use crate::state::{DirtyState, EditorState, Inspectable, Inspecting};

@@ -1,6 +1,6 @@
-use sprinkles::prelude::*;
 use bevy::picking::prelude::Pickable;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::EditorState;
 use crate::ui::components::binding::{Field, get_inspecting_emitter};

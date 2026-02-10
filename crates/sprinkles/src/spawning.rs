@@ -18,7 +18,6 @@ use crate::{
     },
 };
 
-
 const MAX_FRAME_DELTA: f32 = 0.1;
 
 pub fn update_particle_time(
@@ -124,7 +123,6 @@ pub fn update_particle_time(
         }
     }
 }
-
 
 fn create_cylinder_mesh(
     top_radius: f32,
@@ -247,7 +245,10 @@ fn create_cylinder_mesh(
         }
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -256,7 +257,6 @@ fn create_cylinder_mesh(
 }
 
 fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
-
     let start_pos = size * -0.5;
     let subdivide_w = subdivide.x as usize;
     let subdivide_h = subdivide.y as usize;
@@ -295,7 +295,11 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
                     let i2 = (i * 2) as u32;
 
                     indices.extend_from_slice(&[thisrow + i2 - 2, thisrow + i2, prevrow + i2]);
-                    indices.extend_from_slice(&[thisrow + i2 - 1, thisrow + i2 + 1, prevrow + i2 + 1]);
+                    indices.extend_from_slice(&[
+                        thisrow + i2 - 1,
+                        thisrow + i2 + 1,
+                        prevrow + i2 + 1,
+                    ]);
                 } else if i > 0 && j > 0 {
                     let i2 = (i * 2) as u32;
 
@@ -422,7 +426,10 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
         }
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -472,7 +479,10 @@ fn create_subdivided_quad(size: Vec2, subdivisions_x: u32, subdivisions_y: u32) 
         }
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -519,9 +529,11 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
             mesh
         }
         ParticleMesh::Sphere { radius } => Mesh::from(Sphere::new(*radius)),
-        ParticleMesh::Cuboid { half_size } => {
-            Mesh::from(Cuboid::new(half_size.x * 2.0, half_size.y * 2.0, half_size.z * 2.0))
-        }
+        ParticleMesh::Cuboid { half_size } => Mesh::from(Cuboid::new(
+            half_size.x * 2.0,
+            half_size.y * 2.0,
+            half_size.z * 2.0,
+        )),
         ParticleMesh::Cylinder {
             top_radius,
             bottom_radius,
@@ -611,7 +623,10 @@ fn create_particle_mesh(
         }
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -634,7 +649,6 @@ fn combined_particle_flags(emitter: &EmitterData) -> u32 {
     flags |= transform_align_bits << 3;
     flags
 }
-
 
 fn create_particle_material_from_config(
     config: &DrawPassMaterial,
@@ -659,7 +673,6 @@ fn create_particle_material_from_config(
         },
     }
 }
-
 
 pub fn setup_particle_systems(
     mut commands: Commands,
@@ -770,11 +783,13 @@ pub fn setup_particle_systems(
                 let target_entity = emitter_entities[target_index];
                 let parent_entity = emitter_entities[emitter_index];
 
-                commands.entity(parent_entity).insert(SubEmitterBufferHandle {
-                    buffer: buffer_handle,
-                    target_emitter: target_entity,
-                    max_particles: target_amount,
-                });
+                commands
+                    .entity(parent_entity)
+                    .insert(SubEmitterBufferHandle {
+                        buffer: buffer_handle,
+                        target_emitter: target_entity,
+                        max_particles: target_amount,
+                    });
             }
         }
 
@@ -815,7 +830,8 @@ pub fn sync_emitter_mesh_transforms(
 
     for (emitter_mesh, mut mesh_transform) in mesh_query.iter_mut() {
         if let Ok((emitter_global, runtime)) = emitter_query.get(emitter_mesh.emitter_entity) {
-            let depth_offset = camera_forward * (runtime.emitter_index as f32 * EMITTER_DEPTH_OFFSET);
+            let depth_offset =
+                camera_forward * (runtime.emitter_index as f32 * EMITTER_DEPTH_OFFSET);
             mesh_transform.translation = emitter_global.translation() + depth_offset;
         }
     }

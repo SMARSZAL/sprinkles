@@ -1,7 +1,6 @@
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::ops::Range;
 
-use sprinkles::prelude::*;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::RenderTarget;
 use bevy::color::palettes::tailwind::{ZINC_200, ZINC_950};
@@ -12,6 +11,7 @@ use bevy::picking::hover::Hovered;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureDimension, TextureFormat, TextureUsages};
+use sprinkles::prelude::*;
 
 use crate::state::{
     EditorState, Inspectable, PlaybackPlayEvent, PlaybackResetEvent, PlaybackSeekEvent,
@@ -398,22 +398,21 @@ pub fn handle_playback_play_event(
             .filter_map(|e| e.sub_emitter.as_ref().map(|s| s.target_emitter))
             .collect();
 
-        let all_one_shots_completed =
-            asset
-                .emitters
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| !sub_target_indices.contains(idx))
-                .all(|(idx, emitter_data)| {
-                    if !emitter_data.time.one_shot {
-                        return true;
-                    }
-                    emitter_query.iter().any(|(emitter, runtime)| {
-                        emitter.parent_system == system_entity
-                            && runtime.emitter_index == idx
-                            && runtime.one_shot_completed
-                    })
-                });
+        let all_one_shots_completed = asset
+            .emitters
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !sub_target_indices.contains(idx))
+            .all(|(idx, emitter_data)| {
+                if !emitter_data.time.one_shot {
+                    return true;
+                }
+                emitter_query.iter().any(|(emitter, runtime)| {
+                    emitter.parent_system == system_entity
+                        && runtime.emitter_index == idx
+                        && runtime.one_shot_completed
+                })
+            });
 
         let has_one_shot = asset
             .emitters
@@ -517,22 +516,21 @@ pub fn sync_playback_state(
             .filter_map(|e| e.sub_emitter.as_ref().map(|s| s.target_emitter))
             .collect();
 
-        let all_one_shots_completed =
-            asset
-                .emitters
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| !sub_target_indices.contains(idx))
-                .all(|(idx, emitter_data)| {
-                    if !emitter_data.time.one_shot {
-                        return true;
-                    }
-                    emitter_query.iter().any(|(emitter, runtime)| {
-                        emitter.parent_system == system_entity
-                            && runtime.emitter_index == idx
-                            && runtime.one_shot_completed
-                    })
-                });
+        let all_one_shots_completed = asset
+            .emitters
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !sub_target_indices.contains(idx))
+            .all(|(idx, emitter_data)| {
+                if !emitter_data.time.one_shot {
+                    return true;
+                }
+                emitter_query.iter().any(|(emitter, runtime)| {
+                    emitter.parent_system == system_entity
+                        && runtime.emitter_index == idx
+                        && runtime.one_shot_completed
+                })
+            });
 
         let has_one_shot = asset
             .emitters

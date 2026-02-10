@@ -1,5 +1,5 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::EditorState;
 use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};

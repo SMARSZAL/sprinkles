@@ -1,4 +1,3 @@
-use sprinkles::prelude::{GradientStop, ParticleGradient};
 use bevy::picking::events::Click;
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::PointerButton;
@@ -8,6 +7,7 @@ use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
+use sprinkles::prelude::{GradientStop, ParticleGradient};
 
 use bevy::window::SystemCursorIcon;
 
@@ -423,7 +423,9 @@ fn setup_trigger_swatch(
         commands.entity(swatch_entity).with_children(|parent| {
             parent.spawn((
                 GradientTriggerSwatchMaterial(config.0),
-                MaterialNode(gradient_materials.add(GradientMaterial::swatch(&ParticleGradient::white()))),
+                MaterialNode(
+                    gradient_materials.add(GradientMaterial::swatch(&ParticleGradient::white())),
+                ),
                 Node {
                     position_type: PositionType::Absolute,
                     width: percent(100),
@@ -449,7 +451,10 @@ fn setup_trigger_swatch(
 
 fn sync_trigger_swatch(
     states: Query<&GradientEditState, Changed<GradientEditState>>,
-    swatch_materials: Query<(&GradientTriggerSwatchMaterial, &MaterialNode<GradientMaterial>)>,
+    swatch_materials: Query<(
+        &GradientTriggerSwatchMaterial,
+        &MaterialNode<GradientMaterial>,
+    )>,
     mut gradient_materials: ResMut<Assets<GradientMaterial>>,
 ) {
     for (swatch, mat_node) in &swatch_materials {
@@ -660,12 +665,7 @@ fn setup_gradient_edit_content(
                         },
                     ))
                     .with_children(|rows_parent| {
-                        spawn_stop_rows(
-                            rows_parent,
-                            edit_entity,
-                            &state.gradient,
-                            &asset_server,
-                        );
+                        spawn_stop_rows(rows_parent, edit_entity, &state.gradient, &asset_server);
                     });
             });
 

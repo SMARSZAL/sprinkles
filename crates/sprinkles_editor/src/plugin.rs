@@ -1,6 +1,6 @@
-use sprinkles::prelude::*;
 use bevy::color::palettes::tailwind::ZINC_950;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::io::{EditorData, project_path, save_editor_data};
 use crate::project::load_project_from_path;

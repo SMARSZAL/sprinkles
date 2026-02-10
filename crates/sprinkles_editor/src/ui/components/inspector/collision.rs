@@ -1,5 +1,5 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
 use crate::ui::components::inspector::utils::name_to_label;

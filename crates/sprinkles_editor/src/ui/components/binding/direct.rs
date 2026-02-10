@@ -1,7 +1,7 @@
-use sprinkles::prelude::*;
 use bevy::ecs::system::ParamSet;
 use bevy::prelude::*;
 use bevy_ui_text_input::TextInputQueue;
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
 use crate::ui::widgets::checkbox::{CheckboxCommitEvent, CheckboxState};
@@ -20,8 +20,8 @@ use crate::viewport::{RespawnCollidersEvent, RespawnEmittersEvent};
 use super::{
     Bound, Field, FieldKind, FieldValue, InspectedColliderTracker, InspectedEmitterTracker,
     MAX_ANCESTOR_DEPTH, ReflectPath, find_ancestor, find_ancestor_entity, find_ancestor_field,
-    find_field_for_entity, format_f32, get_inspecting_collider, get_inspecting_collider_mut,
-    get_inspecting_emitter, get_inspecting_emitter_mut, get_field_value_by_reflection,
+    find_field_for_entity, format_f32, get_field_value_by_reflection, get_inspecting_collider,
+    get_inspecting_collider_mut, get_inspecting_emitter, get_inspecting_emitter_mut,
     get_vec2_component, get_vec3_component, label_to_variant_name, mark_dirty_and_restart,
     parse_field_value, set_field_enum_by_name, set_field_value_by_reflection,
     set_variant_field_enum_by_name, set_vec2_component, set_vec3_component,

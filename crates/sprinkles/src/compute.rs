@@ -1,26 +1,32 @@
 use bevy::{
     prelude::*,
     render::{
+        Render, RenderApp, RenderStartup, RenderSystems,
         render_asset::RenderAssets,
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::{
-            binding_types::{sampler, storage_buffer, storage_buffer_read_only, storage_buffer_sized, texture_2d, uniform_buffer},
-            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
-            Buffer, BufferUsages, CachedComputePipelineId, CachedPipelineState,
-            ComputePassDescriptor, ComputePipelineDescriptor, PipelineCache, SamplerBindingType,
-            SamplerDescriptor, ShaderStages, TextureSampleType,
+            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, Buffer,
+            BufferUsages, CachedComputePipelineId, CachedPipelineState, ComputePassDescriptor,
+            ComputePipelineDescriptor, PipelineCache, SamplerBindingType, SamplerDescriptor,
+            ShaderStages, TextureSampleType,
+            binding_types::{
+                sampler, storage_buffer, storage_buffer_read_only, storage_buffer_sized,
+                texture_2d, uniform_buffer,
+            },
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         storage::GpuShaderStorageBuffer,
         texture::GpuImage,
-        Render, RenderApp, RenderStartup, RenderSystems,
     },
 };
 use std::borrow::Cow;
 
 use bevy::render::render_resource::ShaderType;
 
-use crate::extract::{ColliderUniform, EmitterUniforms, ExtractedColliders, ExtractedEmitterData, ExtractedParticleSystem, MAX_COLLIDERS};
+use crate::extract::{
+    ColliderUniform, EmitterUniforms, ExtractedColliders, ExtractedEmitterData,
+    ExtractedParticleSystem, MAX_COLLIDERS,
+};
 use crate::runtime::ParticleData;
 use crate::textures::{FallbackCurveTexture, FallbackGradientTexture};
 
@@ -267,7 +273,9 @@ pub fn prepare_particle_compute_bind_groups(
             continue;
         };
 
-        let Some(turbulence_influence_over_lifetime_image) = turbulence_influence_over_lifetime_gpu_image else {
+        let Some(turbulence_influence_over_lifetime_image) =
+            turbulence_influence_over_lifetime_gpu_image
+        else {
             continue;
         };
 
@@ -366,7 +374,9 @@ pub fn prepare_particle_compute_bind_groups(
     }
 
     commands.insert_resource(ParticleComputeBindGroups { bind_groups });
-    commands.insert_resource(EmissionBufferClearList { buffers: unique_buffers });
+    commands.insert_resource(EmissionBufferClearList {
+        buffers: unique_buffers,
+    });
 }
 
 pub struct ParticleComputeNode {
@@ -447,12 +457,13 @@ impl render_graph::Node for ParticleComputeNode {
             for (pass_index, label) in pass_labels.iter().enumerate() {
                 let is_target_pass = pass_index == 1;
 
-                let mut pass = render_context
-                    .command_encoder()
-                    .begin_compute_pass(&ComputePassDescriptor {
-                        label: Some(label),
-                        ..default()
-                    });
+                let mut pass =
+                    render_context
+                        .command_encoder()
+                        .begin_compute_pass(&ComputePassDescriptor {
+                            label: Some(label),
+                            ..default()
+                        });
 
                 pass.set_pipeline(compute_pipeline);
 

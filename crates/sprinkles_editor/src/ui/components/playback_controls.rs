@@ -1,6 +1,6 @@
-use sprinkles::prelude::*;
 use bevy::color::palettes::tailwind;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::{PlaybackPlayEvent, PlaybackResetEvent};
 use crate::ui::tokens::{PRIMARY_COLOR, TEXT_BODY_COLOR};

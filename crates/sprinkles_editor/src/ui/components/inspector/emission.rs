@@ -1,5 +1,5 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::ui::widgets::inspector_field::InspectorFieldProps;
 use crate::ui::widgets::variant_edit::{VariantDefinition, VariantEditProps};

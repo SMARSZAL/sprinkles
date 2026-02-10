@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    render::{render_resource::ShaderType, storage::ShaderStorageBuffer, Extract},
+    render::{Extract, render_resource::ShaderType, storage::ShaderStorageBuffer},
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -10,8 +10,9 @@ use crate::{
         ParticlesColliderShape3D, SolidOrGradientColor, SubEmitterMode,
     },
     runtime::{
-        compute_phase, is_past_delay, EmitterEntity, EmitterRuntime, ParticleBufferHandle,
-        ParticleSystem3D, ParticleSystemRuntime, ParticlesCollider3D, SubEmitterBufferHandle,
+        EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D,
+        ParticleSystemRuntime, ParticlesCollider3D, SubEmitterBufferHandle, compute_phase,
+        is_past_delay,
     },
     textures::{CurveTextureCache, GradientTextureCache},
 };
@@ -252,20 +253,37 @@ pub fn extract_particle_systems(
         .map(|t| (t.translation(), t.forward().as_vec3()))
         .unwrap_or((Vec3::ZERO, Vec3::NEG_Z));
 
-    let mut emission_buffer_map: std::collections::HashMap<(Entity, usize), Handle<ShaderStorageBuffer>> = std::collections::HashMap::new();
-    for (_entity, emitter_entity, runtime, _buffer_handle, _global_transform, sub_emitter_buf) in emitter_query.iter() {
-        let Some(sub_buf) = sub_emitter_buf else { continue };
-        let Ok((particle_system, _)) = system_query.get(emitter_entity.parent_system) else { continue };
-        let Some(asset) = assets.get(&particle_system.handle) else { continue };
-        let Some(emitter) = asset.emitters.get(runtime.emitter_index) else { continue };
-        let Some(ref sub_config) = emitter.sub_emitter else { continue };
+    let mut emission_buffer_map: std::collections::HashMap<
+        (Entity, usize),
+        Handle<ShaderStorageBuffer>,
+    > = std::collections::HashMap::new();
+    for (_entity, emitter_entity, runtime, _buffer_handle, _global_transform, sub_emitter_buf) in
+        emitter_query.iter()
+    {
+        let Some(sub_buf) = sub_emitter_buf else {
+            continue;
+        };
+        let Ok((particle_system, _)) = system_query.get(emitter_entity.parent_system) else {
+            continue;
+        };
+        let Some(asset) = assets.get(&particle_system.handle) else {
+            continue;
+        };
+        let Some(emitter) = asset.emitters.get(runtime.emitter_index) else {
+            continue;
+        };
+        let Some(ref sub_config) = emitter.sub_emitter else {
+            continue;
+        };
         emission_buffer_map.insert(
             (emitter_entity.parent_system, sub_config.target_emitter),
             sub_buf.buffer.clone(),
         );
     }
 
-    for (entity, emitter_entity, runtime, buffer_handle, global_transform, sub_emitter_buf) in emitter_query.iter() {
+    for (entity, emitter_entity, runtime, buffer_handle, global_transform, sub_emitter_buf) in
+        emitter_query.iter()
+    {
         let Ok((particle_system, _system_runtime)) = system_query.get(emitter_entity.parent_system)
         else {
             continue;
@@ -290,24 +308,60 @@ pub fn extract_particle_systems(
             DrawOrder::ViewDepth => 3,
         };
 
-        let (emission_shape, emission_sphere_radius, emission_box_extents, emission_ring_axis, emission_ring_height, emission_ring_radius, emission_ring_inner_radius) =
-            match emitter.emission.shape {
-                EmissionShape::Point => {
-                    (EMISSION_SHAPE_POINT, 0.0, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
-                }
-                EmissionShape::Sphere { radius } => {
-                    (EMISSION_SHAPE_SPHERE, radius, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
-                }
-                EmissionShape::SphereSurface { radius } => {
-                    (EMISSION_SHAPE_SPHERE_SURFACE, radius, Vec3::ZERO, Vec3::Z, 0.0, 0.0, 0.0)
-                }
-                EmissionShape::Box { extents } => {
-                    (EMISSION_SHAPE_BOX, 0.0, extents, Vec3::Z, 0.0, 0.0, 0.0)
-                }
-                EmissionShape::Ring { axis, height, radius, inner_radius } => {
-                    (EMISSION_SHAPE_RING, 0.0, Vec3::ZERO, axis, height, radius, inner_radius)
-                }
-            };
+        let (
+            emission_shape,
+            emission_sphere_radius,
+            emission_box_extents,
+            emission_ring_axis,
+            emission_ring_height,
+            emission_ring_radius,
+            emission_ring_inner_radius,
+        ) = match emitter.emission.shape {
+            EmissionShape::Point => (
+                EMISSION_SHAPE_POINT,
+                0.0,
+                Vec3::ZERO,
+                Vec3::Z,
+                0.0,
+                0.0,
+                0.0,
+            ),
+            EmissionShape::Sphere { radius } => (
+                EMISSION_SHAPE_SPHERE,
+                radius,
+                Vec3::ZERO,
+                Vec3::Z,
+                0.0,
+                0.0,
+                0.0,
+            ),
+            EmissionShape::SphereSurface { radius } => (
+                EMISSION_SHAPE_SPHERE_SURFACE,
+                radius,
+                Vec3::ZERO,
+                Vec3::Z,
+                0.0,
+                0.0,
+                0.0,
+            ),
+            EmissionShape::Box { extents } => {
+                (EMISSION_SHAPE_BOX, 0.0, extents, Vec3::Z, 0.0, 0.0, 0.0)
+            }
+            EmissionShape::Ring {
+                axis,
+                height,
+                radius,
+                inner_radius,
+            } => (
+                EMISSION_SHAPE_RING,
+                0.0,
+                Vec3::ZERO,
+                axis,
+                height,
+                radius,
+                inner_radius,
+            ),
+        };
 
         let turbulence = &emitter.turbulence;
 
@@ -319,7 +373,11 @@ pub fn extract_particle_systems(
                     SubEmitterMode::AtCollision => SUB_EMITTER_MODE_AT_COLLISION,
                     SubEmitterMode::AtStart => SUB_EMITTER_MODE_AT_START,
                 };
-                let freq = if config.frequency > 0.0 { 1.0 / config.frequency } else { 1.0 };
+                let freq = if config.frequency > 0.0 {
+                    1.0 / config.frequency
+                } else {
+                    1.0
+                };
                 (mode, freq, config.amount, config.keep_velocity as u32)
             }
             None => (SUB_EMITTER_MODE_DISABLED, 1.0, 1, 0),
@@ -378,9 +436,7 @@ pub fn extract_particle_systems(
             scale_max: emitter.scale.range.max,
 
             scale_over_lifetime: match &emitter.scale.scale_over_lifetime {
-                Some(c) if !c.is_constant() => {
-                    CurveUniform::enabled(c.range.min, c.range.max)
-                }
+                Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                 _ => CurveUniform::disabled(),
             },
 
@@ -398,15 +454,11 @@ pub fn extract_particle_systems(
             },
 
             alpha_over_lifetime: match &emitter.colors.alpha_over_lifetime {
-                Some(c) if !c.is_constant() => {
-                    CurveUniform::enabled(c.range.min, c.range.max)
-                }
+                Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                 _ => CurveUniform::disabled(),
             },
             emission_over_lifetime: match &emitter.colors.emission_over_lifetime {
-                Some(c) if !c.is_constant() => {
-                    CurveUniform::enabled(c.range.min, c.range.max)
-                }
+                Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                 _ => CurveUniform::disabled(),
             },
 
@@ -432,9 +484,7 @@ pub fn extract_particle_systems(
                 _pad0: 0.0,
                 _pad1: 0.0,
                 curve: match &emitter.velocities.radial_velocity.velocity_over_lifetime {
-                    Some(c) if !c.is_constant() => {
-                        CurveUniform::enabled(c.range.min, c.range.max)
-                    }
+                    Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                     _ => CurveUniform::disabled(),
                 },
             },
@@ -464,9 +514,7 @@ pub fn extract_particle_systems(
             _angle_pad1: 0.0,
 
             angle_over_lifetime: match &emitter.angle.angle_over_lifetime {
-                Some(c) if !c.is_constant() => {
-                    CurveUniform::enabled(c.range.min, c.range.max)
-                }
+                Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                 _ => CurveUniform::disabled(),
             },
 
@@ -476,9 +524,7 @@ pub fn extract_particle_systems(
                 _pad0: 0.0,
                 _pad1: 0.0,
                 curve: match &emitter.velocities.angular_velocity.velocity_over_lifetime {
-                    Some(c) if !c.is_constant() => {
-                        CurveUniform::enabled(c.range.min, c.range.max)
-                    }
+                    Some(c) if !c.is_constant() => CurveUniform::enabled(c.range.min, c.range.max),
                     _ => CurveUniform::disabled(),
                 },
             },
@@ -576,8 +622,7 @@ pub fn extract_particle_systems(
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(c));
 
-        let emission_buffer_handle = sub_emitter_buf
-            .map(|b| b.buffer.clone());
+        let emission_buffer_handle = sub_emitter_buf.map(|b| b.buffer.clone());
         let source_buffer_handle = if is_sub_emitter_target {
             emission_buffer_map
                 .get(&(emitter_entity.parent_system, runtime.emitter_index))
@@ -636,9 +681,7 @@ pub fn extract_colliders(
             ParticlesColliderShape3D::Sphere { radius } => {
                 ([*radius, 0.0, 0.0], COLLIDER_TYPE_SPHERE)
             }
-            ParticlesColliderShape3D::Box { size } => {
-                ((*size * 0.5).to_array(), COLLIDER_TYPE_BOX)
-            }
+            ParticlesColliderShape3D::Box { size } => ((*size * 0.5).to_array(), COLLIDER_TYPE_BOX),
         };
 
         colliders.push(ColliderUniform {

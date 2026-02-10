@@ -17,8 +17,8 @@ mod velocities;
 pub use types::{FieldKind, VariantField};
 pub use utils::{name_to_label, path_to_label};
 
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::{EditorState, Inspectable};
 use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE_LG};

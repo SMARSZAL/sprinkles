@@ -1,5 +1,5 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
 use crate::ui::tokens::{FONT_PATH, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
@@ -29,12 +29,11 @@ struct TransformAlignComboBox;
 struct TransformAlignContent;
 
 pub fn plugin(app: &mut App) {
-    app.add_observer(handle_transform_align_change)
-        .add_systems(
-            Update,
-            (setup_transform_align_content, sync_transform_align_ui)
-                .after(super::update_inspected_emitter_tracker),
-        );
+    app.add_observer(handle_transform_align_change).add_systems(
+        Update,
+        (setup_transform_align_content, sync_transform_align_ui)
+            .after(super::update_inspected_emitter_tracker),
+    );
 }
 
 pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {

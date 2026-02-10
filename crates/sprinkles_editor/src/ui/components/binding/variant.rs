@@ -1,7 +1,7 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
 use bevy::reflect::{PartialReflect, ReflectRef};
 use bevy_ui_text_input::TextInputQueue;
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
 use crate::ui::widgets::checkbox::CheckboxState;
@@ -25,8 +25,7 @@ use super::{
     get_inspecting_emitter, get_inspecting_emitter_mut, get_variant_field_value_by_reflection,
     get_variant_index_by_reflection, get_vec2_component, get_vec3_component,
     mark_dirty_and_restart, resolve_variant_field_ref, set_variant_field_value_by_reflection,
-    set_vec2_component, set_vec3_component,
-    with_variant_field_mut,
+    set_vec2_component, set_vec3_component, with_variant_field_mut,
 };
 
 pub(super) fn bind_variant_edits(

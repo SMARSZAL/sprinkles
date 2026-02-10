@@ -4,8 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            AsBindGroup, CompareFunction, RenderPipelineDescriptor,
-            SpecializedMeshPipelineError,
+            AsBindGroup, CompareFunction, RenderPipelineDescriptor, SpecializedMeshPipelineError,
         },
         storage::ShaderStorageBuffer,
     },
@@ -48,9 +47,13 @@ impl MaterialExtension for ParticleMaterialExtension {
         key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
         let is_transparent = key.mesh_key.contains(MeshPipelineKey::BLEND_ALPHA)
-            || key.mesh_key.contains(MeshPipelineKey::BLEND_PREMULTIPLIED_ALPHA)
+            || key
+                .mesh_key
+                .contains(MeshPipelineKey::BLEND_PREMULTIPLIED_ALPHA)
             || key.mesh_key.contains(MeshPipelineKey::BLEND_MULTIPLY)
-            || key.mesh_key.contains(MeshPipelineKey::BLEND_ALPHA_TO_COVERAGE);
+            || key
+                .mesh_key
+                .contains(MeshPipelineKey::BLEND_ALPHA_TO_COVERAGE);
 
         if let Some(depth_stencil) = &mut descriptor.depth_stencil {
             depth_stencil.depth_write_enabled = !is_transparent;

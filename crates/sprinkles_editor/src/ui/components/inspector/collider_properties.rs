@@ -1,6 +1,6 @@
-use sprinkles::prelude::*;
 use bevy::prelude::*;
 use bevy_ui_text_input::TextInputQueue;
+use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
 use crate::ui::components::inspector::utils::{VariantConfig, variants_from_reflect};

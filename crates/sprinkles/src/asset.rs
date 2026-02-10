@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{io::Reader, AssetLoader, LoadContext},
+    asset::{AssetLoader, LoadContext, io::Reader},
     prelude::*,
     render::alpha::AlphaMode,
 };
@@ -10,7 +10,6 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::textures::preset::TextureRef;
-
 
 fn is_false(v: &bool) -> bool {
     !*v
@@ -39,7 +38,6 @@ fn is_zero_vec3(v: &Vec3) -> bool {
 fn is_one_vec3(v: &Vec3) -> bool {
     *v == Vec3::ONE
 }
-
 
 #[derive(Default, TypePath)]
 pub struct ParticleSystemAssetLoader;
@@ -74,7 +72,6 @@ impl AssetLoader for ParticleSystemAssetLoader {
         &["ron"]
     }
 }
-
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -327,17 +324,16 @@ fn default_prism_size() -> Vec3 {
 
 impl Default for ParticleMesh {
     fn default() -> Self {
-        Self::Sphere {
-            radius: 1.0,
-        }
+        Self::Sphere { radius: 1.0 }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
 pub enum SerializableAlphaMode {
     Opaque,
-    Mask { cutoff: f32 },
+    Mask {
+        cutoff: f32,
+    },
     #[default]
     Blend,
     Premultiplied,
@@ -512,7 +508,12 @@ impl StandardParticleMaterial {
         let emissive = material.emissive;
 
         Self {
-            base_color: [base_color.red, base_color.green, base_color.blue, base_color.alpha],
+            base_color: [
+                base_color.red,
+                base_color.green,
+                base_color.blue,
+                base_color.alpha,
+            ],
             base_color_texture: None,
             emissive: [emissive.red, emissive.green, emissive.blue, emissive.alpha],
             emissive_texture: None,
@@ -615,11 +616,7 @@ impl Range {
 
     pub fn span(&self) -> f32 {
         let span = self.max - self.min;
-        if span.abs() < f32::EPSILON {
-            1.0
-        } else {
-            span
-        }
+        if span.abs() < f32::EPSILON { 1.0 } else { span }
     }
 
     fn is_zero(&self) -> bool {
@@ -670,7 +667,10 @@ fn default_particles_amount() -> u32 {
 pub struct EmitterEmission {
     #[serde(default, skip_serializing_if = "is_zero_vec3")]
     pub offset: Vec3,
-    #[serde(default = "default_emission_scale", skip_serializing_if = "is_one_vec3")]
+    #[serde(
+        default = "default_emission_scale",
+        skip_serializing_if = "is_one_vec3"
+    )]
     pub scale: Vec3,
     #[serde(default, skip_serializing_if = "EmissionShape::is_default")]
     pub shape: EmissionShape,
@@ -979,7 +979,6 @@ impl Default for SubEmitterConfig {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, Reflect)]
 pub enum CurveMode {
     SingleCurve,
@@ -1086,10 +1085,7 @@ impl Default for CurveTexture {
     fn default() -> Self {
         Self {
             name: Some("Constant".to_string()),
-            points: vec![
-                CurvePoint::new(0.0, 1.0),
-                CurvePoint::new(1.0, 1.0),
-            ],
+            points: vec![CurvePoint::new(0.0, 1.0), CurvePoint::new(1.0, 1.0)],
             range: Range::new(0.0, 1.0),
         }
     }
@@ -1132,7 +1128,9 @@ impl CurveTexture {
             return true;
         }
         let first_value = self.points[0].value;
-        self.points.iter().all(|p| (p.value - first_value).abs() < f64::EPSILON)
+        self.points
+            .iter()
+            .all(|p| (p.value - first_value).abs() < f64::EPSILON)
     }
 
     pub fn sample(&self, t: f32) -> f32 {
@@ -1253,9 +1251,17 @@ fn apply_expo(t: f32, tension: f32) -> f32 {
         return t;
     }
     let eased = if tension >= 0.0 {
-        if t <= 0.0 { 0.0 } else { (2.0_f32).powf(10.0 * (t - 1.0)) }
+        if t <= 0.0 {
+            0.0
+        } else {
+            (2.0_f32).powf(10.0 * (t - 1.0))
+        }
     } else {
-        if t >= 1.0 { 1.0 } else { 1.0 - (2.0_f32).powf(-10.0 * t) }
+        if t >= 1.0 {
+            1.0
+        } else {
+            1.0 - (2.0_f32).powf(-10.0 * t)
+        }
     };
     t + (eased - t) * intensity
 }
@@ -1277,7 +1283,6 @@ fn tension_to_steps(tension: f32) -> u32 {
     let tension = tension.clamp(0.0, 1.0);
     2 + (64.0 * tension) as u32
 }
-
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, Reflect)]
 pub enum GradientInterpolation {
@@ -1390,7 +1395,6 @@ impl SolidOrGradientColor {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum ParticlesColliderShape3D {
