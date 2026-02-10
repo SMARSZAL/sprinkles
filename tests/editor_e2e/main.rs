@@ -1,12 +1,12 @@
 #[path = "../helpers/mod.rs"]
 mod helpers;
 
-mod state;
 mod cache;
-mod project;
-mod integration;
-mod emitter_mgmt;
 mod collider_mgmt;
-mod playback;
+mod emitter_mgmt;
 mod inspector;
+mod integration;
+mod playback;
+mod project;
+mod state;
 mod toast;

@@ -175,12 +175,16 @@ fn test_unsaved_changes_tracks_modifications() {
     assert!(run_until_loaded(&mut app, &handle, 100));
 
     {
-        let mut assets = app.world_mut().resource_mut::<Assets<ParticleSystemAsset>>();
+        let mut assets = app
+            .world_mut()
+            .resource_mut::<Assets<ParticleSystemAsset>>();
         let asset = assets.get_mut(&handle).unwrap();
         asset.emitters[0].time.lifetime = 99.0;
     }
 
-    app.world_mut().resource_mut::<DirtyState>().has_unsaved_changes = true;
+    app.world_mut()
+        .resource_mut::<DirtyState>()
+        .has_unsaved_changes = true;
 
     let dirty = app.world().resource::<DirtyState>();
     assert!(dirty.has_unsaved_changes);

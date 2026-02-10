@@ -1,11 +1,12 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use bevy::{
     prelude::*,
     render::{
+        Extract, Render, RenderApp, RenderSystems,
         render_asset::RenderAssets,
         render_graph::{self, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_resource::{
@@ -14,7 +15,6 @@ use bevy::{
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::GpuImage,
-        Extract, Render, RenderApp, RenderSystems,
     },
 };
 use crossbeam_channel::{Receiver, Sender};
@@ -119,8 +119,7 @@ impl render_graph::Node for ImageCopyDriver {
             let block_dimensions = src_image.texture_format.block_dimensions();
             let block_size = src_image.texture_format.block_copy_size(None).unwrap();
             let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(
-                (src_image.size.width as usize / block_dimensions.0 as usize)
-                    * block_size as usize,
+                (src_image.size.width as usize / block_dimensions.0 as usize) * block_size as usize,
             );
 
             encoder.copy_texture_to_buffer(

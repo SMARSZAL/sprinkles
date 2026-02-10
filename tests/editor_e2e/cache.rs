@@ -7,10 +7,7 @@ fn editor_cache_add_recent_project() {
 
     assert_eq!(cache.recent_projects.len(), 1);
     assert_eq!(cache.recent_projects[0], "project_a.ron");
-    assert_eq!(
-        cache.last_opened_project,
-        Some("project_a.ron".to_string())
-    );
+    assert_eq!(cache.last_opened_project, Some("project_a.ron".to_string()));
 }
 
 #[test]

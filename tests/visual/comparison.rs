@@ -1,10 +1,9 @@
 use std::path::Path;
 
 use super::{
-    capture_frame,
-    helpers::{compare_images, screenshots_baseline_path, screenshots_tmp_path},
     BASELINE_TOLERANCE_AVG_DIFF, BASELINE_TOLERANCE_RATIO, CAPTURE_HEIGHT, CAPTURE_WIDTH,
-    PER_CHANNEL_TOLERANCE,
+    PER_CHANNEL_TOLERANCE, capture_frame,
+    helpers::{compare_images, screenshots_baseline_path, screenshots_tmp_path},
 };
 
 fn save_png(path: &Path, data: &[u8], width: u32, height: u32) {

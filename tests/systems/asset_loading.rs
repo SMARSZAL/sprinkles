@@ -200,7 +200,10 @@ fn load_system_preserves_all_emitter_fields() {
     // draw pass
     assert_eq!(e.draw_pass.draw_order, DrawOrder::Lifetime);
     assert!(!e.draw_pass.shadow_caster);
-    assert_eq!(e.draw_pass.transform_align, Some(TransformAlign::YToVelocity));
+    assert_eq!(
+        e.draw_pass.transform_align,
+        Some(TransformAlign::YToVelocity)
+    );
     match &e.draw_pass.mesh {
         ParticleMesh::Quad {
             orientation,
@@ -242,7 +245,12 @@ fn load_system_preserves_all_emitter_fields() {
     assert_eq!(e.velocities.initial_velocity.max, 10.0);
     assert_eq!(e.velocities.radial_velocity.velocity.min, 1.0);
     assert_eq!(e.velocities.radial_velocity.velocity.max, 3.0);
-    assert!(e.velocities.radial_velocity.velocity_over_lifetime.is_some());
+    assert!(
+        e.velocities
+            .radial_velocity
+            .velocity_over_lifetime
+            .is_some()
+    );
     assert_eq!(e.velocities.angular_velocity.velocity.min, -90.0);
     assert_eq!(e.velocities.angular_velocity.velocity.max, 90.0);
     assert_eq!(e.velocities.pivot, Vec3::new(0.0, 0.5, 0.0));
@@ -409,7 +417,10 @@ fn roundtrip_serialize_deserialize() {
     assert_eq!(deser_e.time.lifetime, orig_e.time.lifetime);
     assert_eq!(deser_e.time.delay, orig_e.time.delay);
     assert_eq!(deser_e.time.fixed_seed, orig_e.time.fixed_seed);
-    assert_eq!(deser_e.emission.particles_amount, orig_e.emission.particles_amount);
+    assert_eq!(
+        deser_e.emission.particles_amount,
+        orig_e.emission.particles_amount
+    );
     assert_eq!(deser_e.velocities.spread, orig_e.velocities.spread);
     assert_eq!(deser_e.accelerations.gravity, orig_e.accelerations.gravity);
     assert_eq!(deser_e.particle_flags, orig_e.particle_flags);

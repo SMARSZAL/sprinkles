@@ -45,7 +45,9 @@ fn mesh_change_updates_config() {
     let (mut app, handle, _) = setup_loaded_system("minimal_particle_system.ron");
 
     // modify the asset's mesh to a different variant
-    let mut assets = app.world_mut().resource_mut::<Assets<ParticleSystemAsset>>();
+    let mut assets = app
+        .world_mut()
+        .resource_mut::<Assets<ParticleSystemAsset>>();
     let asset = assets.get_mut(&handle).unwrap();
     asset.emitters[0].draw_pass.mesh = ParticleMesh::Cuboid {
         half_size: Vec3::new(0.5, 0.5, 0.5),
@@ -94,7 +96,9 @@ fn material_change_updates_handle() {
         .id();
 
     // modify the material in the asset
-    let mut assets = app.world_mut().resource_mut::<Assets<ParticleSystemAsset>>();
+    let mut assets = app
+        .world_mut()
+        .resource_mut::<Assets<ParticleSystemAsset>>();
     let asset = assets.get_mut(&handle).unwrap();
     if let DrawPassMaterial::Standard(ref mut mat) = asset.emitters[0].draw_pass.material {
         mat.base_color = [1.0, 0.0, 0.0, 1.0];
@@ -132,7 +136,9 @@ fn collider_enabled_toggle() {
     assert!(colliders.iter().all(|(_, c)| c.enabled));
 
     // disable a collider in the asset
-    let mut assets = app.world_mut().resource_mut::<Assets<ParticleSystemAsset>>();
+    let mut assets = app
+        .world_mut()
+        .resource_mut::<Assets<ParticleSystemAsset>>();
     let asset = assets.get_mut(&handle).unwrap();
     asset.colliders[0].enabled = false;
 

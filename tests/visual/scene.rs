@@ -11,8 +11,8 @@ use bevy::{
     },
 };
 
-use super::frame_capture::{ImageCopier, MainWorldReceiver};
 use super::PRE_ROLL_FRAMES;
+use super::frame_capture::{ImageCopier, MainWorldReceiver};
 use sprinkles::runtime::ParticleSystem3D;
 
 #[derive(Resource, Clone)]

@@ -1,7 +1,5 @@
 use bevy::math::Vec3;
-use sprinkles::asset::{
-    ColliderData, EmitterData, ParticleFlags, ParticlesColliderShape3D,
-};
+use sprinkles::asset::{ColliderData, EmitterData, ParticleFlags, ParticlesColliderShape3D};
 
 #[test]
 fn test_inspect_color_over_lifetime_gradient() {
@@ -39,22 +37,21 @@ fn test_inspect_initial_color_variant_switch() {
         sprinkles::asset::SolidOrGradientColor::Solid { .. }
     ));
 
-    emitter.colors.initial_color =
-        sprinkles::asset::SolidOrGradientColor::Gradient {
-            gradient: sprinkles::asset::Gradient {
-                stops: vec![
-                    sprinkles::asset::GradientStop {
-                        color: [1.0, 0.0, 0.0, 1.0],
-                        position: 0.0,
-                    },
-                    sprinkles::asset::GradientStop {
-                        color: [0.0, 0.0, 1.0, 1.0],
-                        position: 1.0,
-                    },
-                ],
-                interpolation: sprinkles::asset::GradientInterpolation::Linear,
-            },
-        };
+    emitter.colors.initial_color = sprinkles::asset::SolidOrGradientColor::Gradient {
+        gradient: sprinkles::asset::Gradient {
+            stops: vec![
+                sprinkles::asset::GradientStop {
+                    color: [1.0, 0.0, 0.0, 1.0],
+                    position: 0.0,
+                },
+                sprinkles::asset::GradientStop {
+                    color: [0.0, 0.0, 1.0, 1.0],
+                    position: 1.0,
+                },
+            ],
+            interpolation: sprinkles::asset::GradientInterpolation::Linear,
+        },
+    };
 
     assert!(matches!(
         emitter.colors.initial_color,
@@ -114,7 +111,10 @@ fn test_inspect_sub_emitter_constant() {
     });
 
     let sub = emitter.sub_emitter.as_ref().unwrap();
-    assert!(matches!(sub.mode, sprinkles::asset::SubEmitterMode::Constant));
+    assert!(matches!(
+        sub.mode,
+        sprinkles::asset::SubEmitterMode::Constant
+    ));
     assert_eq!(sub.target_emitter, 1);
 }
 

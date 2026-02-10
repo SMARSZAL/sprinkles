@@ -44,13 +44,15 @@ fn stop_resets_state() {
     runtime.cycle = 3;
     runtime.accumulated_delta = 0.5;
     runtime.one_shot_completed = true;
-    runtime.simulation_steps.push(sprinkles::runtime::SimulationStep {
-        prev_system_time: 0.0,
-        system_time: 0.0,
-        cycle: 0,
-        delta_time: 0.0,
-        clear_requested: false,
-    });
+    runtime
+        .simulation_steps
+        .push(sprinkles::runtime::SimulationStep {
+            prev_system_time: 0.0,
+            system_time: 0.0,
+            cycle: 0,
+            delta_time: 0.0,
+            clear_requested: false,
+        });
 
     runtime.stop(Some(42));
 

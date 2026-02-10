@@ -72,7 +72,9 @@ fn dirty_state_tracks_unsaved_changes() {
         assert!(!dirty.has_unsaved_changes);
     }
 
-    app.world_mut().resource_mut::<DirtyState>().has_unsaved_changes = true;
+    app.world_mut()
+        .resource_mut::<DirtyState>()
+        .has_unsaved_changes = true;
 
     let dirty = app.world().resource::<DirtyState>();
     assert!(dirty.has_unsaved_changes);

@@ -21,15 +21,27 @@ fn gradient_white() {
 fn gradient_cache_key_differs() {
     let grad_a = Gradient {
         stops: vec![
-            GradientStop { color: [1.0, 0.0, 0.0, 1.0], position: 0.0 },
-            GradientStop { color: [0.0, 0.0, 1.0, 1.0], position: 1.0 },
+            GradientStop {
+                color: [1.0, 0.0, 0.0, 1.0],
+                position: 0.0,
+            },
+            GradientStop {
+                color: [0.0, 0.0, 1.0, 1.0],
+                position: 1.0,
+            },
         ],
         interpolation: GradientInterpolation::Linear,
     };
     let grad_b = Gradient {
         stops: vec![
-            GradientStop { color: [0.0, 1.0, 0.0, 1.0], position: 0.0 },
-            GradientStop { color: [1.0, 1.0, 0.0, 1.0], position: 1.0 },
+            GradientStop {
+                color: [0.0, 1.0, 0.0, 1.0],
+                position: 0.0,
+            },
+            GradientStop {
+                color: [1.0, 1.0, 0.0, 1.0],
+                position: 1.0,
+            },
         ],
         interpolation: GradientInterpolation::Linear,
     };
@@ -45,5 +57,8 @@ fn gradient_interpolation_variants() {
     assert_ne!(linear, steps);
     assert_ne!(linear, smoothstep);
     assert_ne!(steps, smoothstep);
-    assert_eq!(GradientInterpolation::default(), GradientInterpolation::Linear);
+    assert_eq!(
+        GradientInterpolation::default(),
+        GradientInterpolation::Linear
+    );
 }

@@ -77,15 +77,27 @@ fn gradient_cache_different_gradients_get_different_handles() {
 
     let gradient_a = sprinkles::asset::Gradient {
         stops: vec![
-            sprinkles::asset::GradientStop { color: [1.0, 0.0, 0.0, 1.0], position: 0.0 },
-            sprinkles::asset::GradientStop { color: [0.0, 0.0, 1.0, 1.0], position: 1.0 },
+            sprinkles::asset::GradientStop {
+                color: [1.0, 0.0, 0.0, 1.0],
+                position: 0.0,
+            },
+            sprinkles::asset::GradientStop {
+                color: [0.0, 0.0, 1.0, 1.0],
+                position: 1.0,
+            },
         ],
         interpolation: sprinkles::asset::GradientInterpolation::Linear,
     };
     let gradient_b = sprinkles::asset::Gradient {
         stops: vec![
-            sprinkles::asset::GradientStop { color: [0.0, 1.0, 0.0, 1.0], position: 0.0 },
-            sprinkles::asset::GradientStop { color: [1.0, 1.0, 0.0, 1.0], position: 1.0 },
+            sprinkles::asset::GradientStop {
+                color: [0.0, 1.0, 0.0, 1.0],
+                position: 0.0,
+            },
+            sprinkles::asset::GradientStop {
+                color: [1.0, 1.0, 0.0, 1.0],
+                position: 1.0,
+            },
         ],
         interpolation: sprinkles::asset::GradientInterpolation::Linear,
     };

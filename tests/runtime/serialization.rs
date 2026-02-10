@@ -148,8 +148,14 @@ fn collision_mode_all_variants_roundtrip() {
         let deserialized: EmitterCollisionMode = ron::from_str(&serialized).unwrap();
         match (mode, &deserialized) {
             (
-                EmitterCollisionMode::Rigid { friction: f1, bounce: b1 },
-                EmitterCollisionMode::Rigid { friction: f2, bounce: b2 },
+                EmitterCollisionMode::Rigid {
+                    friction: f1,
+                    bounce: b1,
+                },
+                EmitterCollisionMode::Rigid {
+                    friction: f2,
+                    bounce: b2,
+                },
             ) => {
                 assert_eq!(f1, f2);
                 assert_eq!(b1, b2);
@@ -203,8 +209,7 @@ fn curve_easing_all_variants_roundtrip() {
 #[test]
 fn particle_flags_roundtrip() {
     let flags = ParticleFlags::ROTATE_Y | ParticleFlags::DISABLE_Z;
-    let serialized =
-        ron::ser::to_string_pretty(&flags, ron::ser::PrettyConfig::default()).unwrap();
+    let serialized = ron::ser::to_string_pretty(&flags, ron::ser::PrettyConfig::default()).unwrap();
     let deserialized: ParticleFlags = ron::from_str(&serialized).unwrap();
     assert_eq!(deserialized, flags);
 }
@@ -212,8 +217,7 @@ fn particle_flags_roundtrip() {
 #[test]
 fn particle_flags_empty_roundtrip() {
     let flags = ParticleFlags::empty();
-    let serialized =
-        ron::ser::to_string_pretty(&flags, ron::ser::PrettyConfig::default()).unwrap();
+    let serialized = ron::ser::to_string_pretty(&flags, ron::ser::PrettyConfig::default()).unwrap();
     let deserialized: ParticleFlags = ron::from_str(&serialized).unwrap();
     assert_eq!(deserialized, flags);
 }
@@ -244,10 +248,7 @@ fn quad_orientation_all_variants_roundtrip() {
 
 #[test]
 fn dimension_all_variants_roundtrip() {
-    let variants = [
-        ParticleSystemDimension::D3,
-        ParticleSystemDimension::D2,
-    ];
+    let variants = [ParticleSystemDimension::D3, ParticleSystemDimension::D2];
     for dim in &variants {
         assert_eq!(&roundtrip_ron(dim), dim, "failed for {dim:?}");
     }

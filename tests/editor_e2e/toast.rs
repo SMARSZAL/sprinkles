@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use sprinkles_editor::ui::components::toasts::ToastEvent;
-use sprinkles_editor::ui::widgets::toast::{ToastVariant, DEFAULT_TOAST_DURATION};
+use sprinkles_editor::ui::widgets::toast::{DEFAULT_TOAST_DURATION, ToastVariant};
 
 #[test]
 fn test_toast_info_construction() {

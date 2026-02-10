@@ -1,8 +1,6 @@
 use super::{
-    capture_frame,
-    comparison::capture_and_compare,
-    helpers::compare_images,
-    BASELINE_TOLERANCE_AVG_DIFF, BASELINE_TOLERANCE_RATIO, PER_CHANNEL_TOLERANCE,
+    BASELINE_TOLERANCE_AVG_DIFF, BASELINE_TOLERANCE_RATIO, PER_CHANNEL_TOLERANCE, capture_frame,
+    comparison::capture_and_compare, helpers::compare_images,
 };
 
 fn test_fixed_seed_determinism() {

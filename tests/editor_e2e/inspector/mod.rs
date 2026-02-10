@@ -1,8 +1,8 @@
+mod complex;
+mod enums;
+mod roundtrip;
 mod scalars;
 mod vectors;
-mod enums;
-mod complex;
-mod roundtrip;
 
 use bevy::math::Vec3;
 use bevy::reflect::GetPath;

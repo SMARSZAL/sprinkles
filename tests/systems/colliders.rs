@@ -44,7 +44,10 @@ fn collider_3d_components_match_config() {
     assert_eq!(colliders.len(), 2);
 
     for (collider_entity, collider_3d, transform) in &colliders {
-        assert!(collider_3d.enabled, "colliders should be enabled by default");
+        assert!(
+            collider_3d.enabled,
+            "colliders should be enabled by default"
+        );
 
         let assets = app.world().resource::<Assets<ParticleSystemAsset>>();
         let asset = assets.get(&handle).unwrap();

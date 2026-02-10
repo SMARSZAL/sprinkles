@@ -9,12 +9,7 @@ mod helpers;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bevy::{
-    app::ScheduleRunnerPlugin,
-    prelude::*,
-    window::ExitCondition,
-    winit::WinitPlugin,
-};
+use bevy::{app::ScheduleRunnerPlugin, prelude::*, window::ExitCondition, winit::WinitPlugin};
 
 use frame_capture::*;
 use helpers::*;
@@ -48,9 +43,7 @@ pub(crate) fn capture_frame(fixture: &str, target_frame: u32) -> Option<Vec<u8>>
             .disable::<WinitPlugin>(),
     );
 
-    app.add_plugins(ScheduleRunnerPlugin::run_loop(
-        Duration::from_millis(1),
-    ));
+    app.add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(1)));
 
     app.add_plugins(sprinkles::SprinklesPlugin);
     app.add_plugins(ImageCopyPlugin);
