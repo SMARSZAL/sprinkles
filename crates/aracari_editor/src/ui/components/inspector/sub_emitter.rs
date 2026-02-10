@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use crate::state::{DirtyState, EditorState, Inspectable};
 use crate::ui::components::inspector::utils::name_to_label;
 use crate::ui::tokens::{FONT_PATH, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
+use crate::ui::widgets::alert::{AlertSpan, AlertVariant, alert};
 use crate::ui::widgets::checkbox::{CheckboxCommitEvent, CheckboxProps, checkbox};
 use crate::ui::widgets::combobox::{
     ComboBoxChangeEvent, ComboBoxConfig, ComboBoxOptionData, combobox_with_selected,
@@ -99,9 +100,7 @@ fn target_options(
         .iter()
         .enumerate()
         .filter(|(i, _)| *i != current_emitter_index)
-        .map(|(i, e)| {
-            ComboBoxOptionData::new(name_to_label(&e.name)).with_value(&i.to_string())
-        })
+        .map(|(i, e)| ComboBoxOptionData::new(name_to_label(&e.name)).with_value(&i.to_string()))
         .collect()
 }
 
@@ -227,7 +226,6 @@ fn spawn_fields(
             let target_idx = target_combo_index(config, asset, current_emitter_index);
             spawn_target_combobox(fields, font, asset, current_emitter_index, target_idx);
 
-            // frequency field (constant mode only)
             let freq_val = config.as_ref().map(|c| c.frequency).unwrap_or(4.0);
             fields
                 .spawn((
@@ -260,7 +258,6 @@ fn spawn_fields(
                     });
                 });
 
-            // amount field (event modes only)
             let amount_val = config.as_ref().map(|c| c.amount).unwrap_or(1);
             fields
                 .spawn((
@@ -293,17 +290,35 @@ fn spawn_fields(
                     });
                 });
 
-            // keep velocity checkbox
             let keep_vel = config.as_ref().map(|c| c.keep_velocity).unwrap_or(false);
             fields.spawn(fields_row()).with_children(|row| {
                 row.spawn((
                     SubEmitterKeepVelocityCheckbox,
                     checkbox(
-                        CheckboxProps::new("Keep Velocity").checked(keep_vel),
+                        CheckboxProps::new("Keep velocity").checked(keep_vel),
                         asset_server,
                     ),
                 ));
             });
+
+            let target_amount = config
+                .as_ref()
+                .and_then(|c| asset.emitters.get(c.target_emitter))
+                .map(|e| e.emission.particles_amount)
+                .unwrap_or(0);
+
+            fields.spawn(alert(
+                AlertVariant::Important,
+                vec![
+                    AlertSpan::Text("A total of up to ".into()),
+                    AlertSpan::Bold(format!("{target_amount}")),
+                    AlertSpan::Text(
+                        " particles can be spawned at once, limited by the sub-emitter's ".into(),
+                    ),
+                    AlertSpan::Bold("Particles amount".into()),
+                    AlertSpan::Text(".".into()),
+                ],
+            ));
         });
 }
 
@@ -352,14 +367,7 @@ fn setup_sub_emitter_content(
             spawn_mode_combobox(parent, &font, mode_idx);
 
             if let Some(asset) = asset_ref {
-                spawn_fields(
-                    parent,
-                    &config,
-                    asset,
-                    emitter_index,
-                    &font,
-                    &asset_server,
-                );
+                spawn_fields(parent, &config, asset, emitter_index, &font, &asset_server);
             }
         })
         .id();
@@ -438,12 +446,10 @@ fn find_first_other_emitter_index(editor_state: &EditorState, emitter: &EmitterD
         .map(|i| i.index as usize)
         .unwrap_or(0);
 
-    // preserve existing target if set
     if let Some(ref config) = emitter.sub_emitter {
         return config.target_emitter;
     }
 
-    // pick first emitter that isn't ourselves
     if current_index == 0 { 1 } else { 0 }
 }
 
@@ -630,7 +636,6 @@ fn sync_sub_emitter_ui(
         }
     }
 
-    // update target combobox options when emitter names change
     if assets.is_changed() {
         let emitter_index = editor_state
             .inspecting
@@ -674,8 +679,15 @@ fn sync_sub_emitter_ui(
         Some(Some(c)) if matches!(c.mode, SubEmitterMode::AtEnd | SubEmitterMode::AtCollision | SubEmitterMode::AtStart)
     );
 
-    fn set_visible(query: &mut Query<&mut Node, impl bevy::ecs::query::QueryFilter>, visible: bool) {
-        let display = if visible { Display::Flex } else { Display::None };
+    fn set_visible(
+        query: &mut Query<&mut Node, impl bevy::ecs::query::QueryFilter>,
+        visible: bool,
+    ) {
+        let display = if visible {
+            Display::Flex
+        } else {
+            Display::None
+        };
         for mut node in query {
             if node.display != display {
                 node.display = display;
