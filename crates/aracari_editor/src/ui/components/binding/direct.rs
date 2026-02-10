@@ -26,6 +26,17 @@ use super::{
     set_variant_field_enum_by_name, set_vec2_component, set_vec3_component,
 };
 
+const RESPAWN_FIELD_PATHS: &[&str] = &[
+    "enabled",
+    "draw_pass.material.unlit",
+    "draw_pass.shadow_caster",
+    "emission.particles_amount",
+];
+
+fn requires_respawn(path: &str) -> bool {
+    RESPAWN_FIELD_PATHS.contains(&path)
+}
+
 fn is_descendant_of_variant_edit(
     entity: Entity,
     variant_edit_query: &Query<(), With<EditorVariantEdit>>,
@@ -416,6 +427,7 @@ pub(super) fn handle_gradient_edit_commit(
 
 pub(super) fn handle_text_edit_commit(
     trigger: On<TextEditCommitEvent>,
+    mut commands: Commands,
     editor_state: Res<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
     mut dirty_state: ResMut<DirtyState>,
@@ -457,6 +469,7 @@ pub(super) fn handle_text_edit_commit(
             &vector_edit_children,
             &mut dirty_state,
             &mut emitter_runtimes,
+            &mut commands,
         );
     }
 }
@@ -470,6 +483,7 @@ fn handle_direct_text_commit(
     vector_edit_children: &Query<&Children, With<EditorVectorEdit>>,
     dirty_state: &mut DirtyState,
     emitter_runtimes: &mut Query<&mut EmitterRuntime>,
+    commands: &mut Commands,
 ) {
     let Some(child_of) = parents.get(entity).ok() else {
         return;
@@ -529,6 +543,9 @@ fn handle_direct_text_commit(
 
         if set_field_value_by_reflection(emitter, &field.path, &new_value) {
             mark_dirty_and_restart(dirty_state, emitter_runtimes, emitter.time.fixed_seed);
+            if requires_respawn(&field.path) {
+                commands.trigger(RespawnEmittersEvent);
+            }
         }
         return;
     }
@@ -541,6 +558,9 @@ fn handle_direct_text_commit(
 
     if set_field_value_by_reflection(emitter, &field.path, &value) {
         mark_dirty_and_restart(dirty_state, emitter_runtimes, emitter.time.fixed_seed);
+        if requires_respawn(&field.path) {
+            commands.trigger(RespawnEmittersEvent);
+        }
     }
 }
 
@@ -585,6 +605,10 @@ pub(super) fn handle_checkbox_commit(
                 &mut emitter_runtimes,
                 emitter.time.fixed_seed,
             );
+            let full_path = format!("{}.{}", config.path, binding.field_name);
+            if requires_respawn(&full_path) {
+                commands.trigger(RespawnEmittersEvent);
+            }
         }
     } else {
         let Some((_, field)) = find_field_for_entity(trigger.entity, &fields, &parents) else {
@@ -596,7 +620,7 @@ pub(super) fn handle_checkbox_commit(
                 &mut emitter_runtimes,
                 emitter.time.fixed_seed,
             );
-            if field.path == "enabled" {
+            if requires_respawn(&field.path) {
                 commands.trigger(RespawnEmittersEvent);
             }
         }
