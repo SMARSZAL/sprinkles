@@ -348,14 +348,12 @@ fn handle_add_button_click(
         return;
     };
 
-    // find the add button entity for anchoring the popover
     let add_btn_entity = add_buttons
         .iter()
         .find(|(_, btn)| btn.0 == section_entity)
         .map(|(e, _)| e);
     let Some(anchor) = add_btn_entity else { return };
 
-    // toggle: close if already open
     for (popover_entity, _) in &existing_popovers {
         commands.entity(popover_entity).try_despawn();
         return;

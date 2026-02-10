@@ -271,7 +271,6 @@ fn handle_trigger_click(
         return;
     };
 
-    // check if popover already exists for this combobox (toggle behavior)
     for (popover_entity, popover_ref) in &existing_popovers {
         if popover_ref.0 == combo_trigger.0 {
             commands.entity(popover_entity).try_despawn();
@@ -294,10 +293,8 @@ fn handle_trigger_click(
         }
     }
 
-    // check if any other popover is open - if so, don't open a new one unless nested
     let any_popover_open = !all_popovers.is_empty();
     if any_popover_open {
-        // check if this combobox is nested inside an open popover
         let is_nested = all_popovers
             .iter()
             .any(|popover| is_descendant_of(combo_trigger.0, popover, &parents));
@@ -308,13 +305,11 @@ fn handle_trigger_click(
 
     let combobox_entity = combo_trigger.0;
 
-    // set button to active state and rotate chevron
     if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
         *variant = ButtonVariant::ActiveAlt;
         set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
     }
 
-    // rotate chevron icon (last ImageNode child of the button)
     if let Ok(button_children) = children_query.get(trigger.entity) {
         for child in button_children.iter().rev() {
             if images.get(child).is_ok() {
@@ -390,7 +385,6 @@ fn reset_combobox_trigger_style(
         set_button_variant(base_variant, &mut bg, &mut border);
     }
 
-    // reset chevron rotation
     if let Ok(button_children) = children_query.get(trigger_entity) {
         for child in button_children.iter().rev() {
             if images.get(child).is_ok() {
@@ -432,7 +426,6 @@ fn handle_combobox_popover_closed(
             ButtonVariant::Default
         };
 
-        // find the trigger button entity (first child of combobox)
         for child in combobox_children.iter() {
             if triggers.get(child).is_ok() {
                 reset_combobox_trigger_style(

@@ -1,13 +1,6 @@
-//! Prelude module for convenient imports.
-//!
-//! ```rust,ignore
-//! use sprinkles::prelude::*;
-//! ```
 
-// core plugin
 pub use crate::SprinklesPlugin;
 
-// asset types
 pub use crate::asset::{
     AnimatedVelocity, ColliderData, DrawOrder, DrawPassMaterial, EmissionShape,
     EmitterAccelerations, EmitterCollision, EmitterCollisionMode, EmitterColors, EmitterData,
@@ -22,7 +15,6 @@ pub use crate::asset::{
 pub use crate::textures::preset::PresetTexture;
 pub use crate::textures::preset::TextureRef;
 
-// runtime types
 pub use crate::runtime::{
     ColliderEntity, EmitterEntity, EmitterRuntime, ParticleMaterial, ParticleMaterialHandle,
     ParticleSystem2D, ParticleSystem3D, ParticleSystemRuntime, ParticlesCollider3D,

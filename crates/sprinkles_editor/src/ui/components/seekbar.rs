@@ -203,7 +203,6 @@ fn update_seekbar(
         **text = format_duration(duration);
     }
 
-    // skip fill update while dragging since it's handled by the drag event
     if drag.dragging {
         return;
     }

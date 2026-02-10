@@ -201,7 +201,7 @@ fn sample_curve(x: f32) -> f32 {
 
     let local_t = (t - left_pos) / segment_range;
 
-    // adjust tension based on slope direction so positive tension always bends DOWN
+    // adjust tension based on slope direction so positive tension always bends down
     let slope_sign = sign(right_val - left_val);
     let effective_tension = right_tension * slope_sign;
     let curved_t = apply_curve(local_t, right_mode, right_easing, effective_tension);
@@ -255,12 +255,9 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         color = mix(color, vec4<f32>(0.5, 0.5, 0.5, 0.8), 0.8);
     }
 
-    // compute distance to curve using polyline approach (like Godot)
-    // sample the curve at regular pixel intervals and compute distance to line segments
+    // compute distance to curve using polyline segments sampled at pixel intervals
     let px = vec2<f32>(in.uv.x * in.size.x, in.uv.y * in.size.y);
     var min_dist = 1000.0;
-
-    // sample density: one sample per pixel across the width
     let num_samples = i32(in.size.x);
     var prev_pos = vec2<f32>(0.0, (1.0 - normalize_value(sample_curve(0.0))) * in.size.y);
 
@@ -269,7 +266,6 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         let curr_y = 1.0 - normalize_value(sample_curve(t));
         let curr_pos = vec2<f32>(t * in.size.x, curr_y * in.size.y);
 
-        // distance to this line segment
         let seg_dist = dist_to_segment(px, prev_pos, curr_pos);
         min_dist = min(min_dist, seg_dist);
 

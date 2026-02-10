@@ -1147,7 +1147,6 @@ fn update_handle_positions(
 
             node.left = percent(stop.position * 100.0);
 
-            // handle children: [arrow, square]; square -> color_indicator
             if let Some(&square_entity) = children.get(1) {
                 if let Ok(square_children) = children_query.get(square_entity) {
                     if let Some(&color_indicator) = square_children.first() {
@@ -1185,7 +1184,6 @@ fn update_stop_position_inputs(
             let position_percent = (stop.position * 100.0).round() as i32;
             let text = position_percent.to_string();
 
-            // hierarchy: StopPositionInput -> wrapper -> text_input (with TextInputQueue)
             for wrapper_entity in input_children.iter() {
                 let Ok(wrapper_children) = children_query.get(wrapper_entity) else {
                     continue;
@@ -1218,7 +1216,6 @@ fn update_handle_colors(
 ) {
     let removed: Vec<Entity> = removed_dragging.read().collect();
 
-    // collect entities that need color updates
     let mut updates: Vec<(Entity, Srgba)> = Vec::new();
 
     for (entity, hovered, is_dragging) in &handles {
@@ -1246,7 +1243,6 @@ fn update_handle_colors(
         }
     }
 
-    // apply color updates to squares
     for (child_of, mut bg) in &mut squares {
         let handle_entity = child_of.parent();
         if let Some((_, color)) = updates.iter().find(|(e, _)| *e == handle_entity) {
@@ -1254,10 +1250,8 @@ fn update_handle_colors(
         }
     }
 
-    // apply color updates to arrows (arrows are grandchildren: handle -> container -> arrow)
     for (arrow_child_of, mut bg) in &mut arrows {
         let container_entity = arrow_child_of.parent();
-        // find the handle that owns this container
         for (handle_entity, color) in &updates {
             if let Ok(handle_children) = children_query.get(*handle_entity) {
                 if handle_children.contains(&container_entity) {
@@ -1573,7 +1567,6 @@ fn handle_stop_position_commit(
     mut states: Query<&mut GradientEditState>,
     parents: Query<&ChildOf>,
 ) {
-    // hierarchy: StopPositionInput -> wrapper -> text_input (trigger.entity)
     let wrapper_entity = parents
         .get(trigger.entity)
         .map(|p| p.parent())

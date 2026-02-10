@@ -1107,7 +1107,6 @@ impl CurvePreset {
 const CURVE_PRESETS: &[CurvePreset] = &[
     CurvePreset::constant("Constant"),
     CurvePreset::new("Linear", CurveMode::DoubleCurve, CurveEasing::Power, 0.0),
-    // Quad
     CurvePreset::new(
         "Quad in",
         CurveMode::SingleCurve,
@@ -1126,7 +1125,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Power,
         QUAD_TENSION,
     ),
-    // Cubic
     CurvePreset::new(
         "Cubic in",
         CurveMode::SingleCurve,
@@ -1145,7 +1143,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Power,
         CUBIC_TENSION,
     ),
-    // Quart
     CurvePreset::new(
         "Quart in",
         CurveMode::SingleCurve,
@@ -1164,7 +1161,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Power,
         QUART_TENSION,
     ),
-    // Quint
     CurvePreset::new(
         "Quint in",
         CurveMode::SingleCurve,
@@ -1183,7 +1179,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Power,
         QUINT_TENSION,
     ),
-    // Sine
     CurvePreset::new("Sine in", CurveMode::SingleCurve, CurveEasing::Sine, 1.0),
     CurvePreset::new("Sine out", CurveMode::SingleCurve, CurveEasing::Sine, -1.0),
     CurvePreset::new(
@@ -1192,7 +1187,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Sine,
         1.0,
     ),
-    // Expo
     CurvePreset::new("Expo in", CurveMode::SingleCurve, CurveEasing::Expo, 1.0),
     CurvePreset::new("Expo out", CurveMode::SingleCurve, CurveEasing::Expo, -1.0),
     CurvePreset::new(
@@ -1201,7 +1195,6 @@ const CURVE_PRESETS: &[CurvePreset] = &[
         CurveEasing::Expo,
         1.0,
     ),
-    // Circ
     CurvePreset::new("Circ in", CurveMode::SingleCurve, CurveEasing::Circ, 1.0),
     CurvePreset::new("Circ out", CurveMode::SingleCurve, CurveEasing::Circ, -1.0),
     CurvePreset::new(
@@ -1251,7 +1244,6 @@ fn handle_flip_click(
         return;
     };
 
-    // collect interpolation properties from points (skip first, it doesn't control any segment)
     let interp_props: Vec<_> = state
         .curve
         .points
@@ -1260,22 +1252,18 @@ fn handle_flip_click(
         .map(|p| (p.mode, p.easing, p.tension))
         .collect();
 
-    // flip positions
     for point in &mut state.curve.points {
         point.position = 1.0 - point.position;
     }
 
-    // reverse points array
     state.curve.points.reverse();
 
-    // reset first point's interpolation properties (it doesn't control any segment)
     if let Some(first) = state.curve.points.first_mut() {
         first.mode = CurveMode::default();
         first.easing = CurveEasing::default();
         first.tension = 0.0;
     }
 
-    // apply reversed interpolation properties to subsequent points
     for (i, (mode, easing, tension)) in interp_props.iter().rev().enumerate() {
         if let Some(point) = state.curve.points.get_mut(i + 1) {
             point.mode = *mode;
@@ -1294,7 +1282,6 @@ fn sync_trigger_label(
     new_trigger_children: Query<Entity, (With<CurveEditTrigger>, Added<Children>)>,
     mut texts: Query<&mut Text>,
 ) {
-    // sync when state changes
     for curve_edit_entity in &changed_states {
         let Ok(state) = states.get(curve_edit_entity) else {
             continue;
@@ -1312,14 +1299,13 @@ fn sync_trigger_label(
         }
     }
 
-    // sync when trigger children are first available (button setup just ran)
     for trigger_entity in &new_trigger_children {
         let Ok((_, trigger, children)) = triggers.get(trigger_entity) else {
             continue;
         };
         let curve_edit_entity = trigger.0;
         if changed_states.get(curve_edit_entity).is_ok() {
-            continue; // already handled above
+            continue;
         }
         let Ok(state) = states.get(curve_edit_entity) else {
             continue;

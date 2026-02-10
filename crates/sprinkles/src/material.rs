@@ -16,13 +16,10 @@ const SHADER_ASSET_PATH: &str = "embedded://sprinkles/shaders/particle_material.
 
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
 pub struct ParticleMaterialExtension {
-    /// sorted particle data buffer (written in draw order by the sort compute shader)
     #[storage(100, read_only)]
     pub sorted_particles: Handle<ShaderStorageBuffer>,
-    /// maximum number of particles
     #[uniform(101)]
     pub max_particles: u32,
-    /// particle flags (emitter-level flags that affect all particles)
     #[uniform(102)]
     pub particle_flags: u32,
 }
@@ -50,15 +47,12 @@ impl MaterialExtension for ParticleMaterialExtension {
         _layout: &MeshVertexBufferLayoutRef,
         key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        // check if material uses a transparent blend mode
         let is_transparent = key.mesh_key.contains(MeshPipelineKey::BLEND_ALPHA)
             || key.mesh_key.contains(MeshPipelineKey::BLEND_PREMULTIPLIED_ALPHA)
             || key.mesh_key.contains(MeshPipelineKey::BLEND_MULTIPLY)
             || key.mesh_key.contains(MeshPipelineKey::BLEND_ALPHA_TO_COVERAGE);
 
         if let Some(depth_stencil) = &mut descriptor.depth_stencil {
-            // opaque particles write to depth for proper 3D occlusion within emitter.
-            // transparent particles skip depth write for cross-emitter transparency.
             depth_stencil.depth_write_enabled = !is_transparent;
             depth_stencil.depth_compare = CompareFunction::GreaterEqual;
         }

@@ -11,7 +11,6 @@ use thiserror::Error;
 
 use crate::textures::preset::TextureRef;
 
-// serde skip helpers
 
 fn is_false(v: &bool) -> bool {
     !*v
@@ -41,7 +40,6 @@ fn is_one_vec3(v: &Vec3) -> bool {
     *v == Vec3::ONE
 }
 
-// asset loader
 
 #[derive(Default, TypePath)]
 pub struct ParticleSystemAssetLoader;
@@ -77,7 +75,6 @@ impl AssetLoader for ParticleSystemAssetLoader {
     }
 }
 
-// asset format
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -87,7 +84,6 @@ bitflags! {
         const DISABLE_Z = 1 << 2;
 
         // TODO: requires implementing damping
-        // const DAMPING_AS_FRICTION = 1 << 3;
     }
 }
 
@@ -337,7 +333,6 @@ impl Default for ParticleMesh {
     }
 }
 
-// material types
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
 pub enum SerializableAlphaMode {
@@ -512,8 +507,6 @@ impl StandardParticleMaterial {
         }
     }
 
-    /// Creates a StandardParticleMaterial from a StandardMaterial.
-    /// Note: texture paths cannot be recovered from handles and will be set to None.
     pub fn from_standard_material(material: &StandardMaterial) -> Self {
         let base_color = material.base_color.to_linear();
         let emissive = material.emissive;
@@ -1181,7 +1174,6 @@ impl CurveTexture {
 
         let local_t = (t - left.position) / segment_range;
 
-        // adjust tension based on slope direction to match shader behavior
         let slope_sign = (right.value - left.value).signum() as f32;
         let effective_tension = right.tension as f32 * slope_sign;
         let curved_t = apply_curve(local_t, right.mode, right.easing, effective_tension);
@@ -1399,7 +1391,6 @@ impl SolidOrGradientColor {
     }
 }
 
-// collision shapes
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum ParticlesColliderShape3D {

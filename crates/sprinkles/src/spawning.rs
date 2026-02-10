@@ -18,7 +18,6 @@ use crate::{
     },
 };
 
-// time systems
 
 const MAX_FRAME_DELTA: f32 = 0.1;
 
@@ -43,12 +42,10 @@ pub fn update_particle_time(
 
         runtime.simulation_steps.clear();
 
-        // consume clear_requested flag here (like godot clearing it inside _particles_process)
         let clear_requested = runtime.clear_requested;
         runtime.clear_requested = false;
 
         if system_runtime.paused {
-            // when paused, only dispatch if a clear is needed
             if clear_requested {
                 let step = SimulationStep {
                     prev_system_time: runtime.system_time,
@@ -70,8 +67,6 @@ pub fn update_particle_time(
             let frame_delta = time.delta_secs().min(MAX_FRAME_DELTA);
             runtime.accumulated_delta += frame_delta;
 
-            // like godot: force at least one dispatch when clear is requested
-            // (godot: `while (todo >= frame_time || particles->clear)`)
             while runtime.accumulated_delta >= fixed_delta
                 || (clear_requested && runtime.simulation_steps.is_empty())
             {
@@ -130,7 +125,6 @@ pub fn update_particle_time(
     }
 }
 
-// mesh generation
 
 fn create_cylinder_mesh(
     top_radius: f32,
@@ -262,8 +256,6 @@ fn create_cylinder_mesh(
 }
 
 fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
-    // a prism/wedge shape: wide at bottom, narrows to a single edge at top
-    // 5 faces: front, back, left (slanted), right (slanted), bottom (no top - it's an edge)
 
     let start_pos = size * -0.5;
     let subdivide_w = subdivide.x as usize;
@@ -275,15 +267,12 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
     let mut uvs: Vec<[f32; 2]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
-    // front and back faces
-    // these are trapezoidal faces that narrow from full width at bottom to a line at top
     {
         let mut y = start_pos.y;
         let mut thisrow: u32 = 0;
         let mut prevrow: u32 = 0;
 
         for j in 0..=(subdivide_h + 1) {
-            // scale goes from 0 (top edge) to 1 (bottom full width)
             let scale = j as f32 / (subdivide_h + 1) as f32;
             let scaled_size_x = size.x * scale;
             let start_x = start_pos.x + (1.0 - scale) * size.x * left_to_right;
@@ -294,28 +283,22 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
             for i in 0..=(subdivide_w + 1) {
                 let u = (i as f32 / (subdivide_w + 1) as f32) * scale;
 
-                // front face (z = +half)
                 positions.push([start_x + x, -y, -start_pos.z]);
                 normals.push([0.0, 0.0, 1.0]);
                 uvs.push([u, v]);
 
-                // back face (z = -half)
                 positions.push([start_x + scaled_size_x - x, -y, start_pos.z]);
                 normals.push([0.0, 0.0, -1.0]);
                 uvs.push([u, v]);
 
-                // indices - first row is special (triangles to apex)
                 if i > 0 && j == 1 {
                     let i2 = (i * 2) as u32;
 
-                    // front triangle (reverse winding)
                     indices.extend_from_slice(&[thisrow + i2 - 2, thisrow + i2, prevrow + i2]);
-                    // back triangle (reverse winding)
                     indices.extend_from_slice(&[thisrow + i2 - 1, thisrow + i2 + 1, prevrow + i2 + 1]);
                 } else if i > 0 && j > 0 {
                     let i2 = (i * 2) as u32;
 
-                    // front quad (two triangles, reverse winding)
                     indices.extend_from_slice(&[
                         thisrow + i2 - 2,
                         prevrow + i2,
@@ -324,7 +307,6 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
                         thisrow + i2,
                         prevrow + i2,
                     ]);
-                    // back quad (two triangles, reverse winding)
                     indices.extend_from_slice(&[
                         thisrow + i2 - 1,
                         prevrow + i2 + 1,
@@ -344,9 +326,7 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
         }
     }
 
-    // left and right faces (slanted sides)
     {
-        // normals for slanted faces
         let normal_left = Vec3::new(-size.y, size.x * left_to_right, 0.0).normalize();
         let normal_right = Vec3::new(size.y, size.x * (1.0 - left_to_right), 0.0).normalize();
 
@@ -365,12 +345,10 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
             for i in 0..=(subdivide_d + 1) {
                 let u = i as f32 / (subdivide_d + 1) as f32;
 
-                // right face
                 positions.push([right, -y, -z]);
                 normals.push(normal_right.to_array());
                 uvs.push([u, v]);
 
-                // left face
                 positions.push([left, -y, z]);
                 normals.push(normal_left.to_array());
                 uvs.push([u, v]);
@@ -378,7 +356,6 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
                 if i > 0 && j > 0 {
                     let i2 = (i * 2) as u32;
 
-                    // right quad (reverse winding)
                     indices.extend_from_slice(&[
                         thisrow + i2 - 2,
                         prevrow + i2,
@@ -387,7 +364,6 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
                         thisrow + i2,
                         prevrow + i2,
                     ]);
-                    // left quad (reverse winding)
                     indices.extend_from_slice(&[
                         thisrow + i2 - 1,
                         prevrow + i2 + 1,
@@ -407,7 +383,6 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
         }
     }
 
-    // bottom face (rectangular, at y = -half)
     {
         let mut z = start_pos.z;
         let mut thisrow = positions.len() as u32;
@@ -428,7 +403,6 @@ fn create_prism_mesh(left_to_right: f32, size: Vec3, subdivide: Vec3) -> Mesh {
                     let curr = thisrow + i as u32;
                     let prev_curr = prevrow + i as u32;
 
-                    // reverse winding for bottom face
                     indices.extend_from_slice(&[
                         curr - 1,
                         prev_curr,
@@ -661,7 +635,6 @@ fn combined_particle_flags(emitter: &EmitterData) -> u32 {
     flags
 }
 
-// material creation
 
 fn create_particle_material_from_config(
     config: &DrawPassMaterial,
@@ -687,7 +660,6 @@ fn create_particle_material_from_config(
     }
 }
 
-// spawning systems
 
 pub fn setup_particle_systems(
     mut commands: Commands,
@@ -779,7 +751,6 @@ pub fn setup_particle_systems(
             }
         }
 
-        // create emission buffers for sub-emitter parent → target pairs
         for (emitter_index, emitter) in asset.emitters.iter().enumerate() {
             if let Some(ref sub_config) = emitter.sub_emitter {
                 let target_index = sub_config.target_emitter;
@@ -788,8 +759,6 @@ pub fn setup_particle_systems(
                 }
 
                 let target_amount = asset.emitters[target_index].emission.particles_amount;
-                // header: atomic<i32> + u32 = 8 bytes, padded to 16 (4 u32s)
-                // entry stride: vec4 + vec4 + u32 = 36 bytes, padded to 48 (12 u32s)
                 let buffer_len = 4 + 12 * target_amount as usize;
                 let mut initial_data = vec![0u32; buffer_len];
                 initial_data[1] = target_amount;
@@ -831,7 +800,6 @@ pub fn setup_particle_systems(
     }
 }
 
-// small offset per emitter index to ensure consistent depth sorting for overlapping emitters
 const EMITTER_DEPTH_OFFSET: f32 = 0.0001;
 
 pub fn sync_emitter_mesh_transforms(
@@ -847,7 +815,6 @@ pub fn sync_emitter_mesh_transforms(
 
     for (emitter_mesh, mut mesh_transform) in mesh_query.iter_mut() {
         if let Ok((emitter_global, runtime)) = emitter_query.get(emitter_mesh.emitter_entity) {
-            // offset along camera forward based on emitter index for consistent ordering
             let depth_offset = camera_forward * (runtime.emitter_index as f32 * EMITTER_DEPTH_OFFSET);
             mesh_transform.translation = emitter_global.translation() + depth_offset;
         }

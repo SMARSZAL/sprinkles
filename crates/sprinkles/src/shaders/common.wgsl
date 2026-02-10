@@ -22,7 +22,7 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 const EMITTER_FLAG_ROTATE_Y: u32 = 2u;
 const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
 
-// transform align mode (2-bit value stored in bits 3-4 of particle_flags)
+// transform align mode (3-bit value stored in bits 3-5 of particle_flags)
 const TRANSFORM_ALIGN_SHIFT: u32 = 3u;
 const TRANSFORM_ALIGN_MASK: u32 = 7u;
 const TRANSFORM_ALIGN_DISABLED: u32 = 0u;
@@ -48,6 +48,8 @@ const SUB_EMITTER_MODE_AT_END: u32 = 2u;
 const SUB_EMITTER_MODE_AT_COLLISION: u32 = 3u;
 const SUB_EMITTER_MODE_AT_START: u32 = 4u;
 
+// multiply-xorshift integer hash
+// https://nullprogram.com/blog/2018/07/31/
 fn hash(n: u32) -> u32 {
     var x = n;
     x = ((x >> 16u) ^ x) * 0x45d9f3bu;

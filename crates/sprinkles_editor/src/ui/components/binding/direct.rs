@@ -89,12 +89,10 @@ pub(super) fn bind_values_to_inputs(
                 continue;
             }
 
-            // handle Vector fields by finding the component index
             if let FieldKind::Vector(suffixes) = &field.kind {
                 let value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
                 let component_count = suffixes.vector_size().count();
 
-                // find the vector edit ancestor and determine component index
                 if let Some(vec_edit_entity) =
                     find_ancestor(child_of.parent(), &parents, MAX_ANCESTOR_DEPTH, |e| {
                         vector_edit_children.get(e).is_ok()
@@ -269,7 +267,6 @@ pub(super) fn bind_curve_edit_values(
             continue;
         };
 
-        // try binding directly to CurveTexture
         if let Some(curve_texture) = value.try_downcast_ref::<CurveTexture>() {
             state.set_curve(curve_texture.clone());
             commands
@@ -278,12 +275,10 @@ pub(super) fn bind_curve_edit_values(
             continue;
         }
 
-        // try binding to Option<CurveTexture>
         if let Some(curve_opt) = value.try_downcast_ref::<Option<CurveTexture>>() {
             if let Some(curve) = curve_opt {
                 state.set_curve(curve.clone());
             }
-            // mark as bound even if None so we can create the curve on commit
             commands
                 .entity(entity)
                 .try_insert(Bound::direct(field_entity));
@@ -322,7 +317,6 @@ pub(super) fn handle_curve_edit_commit(
         return;
     };
 
-    // handle direct CurveTexture binding
     if let Some(curve_texture) = target.try_downcast_mut::<CurveTexture>() {
         *curve_texture = trigger.curve.clone();
         mark_dirty_and_restart(
@@ -333,7 +327,6 @@ pub(super) fn handle_curve_edit_commit(
         return;
     }
 
-    // handle Option<CurveTexture> binding
     if let Some(curve_opt) = target.try_downcast_mut::<Option<CurveTexture>>() {
         match curve_opt {
             Some(curve) => {
@@ -511,7 +504,6 @@ fn handle_direct_text_commit(
         return;
     };
 
-    // handle Vector fields
     if let FieldKind::Vector(suffixes) = &field.kind {
         let current_value = get_field_value_by_reflection(emitter, &field.path, &field.kind);
         let component_count = suffixes.vector_size().count();

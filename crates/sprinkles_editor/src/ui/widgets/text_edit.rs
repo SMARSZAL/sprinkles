@@ -105,7 +105,6 @@ struct NumericRange {
     max: f64,
 }
 
-/// Marker for inputs that allow empty values (skip clamping when empty)
 #[derive(Component)]
 struct AllowEmpty;
 
@@ -647,7 +646,6 @@ fn handle_clamp_on_unfocus(
 
     let text = strip_suffix(&buffer.get_text(), suffix);
 
-    // emit commit event for all text edits on blur
     commands.trigger(TextEditCommitEvent {
         entity: was_focused,
         text: text.clone(),

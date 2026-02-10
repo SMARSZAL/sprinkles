@@ -36,12 +36,9 @@ impl ParticleData {
     }
 }
 
-/// system-wide runtime state for a particle system
 #[derive(Component)]
 pub struct ParticleSystemRuntime {
-    /// set to true when the simulation is paused (freezes physics)
     pub paused: bool,
-    /// when true, one-shot emitters will restart after completing
     pub force_loop: bool,
     pub global_seed: u32,
 }
@@ -57,17 +54,14 @@ impl Default for ParticleSystemRuntime {
 }
 
 impl ParticleSystemRuntime {
-    /// Pause playback, freezing all particles in place
     pub fn pause(&mut self) {
         self.paused = true;
     }
 
-    /// Resume playback
     pub fn resume(&mut self) {
         self.paused = false;
     }
 
-    /// Toggle pause state
     pub fn toggle(&mut self) {
         self.paused = !self.paused;
     }
@@ -82,7 +76,6 @@ pub struct SimulationStep {
     pub clear_requested: bool,
 }
 
-/// per-emitter runtime state
 #[derive(Component)]
 pub struct EmitterRuntime {
     pub emitting: bool,
@@ -90,16 +83,10 @@ pub struct EmitterRuntime {
     pub prev_system_time: f32,
     pub cycle: u32,
     pub accumulated_delta: f32,
-    /// the active seed used for particle randomness. this is either the user-configured
-    /// fixed seed or a randomly generated seed, depending on `use_fixed_seed` setting.
     pub random_seed: u32,
-    /// set to true when a one-shot emitter completes its emission cycle
     pub one_shot_completed: bool,
-    /// set to true to clear all particles on the next frame
     pub clear_requested: bool,
-    /// index into the asset's emitters array
     pub emitter_index: usize,
-    /// simulation steps for this frame (populated by update_particle_time)
     pub simulation_steps: Vec<SimulationStep>,
 }
 
@@ -128,7 +115,6 @@ impl EmitterRuntime {
         if total_duration <= 0.0 {
             return 0.0;
         }
-        // during delay period, phase is 0
         let time_in_cycle = self.system_time % total_duration;
         if time_in_cycle < time.delay {
             return 0.0;
@@ -144,7 +130,6 @@ impl EmitterRuntime {
         if total_duration <= 0.0 {
             return 0.0;
         }
-        // during delay period, phase is 0
         let time_in_cycle = self.prev_system_time % total_duration;
         if time_in_cycle < time.delay {
             return 0.0;
@@ -152,7 +137,6 @@ impl EmitterRuntime {
         (time_in_cycle - time.delay) / time.lifetime
     }
 
-    /// returns true if the emitter is currently past its delay period and should spawn particles
     pub fn is_past_delay(&self, time: &crate::asset::EmitterTime) -> bool {
         let total_duration = time.total_duration();
         if total_duration <= 0.0 {
@@ -162,14 +146,11 @@ impl EmitterRuntime {
         time_in_cycle >= time.delay
     }
 
-    /// Start or resume playback
     pub fn play(&mut self) {
         self.emitting = true;
         self.one_shot_completed = false;
     }
 
-    /// Stop playback, reset time, and clear all particles.
-    /// If `fixed_seed` is Some, uses that seed. Otherwise generates a new random seed.
     pub fn stop(&mut self, fixed_seed: Option<u32>) {
         self.emitting = false;
         self.system_time = 0.0;
@@ -182,14 +163,11 @@ impl EmitterRuntime {
         self.simulation_steps.clear();
     }
 
-    /// Restart playback from the beginning.
-    /// If `fixed_seed` is Some, uses that seed. Otherwise generates a new random seed.
     pub fn restart(&mut self, fixed_seed: Option<u32>) {
         self.stop(fixed_seed);
         self.emitting = true;
     }
 
-    /// Seek to a specific time in seconds.
     pub fn seek(&mut self, time: f32) {
         self.system_time = time;
         self.prev_system_time = time;
@@ -220,7 +198,6 @@ pub fn is_past_delay(time: f32, emitter_time: &crate::asset::EmitterTime) -> boo
     time_in_cycle >= emitter_time.delay
 }
 
-/// marker component for emitter child entities
 #[derive(Component)]
 pub struct EmitterEntity {
     pub parent_system: Entity,
@@ -240,17 +217,14 @@ fn rand_seed() -> u32 {
     (duration.as_nanos() & 0xFFFFFFFF) as u32
 }
 
-/// stores handles to particle storage buffer for GPU rendering
 #[derive(Component)]
 pub struct ParticleBufferHandle {
     pub particle_buffer: Handle<ShaderStorageBuffer>,
     pub indices_buffer: Handle<ShaderStorageBuffer>,
-    /// sorted particle data for rendering (written in draw order)
     pub sorted_particles_buffer: Handle<ShaderStorageBuffer>,
     pub max_particles: u32,
 }
 
-/// stores raw GPU buffers for compute shader access in render world
 #[derive(Component)]
 pub struct ParticleGpuBuffers {
     pub particle_buffer: Buffer,
@@ -258,31 +232,25 @@ pub struct ParticleGpuBuffers {
     pub max_particles: u32,
 }
 
-/// links an emitter's rendering mesh entity to its emitter
 #[derive(Component)]
 pub struct EmitterMeshEntity {
     pub emitter_entity: Entity,
 }
 
-/// stores the current mesh configuration for change detection
 #[derive(Component)]
 pub struct CurrentMeshConfig(pub ParticleMesh);
 
-/// stores the current material configuration for change detection
 #[derive(Component)]
 pub struct CurrentMaterialConfig(pub DrawPassMaterial);
 
-/// stores the mesh handle for particle entities
 #[derive(Component)]
 pub struct ParticleMeshHandle(pub Handle<Mesh>);
 
 pub type ParticleMaterial = ExtendedMaterial<StandardMaterial, ParticleMaterialExtension>;
 
-/// stores the shared material handle for all particle entities in a system
 #[derive(Component)]
 pub struct ParticleMaterialHandle(pub Handle<ParticleMaterial>);
 
-/// stores the emission buffer handle for sub-emitter parent → target pairs
 #[derive(Component)]
 pub struct SubEmitterBufferHandle {
     pub buffer: Handle<ShaderStorageBuffer>,
@@ -290,7 +258,6 @@ pub struct SubEmitterBufferHandle {
     pub max_particles: u32,
 }
 
-/// collider component for particle collision detection
 #[derive(Component, Debug, Clone)]
 pub struct ParticlesCollider3D {
     pub enabled: bool,

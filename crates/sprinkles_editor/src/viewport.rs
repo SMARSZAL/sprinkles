@@ -398,7 +398,6 @@ pub fn handle_playback_play_event(
             .filter_map(|e| e.sub_emitter.as_ref().map(|s| s.target_emitter))
             .collect();
 
-        // check if all one-shot emitters have completed (ignoring subemitter targets)
         let all_one_shots_completed =
             asset
                 .emitters
@@ -423,7 +422,6 @@ pub fn handle_playback_play_event(
             .filter(|(idx, _)| !sub_target_indices.contains(idx))
             .any(|(_, e)| e.time.one_shot);
 
-        // restart completed one-shot emitters when play is requested
         if has_one_shot && all_one_shots_completed {
             for (emitter, mut runtime) in emitter_query.iter_mut() {
                 if emitter.parent_system == system_entity {
@@ -506,7 +504,6 @@ pub fn sync_playback_state(
             continue;
         };
 
-        // while seeking, pause and skip normal updates
         if is_seeking {
             if !system_runtime.paused {
                 system_runtime.pause();
@@ -514,14 +511,12 @@ pub fn sync_playback_state(
             continue;
         }
 
-        // ignore subemitter targets for completion checks
         let sub_target_indices: Vec<usize> = asset
             .emitters
             .iter()
             .filter_map(|e| e.sub_emitter.as_ref().map(|s| s.target_emitter))
             .collect();
 
-        // check if all one-shot emitters have completed
         let all_one_shots_completed =
             asset
                 .emitters
@@ -546,7 +541,6 @@ pub fn sync_playback_state(
             .filter(|(idx, _)| !sub_target_indices.contains(idx))
             .any(|(_, e)| e.time.one_shot);
 
-        // handle one-shot emitters completion
         if has_one_shot && all_one_shots_completed {
             if system_runtime.force_loop {
                 for (emitter, mut runtime) in emitter_query.iter_mut() {
@@ -559,7 +553,6 @@ pub fn sync_playback_state(
                     }
                 }
             } else {
-                // pause and reset elapsed time to 0
                 system_runtime.pause();
                 for (emitter, mut runtime) in emitter_query.iter_mut() {
                     if emitter.parent_system == system_entity {
@@ -570,7 +563,6 @@ pub fn sync_playback_state(
             continue;
         }
 
-        // sync playback state
         if !system_runtime.paused {
             for (emitter, mut runtime) in emitter_query.iter_mut() {
                 if emitter.parent_system == system_entity

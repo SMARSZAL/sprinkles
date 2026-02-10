@@ -787,7 +787,6 @@ fn setup_color_picker_content(
             let current_color = state.to_srgba();
             let current_rgb = hsv_to_rgb(state.hue, state.saturation, state.brightness);
 
-            // hsv rectangle
             parent
                 .spawn((
                     HsvRectangle(picker_entity),
@@ -819,7 +818,6 @@ fn setup_color_picker_content(
                 .observe(on_control_drag::<HsvRectangle>)
                 .observe(on_control_drag_end::<HsvRectangle>);
 
-            // slider row: [slider column | preview swatch]
             parent
                 .spawn(Node {
                     column_gap: px(12.0),
@@ -827,7 +825,6 @@ fn setup_color_picker_content(
                     ..default()
                 })
                 .with_children(|slider_row| {
-                    // slider column (hue + alpha)
                     slider_row
                         .spawn(Node {
                             flex_direction: FlexDirection::Column,
@@ -836,7 +833,6 @@ fn setup_color_picker_content(
                             ..default()
                         })
                         .with_children(|slider_col| {
-                            // hue slider
                             slider_col
                                 .spawn((HueSlider(picker_entity), slider_node()))
                                 .with_children(|hue_parent| {
@@ -870,7 +866,6 @@ fn setup_color_picker_content(
                                 .observe(on_control_drag::<HueSlider>)
                                 .observe(on_control_drag_end::<HueSlider>);
 
-                            // alpha slider
                             slider_col
                                 .spawn((AlphaSlider(picker_entity), slider_node()))
                                 .with_children(|alpha_parent| {
@@ -949,7 +944,6 @@ fn setup_color_picker_content(
                                 .observe(on_control_drag_end::<AlphaSlider>);
                         });
 
-                    // preview swatch
                     slider_row
                         .spawn((
                             Pickable::IGNORE,
@@ -985,7 +979,6 @@ fn setup_color_picker_content(
                         });
                 });
 
-            // color input row
             parent
                 .spawn((
                     ColorInputRow(picker_entity),
@@ -1101,7 +1094,6 @@ fn spawn_input_fields(
         true,
     );
 
-    // icon-only mode selector combobox
     parent
         .spawn((
             ColorInputField {
@@ -1318,7 +1310,6 @@ fn update_color_picker_visuals(
     mut alpha_materials: ResMut<Assets<AlphaSliderMaterial>>,
     mut checkerboard_materials: ResMut<Assets<CheckerboardMaterial>>,
 ) {
-    // collect pickers needing update: state changed OR layout just resolved
     let mut needs_update = Vec::new();
     for entity in &changed_pickers {
         if let Ok(state) = all_pickers.get(entity) {
@@ -1342,7 +1333,6 @@ fn update_color_picker_visuals(
             clamped_rgba[3],
         );
 
-        // get computed sizes for dynamic handle positioning (convert physical to logical pixels)
         let hsv_size = all_hsv_rects
             .iter()
             .find(|(r, _)| r.0 == picker_entity)

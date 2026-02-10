@@ -227,7 +227,6 @@ pub(super) fn handle_variant_change(
         return;
     };
 
-    // nested variant edit: write through parent's path + field resolution
     if let Ok(binding) = variant_field_bindings.get(variant_edit_entity) {
         let Ok(parent_config) = variant_edit_configs.get(binding.variant_edit) else {
             return;
@@ -622,7 +621,6 @@ fn get_nested_variant_index(value: &dyn PartialReflect, variants: &[VariantDefin
         return pos;
     }
 
-    // for Option::Some, check the inner value's variant name
     if variant_name == "Some" {
         if let Some(inner) = enum_ref.field_at(0) {
             if let ReflectRef::Enum(inner_enum) = inner.reflect_ref() {

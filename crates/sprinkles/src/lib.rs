@@ -86,7 +86,6 @@ impl Plugin for SprinklesPlugin {
     }
 }
 
-// re-exports
 pub use asset::{
     ColliderData, DrawOrder, DrawPassMaterial, EmitterAccelerations, EmitterCollision,
     EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission,

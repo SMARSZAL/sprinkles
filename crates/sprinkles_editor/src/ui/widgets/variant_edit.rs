@@ -449,7 +449,6 @@ fn sync_variant_edit_button(
             continue;
         };
 
-        // the button is the last child (label is first)
         let Some(&button_entity) = children.last() else {
             continue;
         };
@@ -457,7 +456,6 @@ fn sync_variant_edit_button(
             continue;
         };
 
-        // update the button text
         let mut text_updated = false;
         for child in button_children.iter() {
             if let Ok(mut text) = texts.get_mut(child) {
@@ -467,7 +465,6 @@ fn sync_variant_edit_button(
             }
         }
 
-        // update the left icon via the marker component (skip if using swatch slot)
         if !config.show_swatch_slot {
             for (left_icon, mut image, mut node) in &mut left_icons {
                 if left_icon.0 != entity {
@@ -520,7 +517,6 @@ fn handle_variant_edit_click(
         return;
     };
 
-    // toggle behavior: if this variant edit's popover is already open, close it
     if let Some(popover_entity) = state.popover {
         if existing_popovers.get(popover_entity).is_ok() {
             commands.entity(popover_entity).try_despawn();
@@ -536,7 +532,6 @@ fn handle_variant_edit_click(
         }
     }
 
-    // check if any other popover is open - if so, don't open a new one unless nested
     let any_popover_open = !all_popovers.is_empty();
     if any_popover_open {
         let is_nested = all_popovers
@@ -633,7 +628,6 @@ fn handle_variant_edit_click(
                     .spawn((VariantFieldsContainer(entity), popover_content()))
                     .id();
 
-                // only auto-spawn fields in AutoFields mode
                 if has_auto_fields {
                     if let Some(variant) = selected_variant {
                         let mut cmds = parent.commands();
@@ -686,7 +680,6 @@ fn handle_variant_combobox_change(
         return;
     };
 
-    // update the button text
     if let Ok(children) = variant_edit_children.get(variant_edit_entity) {
         if let Some(&button_entity) = children.last() {
             if let Ok(button_children) = children_query.get(button_entity) {
@@ -700,7 +693,6 @@ fn handle_variant_combobox_change(
         }
     }
 
-    // update the left icon via the marker component (skip if using swatch slot)
     if !config.show_swatch_slot {
         for (left_icon, mut image, mut node) in &mut left_icons {
             if left_icon.0 != variant_edit_entity {
@@ -716,21 +708,18 @@ fn handle_variant_combobox_change(
         }
     }
 
-    // find and update the fields container (only in AutoFields mode)
     if matches!(config.content_mode, VariantContentMode::AutoFields) {
         for (container_entity, container) in &fields_containers {
             if container.0 != variant_edit_entity {
                 continue;
             }
 
-            // despawn old children
             if let Ok(children) = children_query.get(container_entity) {
                 for child in children.iter() {
                     commands.entity(child).try_despawn();
                 }
             }
 
-            // spawn new fields
             spawn_variant_fields_for_entity(
                 &mut commands,
                 container_entity,

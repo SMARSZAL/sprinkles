@@ -201,8 +201,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var p = particles[idx];
 
-    // handle clear request: fully reset particle data, then continue to
-    // emission/update (like godot, clear does not skip the rest of the step)
+    // fully reset particle data, then continue to emission/update
+    // (clear does not skip the rest of the step)
     if (params.clear_particles != 0u) {
         p.position = vec4(0.0, 0.0, 0.0, 1.0);
         p.velocity = vec4(0.0);
@@ -211,7 +211,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         p.alignment_dir = vec4(0.0, 1.0, 0.0, 0.0);
     }
 
-    // when delta is zero (paused clear), write the cleared data and stop
+    // when delta is zero (paused), write cleared data and stop
     if (params.delta_time <= 0.0) {
         particles[idx] = p;
         return;
@@ -232,19 +232,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
             if (src_index >= 0) {
                 let entry = src_emission_buffer.data[src_index];
-
-                // spawn particle using target emitter's own properties
                 p = spawn_particle(idx);
 
-                // override position from parent particle
                 if ((entry.flags & EMISSION_FLAG_HAS_POSITION) != 0u) {
                     p.position = vec4(entry.position.xyz, p.position.w);
                 }
 
-                // override velocity from parent particle
                 if ((entry.flags & EMISSION_FLAG_HAS_VELOCITY) != 0u) {
                     p.velocity = vec4(entry.velocity.xyz, p.velocity.w);
-                    // update alignment direction
                     if length(entry.velocity.xyz) > 0.0 {
                         p.alignment_dir = vec4(normalize(entry.velocity.xyz), p.alignment_dir.w);
                     }
@@ -258,11 +253,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var should_restart = false;
         if (params.emitting != 0u) {
             if (params.system_phase < params.prev_system_phase) {
-                // wrapped around: check if phase is in [prev, 1) or [0, current)
+                // phase wrapped around
                 should_restart = adjusted_phase >= params.prev_system_phase ||
                                adjusted_phase < params.system_phase;
             } else {
-                // normal case: check if phase is in [prev, current)
                 should_restart = adjusted_phase >= params.prev_system_phase &&
                                adjusted_phase < params.system_phase;
             }
@@ -286,7 +280,7 @@ fn get_emission_offset(seed: u32) -> vec3<f32> {
             pos = vec3(0.0);
         }
         case EMISSION_SHAPE_SPHERE: {
-            // uniform distribution inside sphere using rejection sampling approximation
+            // uniform distribution inside sphere
             let u = hash_to_float(seed);
             let v = hash_to_float(seed + 1u);
             let w = hash_to_float(seed + 2u);
@@ -324,7 +318,6 @@ fn get_emission_offset(seed: u32) -> vec3<f32> {
             pos = vec3(u, v, w) * params.emission_box_extents;
         }
         case EMISSION_SHAPE_RING: {
-            // ring emission with configurable axis, height, radius, and inner radius
             let u = hash_to_float(seed);
             let v = hash_to_float(seed + 1u);
             let h = hash_to_float(seed + 2u);
@@ -334,10 +327,8 @@ fn get_emission_offset(seed: u32) -> vec3<f32> {
             let r = params.emission_ring_inner_radius + sqrt(v) * r_range;
             let height_offset = (h - 0.5) * params.emission_ring_height;
 
-            // create position in ring local space (ring lies in XY plane, axis is Z)
+            // ring local space (ring lies in XY plane, axis is Z)
             let local_pos = vec3(r * cos(theta), r * sin(theta), height_offset);
-
-            // rotate to align with the configured axis
             pos = rotate_to_axis(local_pos, params.emission_ring_axis);
         }
         default: {
@@ -345,10 +336,9 @@ fn get_emission_offset(seed: u32) -> vec3<f32> {
         }
     }
 
-    // apply offset and scale
     var result = pos * params.emission_scale + params.emission_offset;
 
-    // disable Z for 2D mode
+    // disable z for 2d mode
     if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
         result.z = 0.0;
     }
@@ -369,7 +359,6 @@ fn rotate_to_axis(v: vec3<f32>, axis: vec3<f32>) -> vec3<f32> {
         return v;
     }
 
-    // compute rotation axis and angle
     let rot_axis = normalize(cross(z_axis, target_axis));
     let cos_angle = dot_val;
     let sin_angle = sqrt(1.0 - cos_angle * cos_angle);
@@ -379,28 +368,23 @@ fn rotate_to_axis(v: vec3<f32>, axis: vec3<f32>) -> vec3<f32> {
 }
 
 fn get_emission_velocity(seed: u32) -> vec3<f32> {
-    // base direction
     var dir = normalize(params.direction);
     if (length(params.direction) < 0.0001) {
         dir = vec3(1.0, 0.0, 0.0);
     }
 
-    // apply spread angle to randomize direction within a cone
+    // randomize direction within a cone based on spread angle
     let spread_rad = radians(params.spread);
     if (spread_rad > 0.0001) {
         let u = hash_to_float(seed);
         let v = hash_to_float(seed + 1u);
 
-        // random angle around the cone
         let phi = 2.0 * PI * u;
-        // random angle from center (0 to spread)
         let theta = spread_rad * sqrt(v);
 
-        // create a random direction within the cone
         let cos_theta = cos(theta);
         let sin_theta = sin(theta);
 
-        // find perpendicular vectors to direction
         var perp1: vec3<f32>;
         if (abs(dir.x) < 0.9) {
             perp1 = normalize(cross(dir, vec3(1.0, 0.0, 0.0)));
@@ -418,13 +402,11 @@ fn get_emission_velocity(seed: u32) -> vec3<f32> {
         dir = normalize(dir);
     }
 
-    // interpolate between min and max velocity
     let vel_t = hash_to_float(seed + 2u);
     let speed = mix(params.initial_velocity_min, params.initial_velocity_max, vel_t);
 
     var result = dir * speed;
 
-    // disable Z for 2D mode
     if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
         result.z = 0.0;
     }
@@ -447,15 +429,14 @@ fn get_initial_angular_velocity(seed: u32) -> f32 {
     return mix(params.angular_velocity.min, params.angular_velocity.max, t);
 }
 
-// computes the final angle in radians based on initial angle, angular velocity,
-// and lifetime curves (following godot's approach)
+// computes the final angle in radians from initial angle, angular velocity,
+// and lifetime curves
 fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
     let lifetime_frac = clamp(age / lifetime, 0.0, 1.0);
 
-    // base angle from initial randomization
     var base_angle = get_initial_angle(seed);
 
-    // apply angle_over_lifetime curve as a multiplier to the initial angle
+    // curve applies as a multiplier to the initial angle
     if (params.angle_over_lifetime.enabled != 0u) {
         let curve_value = sample_spline_curve(
             angle_over_lifetime_texture,
@@ -466,7 +447,6 @@ fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
         base_angle *= curve_value;
     }
 
-    // accumulate angular velocity over time
     let angular_vel = get_initial_angular_velocity(seed + 1u);
     if (abs(angular_vel) > 0.0001) {
         if (params.angular_velocity.curve.enabled != 0u) {
@@ -485,7 +465,7 @@ fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
     return radians(base_angle);
 }
 
-// turbulence noise functions (based on godot's implementation)
+// 3d noise / turbulence functions
 fn grad(p: vec4<f32>) -> vec4<f32> {
     let frac_p = fract(vec4(
         dot(p, vec4(0.143081, 0.001724, 0.280166, 0.262771)),
@@ -497,7 +477,7 @@ fn grad(p: vec4<f32>) -> vec4<f32> {
 }
 
 fn noise_4d(coord: vec4<f32>) -> f32 {
-    // domain rotation for better xyz slices + animation patterns
+    // domain rotation to improve the look of xyz slices + animation patterns
     let rotated = vec4(
         coord.xyz + dot(coord, vec4(vec3(-0.1666667), -0.5)),
         dot(coord, vec4(0.5))
@@ -702,7 +682,6 @@ fn get_radial_velocity_curve_multiplier(age: f32, lifetime: f32) -> f32 {
 }
 
 // computes radial displacement (movement away from or toward velocity_pivot)
-// based on godot's implementation
 fn get_radial_displacement(
     position: vec3<f32>,
     radial_velocity: f32,
@@ -713,16 +692,13 @@ fn get_radial_displacement(
 ) -> vec3<f32> {
     var radial_displacement = vec3(0.0);
 
-    // skip if delta time is too small
     if (dt < 0.001) {
         return radial_displacement;
     }
 
-    // apply lifetime curve
     let curve_multiplier = get_radial_velocity_curve_multiplier(age, lifetime);
     let effective_velocity = radial_velocity * curve_multiplier;
 
-    // skip if no radial velocity
     if (abs(effective_velocity) < 0.0001) {
         return radial_displacement;
     }
@@ -735,19 +711,17 @@ fn get_radial_displacement(
     let min_distance = 0.01;
 
     if (distance_to_pivot > min_distance) {
-        // normal case: radiate away from pivot
         let direction = normalize(to_particle);
         radial_displacement = direction * effective_velocity;
 
-        // for negative (inward) velocity, clamp to prevent overshooting pivot
+        // clamp inward velocity to prevent overshooting pivot
         if (effective_velocity < 0.0) {
             let max_inward_speed = distance_to_pivot / dt;
             let clamped_speed = min(abs(effective_velocity), max_inward_speed);
             radial_displacement = direction * (-clamped_speed);
         }
     } else {
-        // particle is at or very close to pivot - use random direction
-        // this prevents singularity and creates natural spread
+        // particle at pivot - use random direction to avoid singularity
         let u = hash_to_float(seed + 50u);
         let v = hash_to_float(seed + 51u);
         let theta = 2.0 * PI * u;
@@ -789,7 +763,6 @@ fn check_sphere_collision(
     result.normal = vec3(0.0);
     result.depth = 0.0;
 
-    // transform particle to collider local space
     let local_pos = (collider.inverse_transform * vec4(particle_pos, 1.0)).xyz;
     let collider_radius = collider.extents.x;
 
@@ -800,7 +773,6 @@ fn check_sphere_collision(
         result.collided = true;
         result.depth = -penetration;
 
-        // normal in world space
         if (dist > COLLISION_EPSILON) {
             let local_normal = normalize(local_pos);
             result.normal = normalize((collider.transform * vec4(local_normal, 0.0)).xyz);
@@ -822,16 +794,14 @@ fn check_box_collision(
     result.normal = vec3(0.0);
     result.depth = 0.0;
 
-    // transform particle to collider local space
     let local_pos = (collider.inverse_transform * vec4(particle_pos, 1.0)).xyz;
     let extents = collider.extents;
 
     let abs_pos = abs(local_pos);
     let sgn_pos = sign(local_pos);
 
-    // check if outside box
+    // point outside box
     if (any(abs_pos > extents)) {
-        // find closest point on box surface
         let closest = min(abs_pos, extents);
         let rel = abs_pos - closest;
         let dist = length(rel);
@@ -849,7 +819,7 @@ fn check_box_collision(
             }
         }
     } else {
-        // inside box - push out along shortest axis
+        // point inside box
         let axis_dist = extents - abs_pos;
         var local_normal: vec3<f32>;
         var min_dist: f32;
@@ -900,10 +870,9 @@ fn process_collisions(
 
         if (col_result.collided) {
             if (!final_result.collided) {
-                // first collision
                 final_result = col_result;
             } else {
-                // accumulate multiple collisions (from godot)
+                // accumulate multiple collisions
                 let c = final_result.normal * final_result.depth;
                 let new_c = c + col_result.normal * max(0.0, col_result.depth - dot(col_result.normal, c));
                 final_result.depth = length(new_c);
@@ -947,8 +916,7 @@ fn emit_sub_particles(position: vec3<f32>, scale: f32, velocity: vec3<f32>) {
 
 fn spawn_particle(idx: u32) -> Particle {
     var p: Particle;
-    // per-particle seed derivation:
-    // base_seed + 1 + particle_index + (cycle * particle_count)
+    // per-particle seed: base_seed + 1 + index + (cycle * amount)
     let seed = hash(params.random_seed + 1u + idx + params.cycle * params.amount);
 
     let emission_pos = get_emission_offset(seed);
@@ -984,29 +952,23 @@ fn spawn_particle(idx: u32) -> Particle {
         p.color = textureSampleLevel(gradient_texture, gradient_sampler, vec2(t, 0.5), 0.0);
     }
 
-    // apply alpha curve at spawn (t=0)
     let initial_alpha = p.color.a;
     p.color.a = get_alpha_at_lifetime(initial_alpha, 0.0, 1.0);
 
-    // apply emission curve and color over lifetime at spawn (t=0)
     let emission = get_emission_at_lifetime(0.0, 1.0);
     let col_life = get_color_over_lifetime(0.0, 1.0);
     p.color = vec4(p.color.rgb * emission * col_life.rgb, p.color.a * col_life.a);
 
     // spawn_index tracks total spawns across all cycles for depth ordering
-    // only set when draw_order is Index, otherwise use 0
     var spawn_index = 0.0;
     if (params.draw_order == DRAW_ORDER_INDEX) {
         spawn_index = f32(params.cycle * params.amount + idx);
     }
     p.custom = vec4(0.0, spawn_index, bitcast<f32>(seed), bitcast<f32>(PARTICLE_FLAG_ACTIVE));
 
-    // compute angle at spawn (t=0)
     let angle = compute_angle(seed + 70u, 0.0, lifetime);
 
-    // initialize alignment direction for ALIGN_Y_TO_VELOCITY (like godot)
-    // if velocity > 0, use normalized velocity; otherwise use default up
-    // w component stores the computed angle in radians
+    // initialize alignment direction from velocity, w stores angle in radians
     if length(vel) > 0.0 {
         p.alignment_dir = vec4(normalize(vel), angle);
     } else {
@@ -1024,14 +986,12 @@ fn spawn_particle(idx: u32) -> Particle {
 fn update_particle(p_in: Particle) -> Particle {
     var p = p_in;
     let dt = params.delta_time;
-
-    // update age
     let age = p.custom.x + dt;
     p.custom.x = age;
 
     let lifetime = p.velocity.w;
 
-    // sub emitter: constant mode — emit one particle per frequency interval
+    // sub emitter: constant mode - emit once per frequency interval
     if (params.sub_emitter_mode == SUB_EMITTER_MODE_CONSTANT) {
         let prev_age = age - dt;
         let interval = params.sub_emitter_frequency;
@@ -1048,7 +1008,6 @@ fn update_particle(p_in: Particle) -> Particle {
         }
     }
 
-    // check if lifetime exceeded
     if (age >= lifetime) {
         // sub emitter: at end trigger
         if (params.sub_emitter_mode == SUB_EMITTER_MODE_AT_END) {
@@ -1061,19 +1020,15 @@ fn update_particle(p_in: Particle) -> Particle {
     let seed = bitcast<u32>(p.custom.z);
     let initial_radial_velocity = get_initial_radial_velocity(seed + 60u);
 
-    // the stored velocity includes the previous frame's radial displacement (for alignment)
-    // we need to extract the pure physics velocity before applying gravity
+    // stored velocity includes previous radial displacement, extract pure physics velocity
     let stored_velocity = p.velocity.xyz;
 
-    // extract physics velocity by removing previous radial component
-    // on first frame (age <= dt), stored velocity is pure physics (no radial yet)
+    // on first frame, stored velocity is pure physics (no radial yet)
     var physics_velocity = stored_velocity;
     if (age > dt) {
-        // compute previous position to calculate previous radial displacement
         let prev_position = p.position.xyz - stored_velocity * dt;
         let prev_age = age - dt;
 
-        // compute what the radial displacement was last frame
         var prev_radial = get_radial_displacement(
             prev_position,
             initial_radial_velocity,
@@ -1089,14 +1044,12 @@ fn update_particle(p_in: Particle) -> Particle {
         physics_velocity = stored_velocity - prev_radial;
     }
 
-    // apply gravity (respect DISABLE_Z flag for 2D mode)
     var gravity = params.gravity;
     if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
         gravity.z = 0.0;
     }
     physics_velocity = physics_velocity + gravity * dt;
 
-    // compute current radial displacement
     var radial_displacement = get_radial_displacement(
         p.position.xyz,
         initial_radial_velocity,
@@ -1109,7 +1062,7 @@ fn update_particle(p_in: Particle) -> Particle {
         radial_displacement.z = 0.0;
     }
 
-    // apply turbulence to physics velocity
+    // turbulence
     if (params.turbulence_enabled != 0u) {
         let base_influence = get_turbulence_influence(seed + 40u);
         let influence = get_turbulence_influence_at_lifetime(base_influence, age, lifetime);
@@ -1121,37 +1074,30 @@ fn update_particle(p_in: Particle) -> Particle {
         }
     }
 
-    // disable Z for 2D mode before storing velocity and updating position
     if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
         physics_velocity.z = 0.0;
     }
 
-    // combine physics velocity with controlled displacements (like radial velocity)
+    // combine physics velocity with controlled displacements
     let effective_velocity = physics_velocity + radial_displacement;
 
     p.velocity = vec4(effective_velocity, lifetime);
 
-    // recompute angle at current lifetime
     let angle = compute_angle(seed + 70u, age, lifetime);
 
-    // update alignment direction only when velocity > 0 (like godot)
-    // if velocity is zero, keep the existing alignment direction
-    // w component stores the computed angle in radians
+    // update alignment direction from velocity, preserve existing direction if zero
     if length(effective_velocity) > 0.0 {
         p.alignment_dir = vec4(normalize(effective_velocity), angle);
     } else {
         p.alignment_dir.w = angle;
     }
 
-    // update position
     var new_position = p.position.xyz + effective_velocity * dt;
 
-    // force Z to 0 for 2D mode
     if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
         new_position.z = 0.0;
     }
 
-    // update scale based on lifetime progress
     let initial_scale = get_initial_scale(seed + 20u);
     let scale = get_scale_at_lifetime(initial_scale, age, lifetime);
 
@@ -1177,23 +1123,20 @@ fn update_particle(p_in: Particle) -> Particle {
             var velocity = p.velocity.xyz;
             let collision_response = dot(collision.normal, velocity);
 
-            // adaptive bounce threshold (from godot)
+            // adaptive bounce threshold
             let bounce_threshold = 2.0 / clamp(params.collision_bounce + 1.0, 1.0, 2.0);
             let should_bounce = step(bounce_threshold, abs(collision_response));
 
-            // push particle out of collision
             var col_position = p.position.xyz + collision.normal * collision.depth;
 
-            // remove velocity component along normal
+            // remove velocity components not tangential to collision normal
             var col_velocity = velocity - collision.normal * collision_response;
 
-            // apply friction to remaining velocity
+            // apply friction to velocity along the surface
             col_velocity = mix(col_velocity, vec3(0.0), clamp(params.collision_friction, 0.0, 1.0));
 
-            // apply bounce
+            // add bounce velocity
             col_velocity -= collision.normal * collision_response * params.collision_bounce * should_bounce;
-
-            // handle 2D mode
             if ((params.particle_flags & EMITTER_FLAG_DISABLE_Z) != 0u) {
                 col_position.z = 0.0;
                 col_velocity.z = 0.0;
@@ -1202,19 +1145,16 @@ fn update_particle(p_in: Particle) -> Particle {
             p.position = vec4(col_position, scale);
             p.velocity = vec4(col_velocity, lifetime);
 
-            // update alignment direction only when velocity > 0 (like godot)
-            // preserve angle in w component
+            // update alignment direction from velocity
             if length(col_velocity) > 0.0 {
                 p.alignment_dir = vec4(normalize(col_velocity), p.alignment_dir.w);
             }
         }
     }
 
-    // update alpha based on lifetime progress
     let initial_alpha = get_initial_alpha(seed);
     p.color.a = get_alpha_at_lifetime(initial_alpha, age, lifetime);
 
-    // update color based on emission curve and color over lifetime
     let initial_rgb = get_initial_color_rgb(seed);
     let emission = get_emission_at_lifetime(age, lifetime);
     let col_life = get_color_over_lifetime(age, lifetime);

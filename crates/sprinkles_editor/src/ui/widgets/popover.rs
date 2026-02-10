@@ -322,8 +322,6 @@ fn is_nested_in_popover(
     if is_descendant_of(anchor.0, target, parents) {
         return true;
     }
-    // check transitively: if the anchor is inside an intermediate popover,
-    // check whether that intermediate popover is itself nested in target
     for (intermediate, _, _) in popovers.iter() {
         if intermediate == target || intermediate == popover {
             continue;

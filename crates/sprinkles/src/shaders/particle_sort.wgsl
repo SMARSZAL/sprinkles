@@ -1,6 +1,5 @@
 #import sprinkles::common::{Particle, PARTICLE_FLAG_ACTIVE}
 
-// draw order modes matching DrawOrder enum
 const DRAW_ORDER_INDEX: u32 = 0u;
 const DRAW_ORDER_LIFETIME: u32 = 1u;
 const DRAW_ORDER_REVERSE_LIFETIME: u32 = 2u;
@@ -29,34 +28,33 @@ fn get_sort_key(particle_index: u32) -> f32 {
     let flags = bitcast<u32>(particle.custom.w);
     let is_active = (flags & PARTICLE_FLAG_ACTIVE) != 0u;
 
-    // inactive particles should be sorted to the back
+    // inactive particles sort to the back
     if (!is_active) {
         return -1e10;
     }
 
     switch (params.draw_order) {
         case DRAW_ORDER_INDEX: {
-            // particles drawn in emission order (lowest index first, highest last = front)
+            // emission order (lowest index first, highest last = front)
             return f32(particle_index);
         }
         case DRAW_ORDER_LIFETIME: {
-            // particles with highest remaining lifetime drawn at front
+            // highest remaining lifetime drawn at front
             let age = particle.custom.x;
             let lifetime = particle.velocity.w;
             let remaining = lifetime - age;
             return remaining;
         }
         case DRAW_ORDER_REVERSE_LIFETIME: {
-            // particles with lowest remaining lifetime drawn at front
+            // lowest remaining lifetime drawn at front
             let age = particle.custom.x;
             let lifetime = particle.velocity.w;
             let remaining = lifetime - age;
             return -remaining;
         }
         case DRAW_ORDER_VIEW_DEPTH: {
-            // particles sorted by depth along camera view axis (farthest first for proper transparency)
-            // uses dot product with camera forward direction instead of euclidean distance,
-            // matching Godot's implementation for correct view-relative depth ordering
+            // depth along camera view axis (farthest first for transparency)
+            // dot product with camera forward gives correct view-relative depth
             let local_pos = particle.position.xyz;
             let world_pos = (params.emitter_transform * vec4(local_pos, 1.0)).xyz;
             let to_particle = world_pos - params.camera_position;
@@ -109,10 +107,8 @@ fn sort(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // for descending blocks: we want larger keys at lower indices
     var should_swap = false;
     if (ascending) {
-        // ascending: swap if key_a > key_b (put smaller key at idx)
         should_swap = key_a > key_b;
     } else {
-        // descending: swap if key_a < key_b (put larger key at idx)
         should_swap = key_a < key_b;
     }
 
@@ -132,9 +128,7 @@ fn init_indices(@builtin(global_invocation_id) global_id: vec3<u32>) {
     indices[idx] = idx;
 }
 
-// copy particle data to sorted output buffer
-// this writes particles in sorted order so that instance 0 contains the first
-// particle to render (back-most), instance N contains the last (front-most)
+// copy particle data to sorted output buffer (instance 0 = back-most, instance N = front-most)
 @compute @workgroup_size(256)
 fn copy_sorted(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x;

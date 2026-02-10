@@ -71,14 +71,10 @@ pub fn init_particle_compute_pipeline(
                 sampler(SamplerBindingType::Filtering),
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
-                // color_over_lifetime gradient
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
-                // colliders storage buffer (read-only)
                 storage_buffer_read_only::<ColliderArray>(false),
-                // sub emitter destination emission buffer (parent writes)
                 storage_buffer_sized(false, None),
-                // sub emitter source emission buffer (target reads)
                 storage_buffer_sized(false, None),
             ),
         ),
@@ -111,8 +107,6 @@ pub fn init_particle_compute_pipeline(
         ..default()
     });
 
-    // fallback emission buffer: 16-byte header + one 48-byte entry = 64 bytes minimum
-    // particle_count=0, particle_max=0 so the shader never reads/writes entries
     let fallback_emission_buffer = render_device.create_buffer_with_data(
         &bevy::render::render_resource::BufferInitDescriptor {
             label: Some("fallback_emission_buffer"),
@@ -175,7 +169,6 @@ pub fn prepare_particle_compute_bind_groups(
         .as_ref()
         .and_then(|ft| gpu_images.get(&ft.handle));
 
-    // prepare colliders array
     let mut collider_array = ColliderArray::default();
     let collider_count = if let Some(ref colliders) = extracted_colliders {
         for (i, collider) in colliders.colliders.iter().enumerate() {
@@ -296,7 +289,6 @@ pub fn prepare_particle_compute_bind_groups(
 
         let bind_group_layout = pipeline_cache.get_bind_group_layout(&pipeline.bind_group_layout);
 
-        // resolve emission buffer GPU handles
         let dst_buffer = emitter_data
             .emission_buffer_handle
             .as_ref()
@@ -312,7 +304,6 @@ pub fn prepare_particle_compute_bind_groups(
         let dst_binding = dst_buffer.unwrap_or(&fallback_emission_buffer.0);
         let src_binding = src_buffer.unwrap_or(&fallback_emission_buffer.0);
 
-        // track emission buffers that need clearing before each step
         if let Some(buf) = dst_buffer {
             emission_clear_list.push(buf.clone());
         }
@@ -367,7 +358,6 @@ pub fn prepare_particle_compute_bind_groups(
         bind_groups.push((*entity, step_bind_groups));
     }
 
-    // deduplicate emission buffers for clearing
     let mut unique_buffers: Vec<Buffer> = Vec::new();
     for buf in emission_clear_list {
         if !unique_buffers.iter().any(|b| b.id() == buf.id()) {
@@ -448,7 +438,6 @@ impl render_graph::Node for ParticleComputeNode {
         };
 
         for step_index in 0..max_steps {
-            // clear emission buffer counters before parent pass
             for buf in &emission_clear_list.buffers {
                 render_context
                     .command_encoder()

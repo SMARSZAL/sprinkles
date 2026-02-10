@@ -16,14 +16,12 @@ use crate::{
     textures::{CurveTextureCache, GradientTextureCache},
 };
 
-// emission shape constants
 pub const EMISSION_SHAPE_POINT: u32 = 0;
 pub const EMISSION_SHAPE_SPHERE: u32 = 1;
 pub const EMISSION_SHAPE_SPHERE_SURFACE: u32 = 2;
 pub const EMISSION_SHAPE_BOX: u32 = 3;
 pub const EMISSION_SHAPE_RING: u32 = 4;
 
-// collision constants
 pub const COLLIDER_TYPE_SPHERE: u32 = 0;
 pub const COLLIDER_TYPE_BOX: u32 = 1;
 pub const MAX_COLLIDERS: usize = 32;
@@ -32,7 +30,6 @@ pub const COLLISION_MODE_DISABLED: u32 = 0;
 pub const COLLISION_MODE_RIGID: u32 = 1;
 pub const COLLISION_MODE_HIDE_ON_CONTACT: u32 = 2;
 
-// sub emitter mode constants
 pub const SUB_EMITTER_MODE_DISABLED: u32 = 0;
 pub const SUB_EMITTER_MODE_CONSTANT: u32 = 1;
 pub const SUB_EMITTER_MODE_AT_END: u32 = 2;
@@ -165,7 +162,6 @@ pub struct EmitterUniforms {
 
     pub radial_velocity: AnimatedVelocityUniform,
 
-    // collision
     pub collision_mode: u32,
     pub collision_base_size: f32,
     pub collision_use_scale: u32,
@@ -176,7 +172,6 @@ pub struct EmitterUniforms {
     pub _collision_pad0: f32,
     pub _collision_pad1: f32,
 
-    // angle
     pub angle_min: f32,
     pub angle_max: f32,
     pub _angle_pad0: f32,
@@ -186,7 +181,6 @@ pub struct EmitterUniforms {
 
     pub angular_velocity: AnimatedVelocityUniform,
 
-    // sub emitter
     pub sub_emitter_mode: u32,
     pub sub_emitter_frequency: f32,
     pub sub_emitter_amount: u32,
@@ -258,8 +252,6 @@ pub fn extract_particle_systems(
         .map(|t| (t.translation(), t.forward().as_vec3()))
         .unwrap_or((Vec3::ZERO, Vec3::NEG_Z));
 
-    // first pass: build a map of (system_entity, emitter_index) → emission buffer handle
-    // for resolving source buffers on sub-emitter targets
     let mut emission_buffer_map: std::collections::HashMap<(Entity, usize), Handle<ShaderStorageBuffer>> = std::collections::HashMap::new();
     for (_entity, emitter_entity, runtime, _buffer_handle, _global_transform, sub_emitter_buf) in emitter_query.iter() {
         let Some(sub_buf) = sub_emitter_buf else { continue };
@@ -333,7 +325,6 @@ pub fn extract_particle_systems(
             None => (SUB_EMITTER_MODE_DISABLED, 1.0, 1, 0),
         };
 
-        // build base uniform with timing fields zeroed (filled per step below)
         let base_uniforms = EmitterUniforms {
             delta_time: 0.0,
             system_phase: 0.0,
@@ -502,7 +493,6 @@ pub fn extract_particle_systems(
             _sub_emitter_pad2: 0,
         };
 
-        // check if this emitter is a sub-emitter target (another emitter in same system references it)
         let is_sub_emitter_target = emission_buffer_map
             .contains_key(&(emitter_entity.parent_system, runtime.emitter_index));
 
@@ -586,7 +576,6 @@ pub fn extract_particle_systems(
             .filter(|c| !c.is_constant())
             .and_then(|c| curve_cache.get(c));
 
-        // resolve emission buffer handles
         let emission_buffer_handle = sub_emitter_buf
             .map(|b| b.buffer.clone());
         let source_buffer_handle = if is_sub_emitter_target {

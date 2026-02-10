@@ -34,21 +34,16 @@
 
 const STANDARD_MATERIAL_FLAGS_UNLIT_BIT: u32 = 1u << 5u;
 
-// sorted particle data buffer - particles are written here in draw order by the sort compute shader
-// instance 0 contains the first particle to render (back-most), instance N is the last (front-most)
+// sorted particle data, written in draw order by the sort compute shader
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<storage, read> sorted_particles: array<Particle>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> max_particles: u32;
 @group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> particle_flags: u32;
 
-// helper function to compute a rotation matrix that aligns Y axis to a direction
-// based on godot's TRANSFORM_ALIGN_Y_TO_VELOCITY implementation
+// computes a rotation matrix that aligns Y axis to a direction
 fn align_y_to_direction(dir: vec3<f32>) -> mat3x3<f32> {
     let y_axis = normalize(dir);
 
-    // use world Z as reference (like godot does)
     var z_ref = vec3(0.0, 0.0, 1.0);
-
-    // compute X axis from Y cross Z
     var x_axis = cross(y_axis, z_ref);
     let x_len = length(x_axis);
 
@@ -59,7 +54,6 @@ fn align_y_to_direction(dir: vec3<f32>) -> mat3x3<f32> {
         x_axis = x_axis / x_len;
     }
 
-    // compute Z axis from X cross Y to ensure orthonormal basis
     let z_axis = cross(x_axis, y_axis);
 
     return mat3x3<f32>(x_axis, y_axis, z_axis);
@@ -69,20 +63,16 @@ fn align_y_to_direction(dir: vec3<f32>) -> mat3x3<f32> {
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    // read particle index from uv_b.x (encoded during mesh generation)
-    // this eliminates reliance on instance_index which isn't guaranteed to match particle order
+    // particle index encoded in uv_b.x (instance_index doesn't guarantee particle order)
     let particle_index = u32(vertex.uv_b.x);
     let particle = sorted_particles[particle_index];
 
-    // check if particle is active
     let flags = bitcast<u32>(particle.custom.w);
     let is_active = (flags & PARTICLE_FLAG_ACTIVE) != 0u;
 
-    // get particle transform data
     let particle_position = particle.position.xyz;
     let particle_scale = select(0.0, particle.position.w, is_active);
 
-    // compute particle rotation based on flags
     var rotated_position = vertex.position;
 #ifdef VERTEX_NORMALS
     var rotated_normal = vertex.normal;
@@ -90,7 +80,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let transform_align = (particle_flags >> TRANSFORM_ALIGN_SHIFT) & TRANSFORM_ALIGN_MASK;
 
-    // align Y axis to velocity direction (TransformAlign::YToVelocity)
     if transform_align == TRANSFORM_ALIGN_Y_TO_VELOCITY {
         let alignment_dir = particle.alignment_dir.xyz;
         let dir_length = length(alignment_dir);
@@ -103,7 +92,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     }
 
-    // apply angle rotation (stored in alignment_dir.w as radians)
+    // angle rotation from alignment_dir.w (radians)
     let angle = particle.alignment_dir.w;
     if abs(angle) > 0.0001 {
         let cos_a = cos(angle);
@@ -148,7 +137,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
         if transform_align == TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY {
             let v = particle.alignment_dir.xyz;
-            // project velocity direction onto the screen plane
+            // project velocity onto the screen plane
             var sv = v - cam_forward * dot(cam_forward, v);
             if length(sv) < 0.001 {
                 sv = cam_up;
@@ -172,7 +161,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
                 + cam_forward * rotated_normal.z;
 #endif
         } else if transform_align == TRANSFORM_ALIGN_BILLBOARD_FIXED_Y {
-            // Y-axis locked to world up, rotates only around vertical axis to face camera
+            // y-axis locked to world up, rotates around vertical axis to face camera
             let world_up = vec3(0.0, 1.0, 0.0);
             let right = normalize(cross(world_up, cam_forward));
             let forward = cross(right, world_up);
@@ -245,7 +234,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     return out;
 }
 
-// depth-only prepass fragment (shadow/depth pass) - just discard inactive, no output needed
+// depth-only prepass fragment - discard inactive, no output needed
 #ifdef PREPASS_PIPELINE
 #ifndef PREPASS_FRAGMENT
 @fragment

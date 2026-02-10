@@ -51,7 +51,6 @@ fn load_initial_project(
     mut editor_data: ResMut<EditorData>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
-    // try to load last opened project
     if let Some(location) = &editor_data.cache.last_opened_project.clone() {
         let path = project_path(location);
         if path.exists() {
@@ -71,7 +70,6 @@ fn load_initial_project(
         }
     }
 
-    // only load demo on first run (when no recent projects exist)
     let is_first_run = editor_data.cache.recent_projects.is_empty();
 
     if is_first_run {
@@ -90,7 +88,6 @@ fn load_initial_project(
                     });
                 }
 
-                // add demo to recent projects
                 editor_data.cache.add_recent_project(demo_file.to_string());
                 save_editor_data(&editor_data);
                 return;
@@ -98,7 +95,6 @@ fn load_initial_project(
         }
     }
 
-    // fallback: create a default empty project
     let asset = sprinkles::asset::ParticleSystemAsset {
         name: "New project".to_string(),
         dimension: sprinkles::asset::ParticleSystemDimension::D3,
