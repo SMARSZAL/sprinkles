@@ -1,9 +1,12 @@
 #[path = "../helpers/mod.rs"]
 mod helpers;
 
-mod particle_system_runtime;
+mod data_structures;
+mod emitter_defaults;
 mod emitter_runtime;
-mod phase;
-mod free_functions;
 mod emitter_time;
+mod free_functions;
 mod integration;
+mod particle_system_runtime;
+mod phase;
+mod serialization;
