@@ -237,6 +237,7 @@ pub enum TransformAlign {
     Billboard,
     YToVelocity,
     BillboardYToVelocity,
+    BillboardFixedY,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]

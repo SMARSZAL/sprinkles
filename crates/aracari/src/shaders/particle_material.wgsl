@@ -7,6 +7,7 @@
     TRANSFORM_ALIGN_BILLBOARD,
     TRANSFORM_ALIGN_Y_TO_VELOCITY,
     TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY,
+    TRANSFORM_ALIGN_BILLBOARD_FIXED_Y,
 }
 #import bevy_pbr::{
     mesh_functions,
@@ -132,7 +133,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
 
-    if transform_align == TRANSFORM_ALIGN_BILLBOARD || transform_align == TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY {
+    if transform_align == TRANSFORM_ALIGN_BILLBOARD || transform_align == TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY || transform_align == TRANSFORM_ALIGN_BILLBOARD_FIXED_Y {
         let cam_right = normalize(view.world_from_view[0].xyz);
         let cam_up = normalize(view.world_from_view[1].xyz);
         let cam_forward = normalize(view.world_from_view[2].xyz);
@@ -169,6 +170,26 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             out.world_normal = right * rotated_normal.x
                 + sv * rotated_normal.y
                 + cam_forward * rotated_normal.z;
+#endif
+        } else if transform_align == TRANSFORM_ALIGN_BILLBOARD_FIXED_Y {
+            // Y-axis locked to world up, rotates only around vertical axis to face camera
+            let world_up = vec3(0.0, 1.0, 0.0);
+            let right = normalize(cross(world_up, cam_forward));
+            let forward = cross(right, world_up);
+
+            let scaled_vertex = rotated_position * scale;
+            let pos = particle_world_pos
+                + right * scaled_vertex.x
+                + world_up * scaled_vertex.y
+                + forward * scaled_vertex.z;
+
+            out.world_position = vec4(pos, 1.0);
+            out.position = position_world_to_clip(pos);
+
+#ifdef VERTEX_NORMALS
+            out.world_normal = right * rotated_normal.x
+                + world_up * rotated_normal.y
+                + forward * rotated_normal.z;
 #endif
         } else {
             // standard billboard

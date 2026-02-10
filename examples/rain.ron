@@ -22,7 +22,7 @@
                     unlit: true,
                 )),
                 shadow_caster: false,
-                transform_align: Some(BillboardYToVelocity),
+                transform_align: Some(BillboardFixedY),
             ),
             emission: (
                 offset: (0.0, 10.0, 0.0),

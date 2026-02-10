@@ -76,18 +76,20 @@ pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {
 fn transform_align_index(mode: &Option<TransformAlign>) -> usize {
     match mode {
         None => 0,
-        Some(TransformAlign::Billboard) => 1,
-        Some(TransformAlign::YToVelocity) => 2,
-        Some(TransformAlign::BillboardYToVelocity) => 3,
+        Some(TransformAlign::YToVelocity) => 1,
+        Some(TransformAlign::Billboard) => 2,
+        Some(TransformAlign::BillboardFixedY) => 3,
+        Some(TransformAlign::BillboardYToVelocity) => 4,
     }
 }
 
 fn transform_align_options() -> Vec<ComboBoxOptionData> {
     vec![
         ComboBoxOptionData::new("Disabled").with_value("Disabled"),
-        ComboBoxOptionData::new("Billboard").with_value("Billboard"),
         ComboBoxOptionData::new("Y to velocity").with_value("YToVelocity"),
-        ComboBoxOptionData::new("Billboard + Y to velocity").with_value("BillboardYToVelocity"),
+        ComboBoxOptionData::new("Billboard").with_value("Billboard"),
+        ComboBoxOptionData::new("Billboard (Fixed Y)").with_value("BillboardFixedY"),
+        ComboBoxOptionData::new("Billboard (Y to velocity)").with_value("BillboardYToVelocity"),
     ]
 }
 
@@ -173,6 +175,7 @@ fn handle_transform_align_change(
         "Billboard" => Some(TransformAlign::Billboard),
         "YToVelocity" => Some(TransformAlign::YToVelocity),
         "BillboardYToVelocity" => Some(TransformAlign::BillboardYToVelocity),
+        "BillboardFixedY" => Some(TransformAlign::BillboardFixedY),
         _ => return,
     };
 

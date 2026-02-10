@@ -655,6 +655,7 @@ fn combined_particle_flags(emitter: &EmitterData) -> u32 {
         Some(TransformAlign::Billboard) => 1,
         Some(TransformAlign::YToVelocity) => 2,
         Some(TransformAlign::BillboardYToVelocity) => 3,
+        Some(TransformAlign::BillboardFixedY) => 4,
     };
     flags |= transform_align_bits << 3;
     flags
