@@ -91,6 +91,8 @@ pub(super) fn update_inspected_emitter_tracker(
 
     if tracker.current_index != new_index {
         tracker.current_index = new_index;
+    } else if editor_state.is_changed() {
+        tracker.set_changed();
     }
 }
 
@@ -106,6 +108,8 @@ pub(super) fn update_inspected_collider_tracker(
 
     if tracker.current_index != new_index {
         tracker.current_index = new_index;
+    } else if editor_state.is_changed() {
+        tracker.set_changed();
     }
 }
 
