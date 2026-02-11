@@ -2,16 +2,17 @@ use bevy::prelude::*;
 use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState};
-use crate::ui::tokens::{FONT_PATH, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
-use crate::ui::widgets::combobox::{
-    ComboBoxChangeEvent, ComboBoxConfig, ComboBoxOptionData, combobox_with_selected,
-};
-use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row};
+use crate::ui::tokens::FONT_PATH;
+use crate::ui::widgets::combobox::{ComboBoxChangeEvent, ComboBoxOptionData};
+use crate::ui::widgets::inspector_field::InspectorFieldProps;
 use crate::ui::widgets::variant_edit::{VariantDefinition, VariantEditProps};
 use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::utils::{VariantConfig, combobox_options_from_reflect, variants_from_reflect};
-use super::{InspectorItem, InspectorSection, inspector_section, section_needs_setup};
+use super::{
+    DynamicSectionContent, InspectorItem, InspectorSection, inspector_section, section_needs_setup,
+    spawn_labeled_combobox,
+};
 use crate::ui::components::binding::{
     get_inspecting_emitter, get_inspecting_emitter_mut, mark_dirty_and_restart,
 };
@@ -31,8 +32,7 @@ struct TransformAlignContent;
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_transform_align_change).add_systems(
         Update,
-        (setup_transform_align_content, sync_transform_align_ui)
-            .after(super::update_inspected_emitter_tracker),
+        setup_transform_align_content.after(super::update_inspected_emitter_tracker),
     );
 }
 
@@ -113,6 +113,7 @@ fn setup_transform_align_content(
     let content = commands
         .spawn((
             TransformAlignContent,
+            DynamicSectionContent,
             Node {
                 width: Val::Percent(100.0),
                 flex_direction: FlexDirection::Column,
@@ -121,32 +122,14 @@ fn setup_transform_align_content(
             },
         ))
         .with_children(|parent| {
-            parent.spawn(fields_row()).with_children(|row| {
-                row.spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(3.0),
-                    flex_grow: 1.0,
-                    flex_shrink: 1.0,
-                    flex_basis: Val::Px(0.0),
-                    ..default()
-                })
-                .with_children(|wrapper| {
-                    wrapper.spawn((
-                        Text::new("Transform align"),
-                        TextFont {
-                            font: font.clone(),
-                            font_size: TEXT_SIZE_SM,
-                            weight: FontWeight::MEDIUM,
-                            ..default()
-                        },
-                        TextColor(TEXT_MUTED_COLOR.into()),
-                    ));
-                    wrapper.spawn((
-                        TransformAlignComboBox,
-                        combobox_with_selected(transform_align_options(), mode_index),
-                    ));
-                });
-            });
+            spawn_labeled_combobox(
+                parent,
+                &font,
+                "Transform align",
+                transform_align_options(),
+                mode_index,
+                TransformAlignComboBox,
+            );
         })
         .id();
 
@@ -155,11 +138,13 @@ fn setup_transform_align_content(
 
 fn handle_transform_align_change(
     trigger: On<ComboBoxChangeEvent>,
+    mut commands: Commands,
     comboboxes: Query<(), With<TransformAlignComboBox>>,
     editor_state: Res<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
     mut dirty_state: ResMut<DirtyState>,
     mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    existing: Query<Entity, With<TransformAlignContent>>,
 ) {
     if comboboxes.get(trigger.entity).is_err() {
         return;
@@ -189,25 +174,9 @@ fn handle_transform_align_change(
         &mut emitter_runtimes,
         emitter.time.fixed_seed,
     );
-}
 
-fn sync_transform_align_ui(
-    editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
-    mut comboboxes: Query<&mut ComboBoxConfig, With<TransformAlignComboBox>>,
-) {
-    if !editor_state.is_changed() && !assets.is_changed() {
-        return;
-    }
-
-    let emitter = get_inspecting_emitter(&editor_state, &assets).map(|(_, e)| e);
-    let mode = emitter.map(|e| &e.draw_pass.transform_align);
-    let new_index = mode.map(transform_align_index).unwrap_or(0);
-
-    for mut config in &mut comboboxes {
-        if config.selected != new_index {
-            config.selected = new_index;
-        }
+    for entity in &existing {
+        commands.entity(entity).try_despawn();
     }
 }
 

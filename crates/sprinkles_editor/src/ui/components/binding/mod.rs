@@ -154,6 +154,21 @@ impl FieldBinding {
         }
     }
 
+    pub fn emitter_variant_field(
+        path: impl Into<String>,
+        field_name: impl Into<String>,
+        kind: FieldKind,
+    ) -> Self {
+        Self {
+            accessor: FieldAccessor::EmitterVariant {
+                path: path.into(),
+                field_name: field_name.into(),
+            },
+            kind,
+            variant_edit: None,
+        }
+    }
+
     pub(super) fn read_value(&self, emitter: &EmitterData) -> FieldValue {
         match &self.accessor {
             FieldAccessor::Emitter(path) => get_field_value_by_reflection(emitter, path, &self.kind),

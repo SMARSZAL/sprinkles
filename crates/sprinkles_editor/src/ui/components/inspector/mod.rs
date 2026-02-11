@@ -21,8 +21,9 @@ use bevy::prelude::*;
 use sprinkles::prelude::*;
 
 use crate::state::{EditorState, Inspectable};
-use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_SIZE_LG};
+use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_LG, TEXT_SIZE_SM};
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
+use crate::ui::widgets::combobox::{ComboBoxOptionData, combobox_with_selected};
 use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
 use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_scrollbar};
 use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
@@ -57,6 +58,7 @@ pub fn plugin(app: &mut App) {
                     update_inspected_collider_tracker,
                 ),
                 (
+                    cleanup_dynamic_sections,
                     setup_inspector_panel,
                     update_panel_title,
                     setup_inspector_section_fields,
@@ -132,6 +134,9 @@ struct PanelTitleIcon;
 
 #[derive(Component)]
 struct EnabledCheckbox;
+
+#[derive(Component)]
+pub(super) struct DynamicSectionContent;
 
 pub fn inspector_panel(_asset_server: &AssetServer) -> impl Bundle {
     (
@@ -474,4 +479,51 @@ fn update_panel_title(
     for mut icon in &mut title_icon {
         icon.image = asset_server.load(icon_path);
     }
+}
+
+fn cleanup_dynamic_sections(
+    mut commands: Commands,
+    tracker: Res<InspectedEmitterTracker>,
+    existing: Query<Entity, With<DynamicSectionContent>>,
+) {
+    if !tracker.is_changed() {
+        return;
+    }
+
+    for entity in &existing {
+        commands.entity(entity).try_despawn();
+    }
+}
+
+pub(super) fn spawn_labeled_combobox(
+    parent: &mut ChildSpawnerCommands,
+    font: &Handle<Font>,
+    label: &str,
+    options: Vec<ComboBoxOptionData>,
+    selected: usize,
+    marker: impl Bundle,
+) {
+    parent.spawn(fields_row()).with_children(|row| {
+        row.spawn(Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(3.0),
+            flex_grow: 1.0,
+            flex_shrink: 1.0,
+            flex_basis: Val::Px(0.0),
+            ..default()
+        })
+        .with_children(|wrapper| {
+            wrapper.spawn((
+                Text::new(label),
+                TextFont {
+                    font: font.clone(),
+                    font_size: TEXT_SIZE_SM,
+                    weight: FontWeight::MEDIUM,
+                    ..default()
+                },
+                TextColor(TEXT_MUTED_COLOR.into()),
+            ));
+            wrapper.spawn((marker, combobox_with_selected(options, selected)));
+        });
+    });
 }
