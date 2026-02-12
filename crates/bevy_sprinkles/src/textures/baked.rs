@@ -193,6 +193,18 @@ pub struct FallbackCurveTexture {
     pub handle: Handle<Image>,
 }
 
+impl CurveTextureCache {
+    fn prepare_optional(
+        &mut self,
+        curve: &Option<CurveTexture>,
+        images: &mut Assets<Image>,
+    ) {
+        if let Some(c) = curve.as_ref().filter(|c| !c.is_constant()) {
+            self.get_or_create(c, images);
+        }
+    }
+}
+
 pub fn prepare_curve_textures(
     mut cache: ResMut<CurveTextureCache>,
     mut images: ResMut<Assets<Image>>,
@@ -204,26 +216,10 @@ pub fn prepare_curve_textures(
             continue;
         };
         for emitter in &asset.emitters {
-            if let Some(curve) = &emitter.scale.scale_over_lifetime {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
-                }
-            }
-            if let Some(curve) = &emitter.colors.alpha_over_lifetime {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
-                }
-            }
-            if let Some(curve) = &emitter.colors.emission_over_lifetime {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
-                }
-            }
-            if let Some(curve) = &emitter.turbulence.influence_over_lifetime {
-                if !curve.is_constant() {
-                    cache.get_or_create(curve, &mut images);
-                }
-            }
+            cache.prepare_optional(&emitter.scale.scale_over_lifetime, &mut images);
+            cache.prepare_optional(&emitter.colors.alpha_over_lifetime, &mut images);
+            cache.prepare_optional(&emitter.colors.emission_over_lifetime, &mut images);
+            cache.prepare_optional(&emitter.turbulence.influence_over_lifetime, &mut images);
         }
     }
 }
