@@ -8,7 +8,7 @@ use crate::ui::widgets::variant_edit::{
     EditorVariantEdit, VariantEditConfig, VariantEditSwatchSlot,
 };
 
-use super::{FieldBinding, FieldKind, ReflectPath, get_inspecting_emitter};
+use super::{FieldBinding, FieldKind, get_inspected_data};
 
 #[derive(Component)]
 pub(super) struct VariantSwatchOwner(Entity);
@@ -72,16 +72,16 @@ pub(super) fn setup_variant_swatch(
         return;
     }
 
-    let emitter = get_inspecting_emitter(&editor_state, &assets).map(|(_, e)| e);
+    let data = get_inspected_data(&editor_state, &assets);
 
     for (slot_entity, slot) in &new_swatch_slots {
         let variant_edit_entity = slot.0;
         let Ok((_config, binding)) = variant_edit_configs.get(variant_edit_entity) else {
             continue;
         };
-        let Some(emitter) = emitter else { continue };
+        let Some(data) = data else { continue };
 
-        if let Some(color_value) = read_color_value(emitter, binding) {
+        if let Some(color_value) = read_color_value(data, binding) {
             commands
                 .entity(slot_entity)
                 .insert(VariantSwatchOwner(variant_edit_entity));
@@ -100,7 +100,7 @@ pub(super) fn setup_variant_swatch(
         if !config.show_swatch_slot {
             continue;
         }
-        let Some(emitter) = emitter else { continue };
+        let Some(data) = data else { continue };
 
         let Some((swatch_entity, _, swatch_children)) = existing_swatches
             .iter()
@@ -111,7 +111,7 @@ pub(super) fn setup_variant_swatch(
 
         despawn_swatch_children(&mut commands, swatch_children);
 
-        if let Some(color_value) = read_color_value(emitter, binding) {
+        if let Some(color_value) = read_color_value(data, binding) {
             let material_entity = spawn_swatch_material(
                 &mut commands,
                 variant_edit_entity,
@@ -203,10 +203,8 @@ fn despawn_swatch_children(commands: &mut Commands, children: &Children) {
 }
 
 fn read_color_value<'a>(
-    emitter: &'a EmitterData,
+    data: &'a dyn Reflect,
     binding: &FieldBinding,
 ) -> Option<&'a SolidOrGradientColor> {
-    let reflect_path = ReflectPath::new(binding.path());
-    let value = emitter.reflect_path(reflect_path.as_str()).ok()?;
-    value.try_downcast_ref::<SolidOrGradientColor>()
+    binding.resolve_ref(data)?.try_downcast_ref::<SolidOrGradientColor>()
 }

@@ -1,5 +1,6 @@
+mod commit;
 mod swatch;
-mod unified;
+mod sync;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -79,13 +80,19 @@ pub(super) fn get_inspected_data<'a>(
     editor_state: &EditorState,
     assets: &'a Assets<ParticleSystemAsset>,
 ) -> Option<&'a dyn Reflect> {
-    if let Some((_, emitter)) = get_inspecting_emitter(editor_state, assets) {
-        return Some(emitter);
+    let inspecting = editor_state.inspecting.as_ref()?;
+    let handle = editor_state.current_project.as_ref()?;
+    let asset = assets.get(handle)?;
+    match inspecting.kind {
+        Inspectable::Emitter => {
+            let emitter = asset.emitters.get(inspecting.index as usize)?;
+            Some(emitter)
+        }
+        Inspectable::Collider => {
+            let collider = asset.colliders.get(inspecting.index as usize)?;
+            Some(collider)
+        }
     }
-    if let Some((_, collider)) = get_inspecting_collider(editor_state, assets) {
-        return Some(collider);
-    }
-    None
 }
 
 pub(super) fn get_inspected_data_mut<'a>(
@@ -126,23 +133,23 @@ where
 }
 
 pub fn plugin(app: &mut App) {
-    app.add_observer(unified::handle_text_commit)
-        .add_observer(unified::handle_checkbox_commit)
-        .add_observer(unified::handle_combobox_change)
-        .add_observer(unified::handle_curve_commit)
-        .add_observer(unified::handle_gradient_commit)
-        .add_observer(unified::handle_color_commit)
-        .add_observer(unified::handle_texture_commit)
-        .add_observer(unified::handle_variant_change)
+    app.add_observer(commit::handle_text_commit)
+        .add_observer(commit::handle_checkbox_commit)
+        .add_observer(commit::handle_combobox_change)
+        .add_observer(commit::handle_curve_commit)
+        .add_observer(commit::handle_gradient_commit)
+        .add_observer(commit::handle_color_commit)
+        .add_observer(commit::handle_texture_commit)
+        .add_observer(commit::handle_variant_change)
         .add_observer(swatch::sync_variant_swatch_from_color)
         .add_systems(
             Update,
             (
                 propagate_bindings,
                 (
-                    unified::bind_text_inputs,
-                    unified::bind_widget_values,
-                    unified::bind_color_pickers,
+                    sync::bind_text_inputs,
+                    sync::bind_widget_values,
+                    sync::bind_color_pickers,
                     swatch::setup_variant_swatch,
                     swatch::sync_variant_swatch_from_gradient,
                 ),
@@ -190,8 +197,8 @@ fn propagate_bindings(
 
 #[derive(Clone)]
 pub enum FieldAccessor {
-    Emitter(String),
-    EmitterVariant { path: String, field_name: String },
+    Direct(String),
+    VariantField { path: String, field_name: String },
 }
 
 #[derive(Component, Clone)]
@@ -204,7 +211,7 @@ pub struct FieldBinding {
 impl FieldBinding {
     pub fn emitter(path: impl Into<String>, kind: FieldKind) -> Self {
         Self {
-            accessor: FieldAccessor::Emitter(path.into()),
+            accessor: FieldAccessor::Direct(path.into()),
             kind,
             variant_edit: None,
         }
@@ -217,7 +224,7 @@ impl FieldBinding {
         variant_edit: Entity,
     ) -> Self {
         Self {
-            accessor: FieldAccessor::EmitterVariant {
+            accessor: FieldAccessor::VariantField {
                 path: path.into(),
                 field_name: field_name.into(),
             },
@@ -232,7 +239,7 @@ impl FieldBinding {
         kind: FieldKind,
     ) -> Self {
         Self {
-            accessor: FieldAccessor::EmitterVariant {
+            accessor: FieldAccessor::VariantField {
                 path: path.into(),
                 field_name: field_name.into(),
             },
@@ -254,8 +261,8 @@ impl FieldBinding {
             }
         };
         match &self.accessor {
-            FieldAccessor::Emitter(_) => Some(value),
-            FieldAccessor::EmitterVariant { field_name, .. } => {
+            FieldAccessor::Direct(_) => Some(value),
+            FieldAccessor::VariantField { field_name, .. } => {
                 resolve_variant_field_ref(value, field_name)
             }
         }
@@ -275,8 +282,8 @@ impl FieldBinding {
             }
         };
         match &self.accessor {
-            FieldAccessor::Emitter(_) => Some(f(target)),
-            FieldAccessor::EmitterVariant { field_name, .. } => {
+            FieldAccessor::Direct(_) => Some(f(target)),
+            FieldAccessor::VariantField { field_name, .. } => {
                 with_variant_field_mut(target, field_name, f)
             }
         }
@@ -334,32 +341,32 @@ impl FieldBinding {
 
     pub fn path(&self) -> &str {
         match &self.accessor {
-            FieldAccessor::Emitter(path) => path,
-            FieldAccessor::EmitterVariant { path, .. } => path,
+            FieldAccessor::Direct(path) => path,
+            FieldAccessor::VariantField { path, .. } => path,
         }
     }
 
     pub fn field_name(&self) -> Option<&str> {
         match &self.accessor {
-            FieldAccessor::Emitter(_) => None,
-            FieldAccessor::EmitterVariant { field_name, .. } => Some(field_name),
+            FieldAccessor::Direct(_) => None,
+            FieldAccessor::VariantField { field_name, .. } => Some(field_name),
         }
     }
 
     pub fn is_variant(&self) -> bool {
-        matches!(self.accessor, FieldAccessor::EmitterVariant { .. })
+        matches!(self.accessor, FieldAccessor::VariantField { .. })
     }
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct ReflectPath(String);
+struct ReflectPath(String);
 
 impl ReflectPath {
-    pub(super) fn new(path: &str) -> Self {
+    fn new(path: &str) -> Self {
         Self(format!(".{}", path))
     }
 
-    pub(super) fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         &self.0
     }
 }
