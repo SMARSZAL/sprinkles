@@ -434,9 +434,7 @@ fn build_base_uniforms(
         turbulence_noise_speed: turbulence.noise_speed.into(),
         turbulence_influence_max: turbulence.influence.max,
 
-        turbulence_influence_over_lifetime: curve_uniform_from(
-            &turbulence.influence_over_lifetime,
-        ),
+        turbulence_influence_over_lifetime: curve_uniform_from(&turbulence.influence_over_lifetime),
 
         radial_velocity: animated_velocity_uniform_from(&emitter.velocities.radial_velocity),
 

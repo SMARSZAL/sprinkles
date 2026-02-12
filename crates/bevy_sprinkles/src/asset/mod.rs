@@ -4,9 +4,7 @@ mod particle_material;
 pub(crate) mod serde_helpers;
 
 pub use curve::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
-pub use gradient::{
-    Gradient, GradientInterpolation, GradientStop, SolidOrGradientColor,
-};
+pub use gradient::{Gradient, GradientInterpolation, GradientStop, SolidOrGradientColor};
 pub use particle_material::{DrawPassMaterial, SerializableAlphaMode, StandardParticleMaterial};
 
 use bevy::{

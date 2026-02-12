@@ -208,18 +208,14 @@ pub fn prepare_particle_compute_bind_groups(
             gpu_images: &'a RenderAssets<GpuImage>,
             fallback: Option<&'a GpuImage>,
         ) -> Option<&'a GpuImage> {
-            handle
-                .as_ref()
-                .and_then(|h| gpu_images.get(h))
-                .or(fallback)
+            handle.as_ref().and_then(|h| gpu_images.get(h)).or(fallback)
         }
 
         let Some(gradient_image) = resolve_texture(
             &emitter_data.gradient_texture_handle,
             &gpu_images,
             fallback_gradient_gpu_image,
-        )
-        else {
+        ) else {
             continue;
         };
         let Some(color_over_lifetime_image) = resolve_texture(

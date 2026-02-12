@@ -1,8 +1,5 @@
 use bevy::{
-    light::NotShadowCaster,
-    pbr::ExtendedMaterial,
-    prelude::*,
-    render::storage::ShaderStorageBuffer,
+    light::NotShadowCaster, pbr::ExtendedMaterial, prelude::*, render::storage::ShaderStorageBuffer,
 };
 
 use crate::{

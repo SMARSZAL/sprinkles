@@ -460,17 +460,11 @@ pub(crate) fn create_particle_mesh(
 ) -> Handle<Mesh> {
     let base_mesh = create_base_mesh(config);
 
-    let base_positions: Vec<[f32; 3]> = extract_float32x3(
-        &base_mesh,
-        Mesh::ATTRIBUTE_POSITION,
-    )
-    .unwrap_or_default();
+    let base_positions: Vec<[f32; 3]> =
+        extract_float32x3(&base_mesh, Mesh::ATTRIBUTE_POSITION).unwrap_or_default();
 
-    let base_normals: Vec<[f32; 3]> = extract_float32x3(
-        &base_mesh,
-        Mesh::ATTRIBUTE_NORMAL,
-    )
-    .unwrap_or_else(|| vec![[0.0, 0.0, 1.0]; base_positions.len()]);
+    let base_normals: Vec<[f32; 3]> = extract_float32x3(&base_mesh, Mesh::ATTRIBUTE_NORMAL)
+        .unwrap_or_else(|| vec![[0.0, 0.0, 1.0]; base_positions.len()]);
 
     let base_uvs: Vec<[f32; 2]> = base_mesh
         .attribute(Mesh::ATTRIBUTE_UV_0)

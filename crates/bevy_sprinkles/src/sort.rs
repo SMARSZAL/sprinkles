@@ -253,7 +253,13 @@ impl render_graph::Node for ParticleSortNode {
                 pass.dispatch_workgroups(workgroups, 1, 1);
             };
 
-            dispatch(render_context, init_pipeline, "particle_sort_init_pass", 0, 0);
+            dispatch(
+                render_context,
+                init_pipeline,
+                "particle_sort_init_pass",
+                0,
+                0,
+            );
 
             if data.draw_order != 0 {
                 let n = data.amount.next_power_of_two();
@@ -261,12 +267,24 @@ impl render_graph::Node for ParticleSortNode {
 
                 for stage in 0..num_stages {
                     for step in (0..=stage).rev() {
-                        dispatch(render_context, sort_pipeline, "particle_sort_pass", stage, step);
+                        dispatch(
+                            render_context,
+                            sort_pipeline,
+                            "particle_sort_pass",
+                            stage,
+                            step,
+                        );
                     }
                 }
             }
 
-            dispatch(render_context, copy_pipeline, "particle_sort_copy_pass", 0, 0);
+            dispatch(
+                render_context,
+                copy_pipeline,
+                "particle_sort_copy_pass",
+                0,
+                0,
+            );
         }
 
         Ok(())

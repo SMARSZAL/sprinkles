@@ -194,11 +194,7 @@ pub struct FallbackCurveTexture {
 }
 
 impl CurveTextureCache {
-    fn prepare_optional(
-        &mut self,
-        curve: &Option<CurveTexture>,
-        images: &mut Assets<Image>,
-    ) {
+    fn prepare_optional(&mut self, curve: &Option<CurveTexture>, images: &mut Assets<Image>) {
         if let Some(c) = curve.as_ref().filter(|c| !c.is_constant()) {
             self.get_or_create(c, images);
         }
