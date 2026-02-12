@@ -1,13 +1,14 @@
+pub mod materials;
+
 use bevy::picking::events::Click;
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::PointerButton;
 use bevy::picking::prelude::Pickable;
 use bevy::prelude::*;
-use bevy::reflect::TypePath;
-use bevy::render::render_resource::*;
-use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
 use sprinkles::prelude::{GradientStop, ParticleGradient};
+
+pub use materials::GradientMaterial;
 
 use bevy::window::SystemCursorIcon;
 
@@ -31,13 +32,10 @@ use crate::ui::widgets::text_edit::{TextEditCommitEvent, TextEditProps, text_edi
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
-const SHADER_GRADIENT_PATH: &str = "shaders/gradient_edit.wgsl";
 const BAR_HEIGHT: f32 = 24.0;
 const HANDLE_SIZE: f32 = 24.0;
 const HANDLE_ARROW_WIDTH: f32 = 8.0;
 const HANDLE_ARROW_HEIGHT: f32 = 6.0;
-const BORDER_RADIUS: f32 = 4.0;
-const CHECKERBOARD_SIZE: f32 = 6.0;
 const BAR_PADDING: f32 = 6.0;
 pub(crate) const MAX_STOPS: usize = 8;
 
@@ -273,57 +271,6 @@ struct Dragging;
 #[derive(Component)]
 struct JustDragged;
 
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
-pub struct GradientMaterial {
-    #[uniform(0)]
-    pub border_radius: f32,
-    #[uniform(0)]
-    pub checkerboard_size: f32,
-    #[uniform(0)]
-    pub stop_count: u32,
-    #[uniform(0)]
-    pub interpolation: u32,
-    #[uniform(0)]
-    pub positions: [Vec4; 2],
-    #[uniform(0)]
-    pub colors: [Vec4; MAX_STOPS],
-}
-
-const SWATCH_CHECKERBOARD_SIZE: f32 = 4.0;
-const SWATCH_BORDER_RADIUS: f32 = 4.0;
-const LINEAR_INTERPOLATION: u32 = 1;
-
-impl GradientMaterial {
-    pub fn from_gradient(gradient: &ParticleGradient) -> Self {
-        let (stop_count, positions, colors) = pack_gradient_stops(gradient);
-        Self {
-            border_radius: BORDER_RADIUS,
-            checkerboard_size: CHECKERBOARD_SIZE,
-            stop_count,
-            interpolation: gradient.interpolation as u32,
-            positions,
-            colors,
-        }
-    }
-
-    pub fn swatch(gradient: &ParticleGradient) -> Self {
-        let (stop_count, positions, colors) = pack_gradient_stops(gradient);
-        Self {
-            border_radius: SWATCH_BORDER_RADIUS,
-            checkerboard_size: SWATCH_CHECKERBOARD_SIZE,
-            stop_count,
-            interpolation: LINEAR_INTERPOLATION,
-            positions,
-            colors,
-        }
-    }
-}
-
-impl UiMaterial for GradientMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_GRADIENT_PATH.into()
-    }
-}
 
 fn setup_gradient_edit(
     mut commands: Commands,

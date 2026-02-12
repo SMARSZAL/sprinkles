@@ -1,13 +1,16 @@
+mod color_math;
+pub mod materials;
+
 use bevy::input_focus::InputFocus;
 use bevy::picking::events::{Press, Release};
 use bevy::picking::prelude::Pickable;
 use bevy::prelude::*;
-use bevy::reflect::TypePath;
-use bevy::render::render_resource::*;
-use bevy::shader::ShaderRef;
 use bevy::ui::UiGlobalTransform;
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
+
+use color_math::{hsv_to_rgb, parse_hex, rgb_to_hsv};
+pub use materials::{AlphaSliderMaterial, CheckerboardMaterial, HsvRectMaterial, HueSliderMaterial};
 
 use crate::ui::widgets::button::{ButtonClickEvent, ButtonProps, ButtonVariant, button};
 
@@ -20,10 +23,6 @@ use crate::ui::widgets::popover::{
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditPrefix, TextEditProps, text_edit};
 use crate::ui::widgets::utils::{find_ancestor, is_descendant_of};
 
-const SHADER_HSV_RECT_PATH: &str = "shaders/color_picker_hsv_rect.wgsl";
-const SHADER_HUE_PATH: &str = "shaders/color_picker_hue.wgsl";
-const SHADER_ALPHA_PATH: &str = "shaders/color_picker_alpha.wgsl";
-const SHADER_CHECKERBOARD_PATH: &str = "shaders/color_picker_checkerboard.wgsl";
 const SLIDER_HEIGHT: f32 = 12.0;
 const HSV_RECT_HEIGHT: f32 = 192.0;
 const PREVIEW_SWATCH_SIZE: f32 = 36.0;
@@ -398,63 +397,6 @@ struct ColorInputField {
 #[derive(Component, Default)]
 struct Dragging;
 
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
-pub struct HsvRectMaterial {
-    #[uniform(0)]
-    pub hue: f32,
-    #[uniform(0)]
-    pub border_radius: f32,
-}
-
-impl UiMaterial for HsvRectMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_HSV_RECT_PATH.into()
-    }
-}
-
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
-pub struct HueSliderMaterial {
-    #[uniform(0)]
-    pub border_radius: f32,
-}
-
-impl UiMaterial for HueSliderMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_HUE_PATH.into()
-    }
-}
-
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
-pub struct AlphaSliderMaterial {
-    #[uniform(0)]
-    pub color: Vec4,
-    #[uniform(0)]
-    pub checkerboard_size: f32,
-    #[uniform(0)]
-    pub border_radius: f32,
-}
-
-impl UiMaterial for AlphaSliderMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_ALPHA_PATH.into()
-    }
-}
-
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
-pub struct CheckerboardMaterial {
-    #[uniform(0)]
-    pub color: Vec4,
-    #[uniform(0)]
-    pub size: f32,
-    #[uniform(0)]
-    pub border_radius: f32,
-}
-
-impl UiMaterial for CheckerboardMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_CHECKERBOARD_PATH.into()
-    }
-}
 
 trait PickerControl: Component {
     fn picker_entity(&self) -> Entity;
@@ -1548,73 +1490,3 @@ fn update_trigger_display(
     }
 }
 
-fn rgb_to_hsv(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let delta = max - min;
-
-    let h = if delta == 0.0 {
-        0.0
-    } else if max == r {
-        60.0 * (((g - b) / delta) % 6.0)
-    } else if max == g {
-        60.0 * (((b - r) / delta) + 2.0)
-    } else {
-        60.0 * (((r - g) / delta) + 4.0)
-    };
-
-    let h = if h < 0.0 { h + 360.0 } else { h };
-
-    let s = if max == 0.0 { 0.0 } else { delta / max };
-    let v = max;
-
-    (h, s, v)
-}
-
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
-    let c = v * s;
-    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
-    let m = v - c;
-
-    let (r, g, b) = if h < 60.0 {
-        (c, x, 0.0)
-    } else if h < 120.0 {
-        (x, c, 0.0)
-    } else if h < 180.0 {
-        (0.0, c, x)
-    } else if h < 240.0 {
-        (0.0, x, c)
-    } else if h < 300.0 {
-        (x, 0.0, c)
-    } else {
-        (c, 0.0, x)
-    };
-
-    (r + m, g + m, b + m)
-}
-
-fn parse_hex(hex: &str) -> Option<[f32; 4]> {
-    let hex = hex.trim_start_matches('#');
-
-    match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-            Some([r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0])
-        }
-        8 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-            let a = u8::from_str_radix(&hex[6..8], 16).ok()?;
-            Some([
-                r as f32 / 255.0,
-                g as f32 / 255.0,
-                b as f32 / 255.0,
-                a as f32 / 255.0,
-            ])
-        }
-        _ => None,
-    }
-}

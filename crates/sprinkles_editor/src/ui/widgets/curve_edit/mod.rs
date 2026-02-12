@@ -1,16 +1,20 @@
+mod materials;
+mod presets;
+
 use bevy::input_focus::InputFocus;
 use bevy::picking::events::{Press, Release};
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::PointerButton;
 use bevy::picking::prelude::Pickable;
 use bevy::prelude::*;
-use bevy::reflect::{TypePath, Typed};
-use bevy::render::render_resource::*;
-use bevy::shader::ShaderRef;
+use bevy::reflect::Typed;
 use bevy::ui::UiGlobalTransform;
 use bevy::window::SystemCursorIcon;
 use inflector::Inflector;
 use sprinkles::prelude::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
+
+use materials::{CurveMaterial, MAX_POINTS};
+use presets::{CURVE_PRESETS, CurvePreset};
 
 use crate::ui::icons::{ICON_ARROW_LEFT_RIGHT, ICON_FCURVE, ICON_MORE};
 use crate::ui::tokens::{
@@ -33,14 +37,12 @@ use crate::ui::widgets::vector_edit::{
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
-const SHADER_CURVE_PATH: &str = "shaders/curve_edit.wgsl";
 const CANVAS_SIZE: f32 = 232.0;
 const CONTENT_PADDING: f32 = 12.0;
 const POINT_HANDLE_SIZE: f32 = 12.0;
 const TENSION_HANDLE_SIZE: f32 = 10.0;
 const HANDLE_BORDER: f32 = 1.0;
 const BORDER_RADIUS: f32 = 4.0;
-const MAX_POINTS: usize = 8;
 const DRAG_SNAP_STEP: f64 = 0.01;
 
 pub fn plugin(app: &mut App) {
@@ -217,98 +219,6 @@ struct PointModeMenu;
 #[derive(Component, Default)]
 struct Dragging;
 
-fn pack_f32(values: &[f32; MAX_POINTS]) -> [Vec4; 2] {
-    [
-        Vec4::new(values[0], values[1], values[2], values[3]),
-        Vec4::new(values[4], values[5], values[6], values[7]),
-    ]
-}
-
-fn pack_u32(values: &[u32; MAX_POINTS]) -> [UVec4; 2] {
-    [
-        UVec4::new(values[0], values[1], values[2], values[3]),
-        UVec4::new(values[4], values[5], values[6], values[7]),
-    ]
-}
-
-#[derive(AsBindGroup, Asset, TypePath, Debug, Clone, Default)]
-pub struct CurveMaterial {
-    #[uniform(0)]
-    border_radius: f32,
-    #[uniform(0)]
-    point_count: u32,
-    #[uniform(0)]
-    range_min: f32,
-    #[uniform(0)]
-    range_max: f32,
-    #[uniform(0)]
-    positions_low: Vec4,
-    #[uniform(0)]
-    positions_high: Vec4,
-    #[uniform(0)]
-    values_low: Vec4,
-    #[uniform(0)]
-    values_high: Vec4,
-    #[uniform(0)]
-    modes_low: UVec4,
-    #[uniform(0)]
-    modes_high: UVec4,
-    #[uniform(0)]
-    tensions_low: Vec4,
-    #[uniform(0)]
-    tensions_high: Vec4,
-    #[uniform(0)]
-    easings_low: UVec4,
-    #[uniform(0)]
-    easings_high: UVec4,
-}
-
-impl CurveMaterial {
-    fn from_curve(curve: &CurveTexture) -> Self {
-        let mut positions = [0.0f32; MAX_POINTS];
-        let mut values = [0.0f32; MAX_POINTS];
-        let mut modes = [0u32; MAX_POINTS];
-        let mut tensions = [0.0f32; MAX_POINTS];
-        let mut easings = [0u32; MAX_POINTS];
-
-        for (i, point) in curve.points.iter().take(MAX_POINTS).enumerate() {
-            positions[i] = point.position;
-            values[i] = point.value as f32;
-            modes[i] = point.mode as u32;
-            tensions[i] = point.tension as f32;
-            easings[i] = point.easing as u32;
-        }
-
-        let [positions_low, positions_high] = pack_f32(&positions);
-        let [values_low, values_high] = pack_f32(&values);
-        let [modes_low, modes_high] = pack_u32(&modes);
-        let [tensions_low, tensions_high] = pack_f32(&tensions);
-        let [easings_low, easings_high] = pack_u32(&easings);
-
-        Self {
-            border_radius: BORDER_RADIUS,
-            point_count: curve.points.len().min(MAX_POINTS) as u32,
-            range_min: curve.range.min,
-            range_max: curve.range.max,
-            positions_low,
-            positions_high,
-            values_low,
-            values_high,
-            modes_low,
-            modes_high,
-            tensions_low,
-            tensions_high,
-            easings_low,
-            easings_high,
-        }
-    }
-}
-
-impl UiMaterial for CurveMaterial {
-    fn fragment_shader() -> ShaderRef {
-        SHADER_CURVE_PATH.into()
-    }
-}
 
 trait CurveControl: Component {
     fn curve_edit_entity(&self) -> Entity;
@@ -1044,154 +954,6 @@ fn update_handle_colors(
     }
 }
 
-// tension values for power-based easings: tension = (1 - 1/exp) / 0.999
-const QUAD_TENSION: f64 = 0.5005005005;
-const CUBIC_TENSION: f64 = 0.6673340007;
-const QUART_TENSION: f64 = 0.7507507508;
-const QUINT_TENSION: f64 = 0.8008008008;
-
-struct CurvePreset {
-    name: &'static str,
-    start_value: f64,
-    mode: CurveMode,
-    easing: CurveEasing,
-    tension: f64,
-}
-
-impl CurvePreset {
-    const fn new(name: &'static str, mode: CurveMode, easing: CurveEasing, tension: f64) -> Self {
-        Self {
-            name,
-            start_value: 0.0,
-            mode,
-            easing,
-            tension,
-        }
-    }
-
-    const fn constant(name: &'static str) -> Self {
-        Self {
-            name,
-            start_value: 1.0,
-            mode: CurveMode::DoubleCurve,
-            easing: CurveEasing::Power,
-            tension: 0.0,
-        }
-    }
-
-    fn to_curve(&self, range: sprinkles::prelude::ParticleRange) -> CurveTexture {
-        CurveTexture::new(vec![
-            CurvePoint::new(0.0, self.start_value),
-            CurvePoint::new(1.0, 1.0)
-                .with_mode(self.mode)
-                .with_easing(self.easing)
-                .with_tension(self.tension),
-        ])
-        .with_name(self.name)
-        .with_range(range)
-    }
-}
-
-const CURVE_PRESETS: &[CurvePreset] = &[
-    CurvePreset::constant("Constant"),
-    CurvePreset::new("Linear", CurveMode::DoubleCurve, CurveEasing::Power, 0.0),
-    CurvePreset::new(
-        "Quad in",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        QUAD_TENSION,
-    ),
-    CurvePreset::new(
-        "Quad out",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        -QUAD_TENSION,
-    ),
-    CurvePreset::new(
-        "Quad in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Power,
-        QUAD_TENSION,
-    ),
-    CurvePreset::new(
-        "Cubic in",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        CUBIC_TENSION,
-    ),
-    CurvePreset::new(
-        "Cubic out",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        -CUBIC_TENSION,
-    ),
-    CurvePreset::new(
-        "Cubic in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Power,
-        CUBIC_TENSION,
-    ),
-    CurvePreset::new(
-        "Quart in",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        QUART_TENSION,
-    ),
-    CurvePreset::new(
-        "Quart out",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        -QUART_TENSION,
-    ),
-    CurvePreset::new(
-        "Quart in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Power,
-        QUART_TENSION,
-    ),
-    CurvePreset::new(
-        "Quint in",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        QUINT_TENSION,
-    ),
-    CurvePreset::new(
-        "Quint out",
-        CurveMode::SingleCurve,
-        CurveEasing::Power,
-        -QUINT_TENSION,
-    ),
-    CurvePreset::new(
-        "Quint in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Power,
-        QUINT_TENSION,
-    ),
-    CurvePreset::new("Sine in", CurveMode::SingleCurve, CurveEasing::Sine, 1.0),
-    CurvePreset::new("Sine out", CurveMode::SingleCurve, CurveEasing::Sine, -1.0),
-    CurvePreset::new(
-        "Sine in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Sine,
-        1.0,
-    ),
-    CurvePreset::new("Expo in", CurveMode::SingleCurve, CurveEasing::Expo, 1.0),
-    CurvePreset::new("Expo out", CurveMode::SingleCurve, CurveEasing::Expo, -1.0),
-    CurvePreset::new(
-        "Expo in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Expo,
-        1.0,
-    ),
-    CurvePreset::new("Circ in", CurveMode::SingleCurve, CurveEasing::Circ, 1.0),
-    CurvePreset::new("Circ out", CurveMode::SingleCurve, CurveEasing::Circ, -1.0),
-    CurvePreset::new(
-        "Circ in out",
-        CurveMode::DoubleCurve,
-        CurveEasing::Circ,
-        1.0,
-    ),
-];
 
 fn handle_preset_change(
     trigger: On<ComboBoxChangeEvent>,
