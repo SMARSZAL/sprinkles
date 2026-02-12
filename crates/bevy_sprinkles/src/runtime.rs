@@ -108,42 +108,15 @@ impl EmitterRuntime {
     }
 
     pub fn system_phase(&self, time: &crate::asset::EmitterTime) -> f32 {
-        if time.lifetime <= 0.0 {
-            return 0.0;
-        }
-        let total_duration = time.total_duration();
-        if total_duration <= 0.0 {
-            return 0.0;
-        }
-        let time_in_cycle = self.system_time % total_duration;
-        if time_in_cycle < time.delay {
-            return 0.0;
-        }
-        (time_in_cycle - time.delay) / time.lifetime
+        compute_phase(self.system_time, time)
     }
 
     pub fn prev_system_phase(&self, time: &crate::asset::EmitterTime) -> f32 {
-        if time.lifetime <= 0.0 {
-            return 0.0;
-        }
-        let total_duration = time.total_duration();
-        if total_duration <= 0.0 {
-            return 0.0;
-        }
-        let time_in_cycle = self.prev_system_time % total_duration;
-        if time_in_cycle < time.delay {
-            return 0.0;
-        }
-        (time_in_cycle - time.delay) / time.lifetime
+        compute_phase(self.prev_system_time, time)
     }
 
     pub fn is_past_delay(&self, time: &crate::asset::EmitterTime) -> bool {
-        let total_duration = time.total_duration();
-        if total_duration <= 0.0 {
-            return true;
-        }
-        let time_in_cycle = self.system_time % total_duration;
-        time_in_cycle >= time.delay
+        is_past_delay(self.system_time, time)
     }
 
     pub fn play(&mut self) {
