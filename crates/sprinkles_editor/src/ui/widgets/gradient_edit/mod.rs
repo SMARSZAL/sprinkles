@@ -271,7 +271,6 @@ struct Dragging;
 #[derive(Component)]
 struct JustDragged;
 
-
 fn setup_gradient_edit(
     mut commands: Commands,
     asset_server: Res<AssetServer>,

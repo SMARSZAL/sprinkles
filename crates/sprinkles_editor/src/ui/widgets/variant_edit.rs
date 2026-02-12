@@ -184,13 +184,7 @@ impl VariantDefinition {
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_variant_edit_click)
         .add_observer(handle_variant_combobox_change)
-        .add_systems(
-            Update,
-            (
-                setup_variant_edit,
-                sync_variant_edit_button,
-            ),
-        );
+        .add_systems(Update, (setup_variant_edit, sync_variant_edit_button));
 }
 
 #[derive(Component)]
@@ -486,10 +480,7 @@ fn handle_variant_edit_click(
     asset_server: Res<AssetServer>,
     buttons: Query<&ChildOf, With<EditorButton>>,
     variant_edit_buttons: Query<&ChildOf, With<VariantEditButton>>,
-    mut variant_edits: Query<
-        (Entity, &VariantEditConfig, &Children),
-        With<EditorVariantEdit>,
-    >,
+    mut variant_edits: Query<(Entity, &VariantEditConfig, &Children), With<EditorVariantEdit>>,
     mut trackers: Query<&mut PopoverTracker>,
     existing_popovers: Query<Entity, With<VariantEditPopover>>,
     all_popovers: Query<Entity, With<EditorPopover>>,
@@ -893,4 +884,3 @@ fn texture_ref_variants() -> Vec<VariantDefinition> {
             .with_default(Some(TextureRef::Asset(String::new()))),
     ]
 }
-

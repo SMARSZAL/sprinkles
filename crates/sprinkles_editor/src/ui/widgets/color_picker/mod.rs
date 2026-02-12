@@ -10,7 +10,9 @@ use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
 use color_math::{hsv_to_rgb, parse_hex, rgb_to_hsv};
-pub use materials::{AlphaSliderMaterial, CheckerboardMaterial, HsvRectMaterial, HueSliderMaterial};
+pub use materials::{
+    AlphaSliderMaterial, CheckerboardMaterial, HsvRectMaterial, HueSliderMaterial,
+};
 
 use crate::ui::widgets::button::{ButtonClickEvent, ButtonProps, ButtonVariant, button};
 
@@ -396,7 +398,6 @@ struct ColorInputField {
 
 #[derive(Component, Default)]
 struct Dragging;
-
 
 trait PickerControl: Component {
     fn picker_entity(&self) -> Entity;
@@ -1489,4 +1490,3 @@ fn update_trigger_display(
         }
     }
 }
-

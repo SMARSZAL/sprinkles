@@ -219,7 +219,6 @@ struct PointModeMenu;
 #[derive(Component, Default)]
 struct Dragging;
 
-
 trait CurveControl: Component {
     fn curve_edit_entity(&self) -> Entity;
     fn canvas_entity(&self) -> Entity;
@@ -953,7 +952,6 @@ fn update_handle_colors(
         }
     }
 }
-
 
 fn handle_preset_change(
     trigger: On<ComboBoxChangeEvent>,

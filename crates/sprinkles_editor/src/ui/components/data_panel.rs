@@ -711,7 +711,9 @@ fn on_rename_commit(
 ) {
     let text_edit_entity = trigger.entity;
 
-    let Some((rename_entity, rename_input)) = find_ancestor(text_edit_entity, &rename_inputs, &parents) else {
+    let Some((rename_entity, rename_input)) =
+        find_ancestor(text_edit_entity, &rename_inputs, &parents)
+    else {
         return;
     };
 

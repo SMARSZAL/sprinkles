@@ -6,23 +6,20 @@ use bevy::window::PrimaryWindow;
 use crate::ui::tokens::{
     BACKGROUND_COLOR, BORDER_COLOR, CORNER_RADIUS_LG, FONT_PATH, TEXT_DISPLAY_COLOR, TEXT_SIZE,
 };
-use crate::ui::widgets::button::{
-    ButtonVariant, IconButtonProps, icon_button, set_button_variant,
-};
+use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button, set_button_variant};
 use crate::ui::widgets::utils::is_descendant_of;
 
 const POPOVER_GAP: f32 = 4.0;
 
 pub fn plugin(app: &mut App) {
-    app.add_observer(handle_popover_close_click)
-        .add_systems(
-            Update,
-            (
-                handle_popover_position,
-                handle_popover_dismiss,
-                cleanup_tracked_popovers,
-            ),
-        );
+    app.add_observer(handle_popover_close_click).add_systems(
+        Update,
+        (
+            handle_popover_position,
+            handle_popover_dismiss,
+            cleanup_tracked_popovers,
+        ),
+    );
 }
 
 #[derive(Component)]
