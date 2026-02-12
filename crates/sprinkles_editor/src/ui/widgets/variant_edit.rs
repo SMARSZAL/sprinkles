@@ -7,7 +7,7 @@ use crate::ui::components::inspector::{FieldKind, VariantField, name_to_label, p
 
 use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM};
 use crate::ui::widgets::button::{
-    ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, button, set_button_variant,
+    ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, button,
 };
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
 use crate::ui::widgets::color_picker::{ColorPickerProps, color_picker};
@@ -16,8 +16,8 @@ use crate::ui::widgets::combobox::{
 };
 use crate::ui::widgets::gradient_edit::{GradientEditProps, gradient_edit};
 use crate::ui::widgets::popover::{
-    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_content,
-    popover_header,
+    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, PopoverTracker,
+    activate_trigger, deactivate_trigger, popover, popover_content, popover_header,
 };
 use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
 
@@ -189,7 +189,6 @@ pub fn plugin(app: &mut App) {
             (
                 setup_variant_edit,
                 sync_variant_edit_button,
-                handle_popover_closed,
             ),
         );
 }
@@ -227,7 +226,6 @@ pub struct VariantComboBox(pub Entity);
 
 #[derive(Component, Default)]
 struct VariantEditState {
-    popover: Option<Entity>,
     last_synced_index: Option<usize>,
 }
 
@@ -318,6 +316,7 @@ pub fn variant_edit(props: VariantEditProps) -> impl Bundle {
             initialized: false,
         },
         VariantEditState::default(),
+        PopoverTracker::default(),
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(3.0),
@@ -488,9 +487,10 @@ fn handle_variant_edit_click(
     buttons: Query<&ChildOf, With<EditorButton>>,
     variant_edit_buttons: Query<&ChildOf, With<VariantEditButton>>,
     mut variant_edits: Query<
-        (Entity, &mut VariantEditState, &VariantEditConfig, &Children),
+        (Entity, &VariantEditConfig, &Children),
         With<EditorVariantEdit>,
     >,
+    mut trackers: Query<&mut PopoverTracker>,
     existing_popovers: Query<Entity, With<VariantEditPopover>>,
     all_popovers: Query<Entity, With<EditorPopover>>,
     mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
@@ -507,21 +507,22 @@ fn handle_variant_edit_click(
             child_of.parent()
         };
 
-    let Ok((entity, mut state, config, children)) = variant_edits.get_mut(variant_edit_entity)
-    else {
+    let Ok((entity, config, children)) = variant_edits.get_mut(variant_edit_entity) else {
         return;
     };
 
-    if let Some(popover_entity) = state.popover {
+    let Ok(mut tracker) = trackers.get_mut(entity) else {
+        return;
+    };
+
+    let button_entity = children.last().copied();
+
+    if let Some(popover_entity) = tracker.popover {
         if existing_popovers.get(popover_entity).is_ok() {
             commands.entity(popover_entity).try_despawn();
-            state.popover = None;
-            if let Some(&button_entity) = children.last() {
-                if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(button_entity)
-                {
-                    *variant = ButtonVariant::Default;
-                    set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-                }
+            tracker.popover = None;
+            if let Some(btn) = button_entity {
+                deactivate_trigger(btn, &mut button_styles);
             }
             return;
         }
@@ -537,11 +538,8 @@ fn handle_variant_edit_click(
         }
     }
 
-    if let Some(&button_entity) = children.last() {
-        if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(button_entity) {
-            *variant = ButtonVariant::ActiveAlt;
-            set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
-        }
+    if let Some(btn) = button_entity {
+        activate_trigger(btn, &mut button_styles);
     }
 
     let popover_title = config
@@ -639,7 +637,11 @@ fn handle_variant_edit_click(
             }
         });
 
-    state.popover = Some(popover_entity);
+    if let Some(btn) = button_entity {
+        tracker.open(popover_entity, btn);
+    } else {
+        tracker.popover = Some(popover_entity);
+    }
 }
 
 fn handle_variant_combobox_change(
@@ -892,27 +894,3 @@ fn texture_ref_variants() -> Vec<VariantDefinition> {
     ]
 }
 
-fn handle_popover_closed(
-    mut variant_edits: Query<(&mut VariantEditState, &Children), With<EditorVariantEdit>>,
-    popovers: Query<Entity, With<EditorPopover>>,
-    mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
-) {
-    for (mut state, children) in &mut variant_edits {
-        let Some(popover_entity) = state.popover else {
-            continue;
-        };
-
-        if popovers.get(popover_entity).is_ok() {
-            continue;
-        }
-
-        state.popover = None;
-
-        if let Some(&button_entity) = children.last() {
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(button_entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
-        }
-    }
-}

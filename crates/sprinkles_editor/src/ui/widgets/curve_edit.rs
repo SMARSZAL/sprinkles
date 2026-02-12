@@ -18,13 +18,12 @@ use crate::ui::tokens::{
 };
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, IconButtonProps, button, icon_button,
-    set_button_variant,
 };
 use crate::ui::widgets::combobox::{ComboBoxChangeEvent, ComboBoxOptionData, combobox_with_label};
 use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 use crate::ui::widgets::popover::{
-    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_content,
-    popover_header,
+    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, PopoverTracker,
+    activate_trigger, deactivate_trigger, popover, popover_content, popover_header,
 };
 use crate::ui::widgets::text_edit::EditorTextEdit;
 use crate::ui::widgets::utils::is_descendant_of;
@@ -58,7 +57,6 @@ pub fn plugin(app: &mut App) {
                 update_curve_visuals,
                 respawn_handles_on_point_change,
                 update_handle_colors,
-                handle_popover_closed,
                 sync_trigger_label,
                 sync_range_inputs_to_state,
                 handle_range_blur,
@@ -75,24 +73,19 @@ pub struct EditorCurveEdit;
 #[derive(Component, Clone)]
 pub struct CurveEditState {
     pub curve: CurveTexture,
-    popover: Option<Entity>,
 }
 
 impl Default for CurveEditState {
     fn default() -> Self {
         Self {
             curve: CurveTexture::default(),
-            popover: None,
         }
     }
 }
 
 impl CurveEditState {
     pub fn from_curve(curve: CurveTexture) -> Self {
-        Self {
-            curve,
-            popover: None,
-        }
+        Self { curve }
     }
 
     pub fn set_curve(&mut self, curve: CurveTexture) {
@@ -165,6 +158,7 @@ pub fn curve_edit(props: CurveEditProps) -> impl Bundle {
         EditorCurveEdit,
         CurveEditLabel(label),
         state,
+        PopoverTracker::default(),
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(3.0),
@@ -642,7 +636,7 @@ fn handle_trigger_click(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     triggers: Query<&CurveEditTrigger>,
-    mut states: Query<&mut CurveEditState>,
+    mut trackers: Query<&mut PopoverTracker>,
     existing_popovers: Query<(Entity, &CurveEditPopover)>,
     all_popovers: Query<Entity, With<EditorPopover>>,
     mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
@@ -653,18 +647,15 @@ fn handle_trigger_click(
     };
 
     let curve_edit_entity = curve_trigger.0;
-    let Ok(mut state) = states.get_mut(curve_edit_entity) else {
+    let Ok(mut tracker) = trackers.get_mut(curve_edit_entity) else {
         return;
     };
 
     for (popover_entity, popover_ref) in &existing_popovers {
         if popover_ref.0 == curve_edit_entity {
             commands.entity(popover_entity).try_despawn();
-            state.popover = None;
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
+            tracker.popover = None;
+            deactivate_trigger(trigger.entity, &mut button_styles);
             return;
         }
     }
@@ -679,10 +670,7 @@ fn handle_trigger_click(
         }
     }
 
-    if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-        *variant = ButtonVariant::ActiveAlt;
-        set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
-    }
+    activate_trigger(trigger.entity, &mut button_styles);
 
     let presets: Vec<_> = CURVE_PRESETS
         .iter()
@@ -704,7 +692,7 @@ fn handle_trigger_click(
         ))
         .id();
 
-    state.popover = Some(popover_entity);
+    tracker.open(popover_entity, trigger.entity);
 
     commands
         .entity(popover_entity)
@@ -1357,35 +1345,6 @@ fn sync_range_inputs_to_state(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-fn handle_popover_closed(
-    mut states: Query<(Entity, &mut CurveEditState), With<EditorCurveEdit>>,
-    triggers: Query<(Entity, &CurveEditTrigger)>,
-    popovers: Query<Entity, With<EditorPopover>>,
-    mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
-) {
-    for (_curve_edit_entity, mut state) in &mut states {
-        let Some(popover_entity) = state.popover else {
-            continue;
-        };
-
-        if popovers.get(popover_entity).is_ok() {
-            continue;
-        }
-
-        state.popover = None;
-
-        for (trigger_entity, trigger) in &triggers {
-            if trigger.0 != _curve_edit_entity {
-                continue;
-            }
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger_entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
             }
         }
     }

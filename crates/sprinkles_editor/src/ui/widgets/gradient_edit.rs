@@ -15,7 +15,7 @@ use crate::ui::icons::ICON_CLOSE;
 use crate::ui::tokens::{BORDER_COLOR, PRIMARY_COLOR};
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, IconButtonProps, button,
-    icon_button, set_button_variant,
+    icon_button,
 };
 use crate::ui::widgets::color_picker::{
     ColorPickerChangeEvent, ColorPickerCommitEvent, ColorPickerProps, EditorColorPicker,
@@ -24,7 +24,8 @@ use crate::ui::widgets::color_picker::{
 use crate::ui::widgets::cursor::{ActiveCursor, HoverCursor};
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::popover::{
-    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_header,
+    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, PopoverTracker,
+    activate_trigger, deactivate_trigger, popover, popover_header,
 };
 use crate::ui::widgets::text_edit::{TextEditCommitEvent, TextEditProps, text_edit};
 use bevy_ui_text_input::TextInputQueue;
@@ -73,7 +74,6 @@ pub fn plugin(app: &mut App) {
                 setup_gradient_edit,
                 setup_gradient_edit_content,
                 setup_trigger_swatch,
-                handle_popover_closed,
                 sync_trigger_swatch,
                 fix_stop_row_sizing,
                 update_gradient_visuals,
@@ -93,15 +93,11 @@ pub struct EditorGradientEdit;
 #[derive(Component, Clone, Default)]
 pub struct GradientEditState {
     pub gradient: ParticleGradient,
-    popover: Option<Entity>,
 }
 
 impl GradientEditState {
     pub fn from_gradient(gradient: ParticleGradient) -> Self {
-        Self {
-            gradient,
-            popover: None,
-        }
+        Self { gradient }
     }
 }
 
@@ -192,6 +188,7 @@ pub fn gradient_edit(props: GradientEditProps) -> impl Bundle {
             label: props.label,
         },
         state,
+        PopoverTracker::default(),
         Node {
             flex_direction: FlexDirection::Column,
             ..default()
@@ -472,7 +469,7 @@ fn handle_trigger_click(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     triggers: Query<&GradientEditTrigger>,
-    mut states: Query<&mut GradientEditState>,
+    mut trackers: Query<&mut PopoverTracker>,
     configs: Query<&GradientEditConfig>,
     existing_popovers: Query<(Entity, &GradientEditPopover)>,
     mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
@@ -482,26 +479,20 @@ fn handle_trigger_click(
     };
 
     let edit_entity = gradient_trigger.0;
-    let Ok(mut state) = states.get_mut(edit_entity) else {
+    let Ok(mut tracker) = trackers.get_mut(edit_entity) else {
         return;
     };
 
     for (popover_entity, popover_ref) in &existing_popovers {
         if popover_ref.0 == edit_entity {
             commands.entity(popover_entity).try_despawn();
-            state.popover = None;
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
+            tracker.popover = None;
+            deactivate_trigger(trigger.entity, &mut button_styles);
             return;
         }
     }
 
-    if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-        *variant = ButtonVariant::ActiveAlt;
-        set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
-    }
+    activate_trigger(trigger.entity, &mut button_styles);
 
     let popover_entity = commands
         .spawn((
@@ -515,7 +506,7 @@ fn handle_trigger_click(
         ))
         .id();
 
-    state.popover = Some(popover_entity);
+    tracker.open(popover_entity, trigger.entity);
 
     let header_title = configs
         .get(edit_entity)
@@ -540,35 +531,6 @@ fn handle_trigger_click(
             },
         ));
     });
-}
-
-fn handle_popover_closed(
-    mut states: Query<(Entity, &mut GradientEditState), With<EditorGradientEdit>>,
-    triggers: Query<(Entity, &GradientEditTrigger)>,
-    popovers: Query<Entity, With<EditorPopover>>,
-    mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
-) {
-    for (edit_entity, mut state) in &mut states {
-        let Some(popover_entity) = state.popover else {
-            continue;
-        };
-
-        if popovers.get(popover_entity).is_ok() {
-            continue;
-        }
-
-        state.popover = None;
-
-        for (trigger_entity, trigger) in &triggers {
-            if trigger.0 != edit_entity {
-                continue;
-            }
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger_entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
-        }
-    }
 }
 
 fn setup_gradient_edit_content(

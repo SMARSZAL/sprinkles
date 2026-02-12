@@ -6,18 +6,64 @@ use bevy::window::PrimaryWindow;
 use crate::ui::tokens::{
     BACKGROUND_COLOR, BORDER_COLOR, CORNER_RADIUS_LG, FONT_PATH, TEXT_DISPLAY_COLOR, TEXT_SIZE,
 };
-use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
+use crate::ui::widgets::button::{
+    ButtonVariant, IconButtonProps, icon_button, set_button_variant,
+};
 use crate::ui::widgets::utils::is_descendant_of;
 
 const POPOVER_GAP: f32 = 4.0;
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_popover_close_click)
-        .add_systems(Update, (handle_popover_position, handle_popover_dismiss));
+        .add_systems(
+            Update,
+            (
+                handle_popover_position,
+                handle_popover_dismiss,
+                cleanup_tracked_popovers,
+            ),
+        );
 }
 
 #[derive(Component)]
 pub struct EditorPopover;
+
+#[derive(Component, Default)]
+pub struct PopoverTracker {
+    pub popover: Option<Entity>,
+    pub trigger: Option<Entity>,
+}
+
+impl PopoverTracker {
+    pub fn open(&mut self, popover: Entity, trigger: Entity) {
+        self.popover = Some(popover);
+        self.trigger = Some(trigger);
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.popover.is_some()
+    }
+}
+
+pub fn activate_trigger(
+    trigger: Entity,
+    button_styles: &mut Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
+) {
+    if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger) {
+        *variant = ButtonVariant::ActiveAlt;
+        set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
+    }
+}
+
+pub fn deactivate_trigger(
+    trigger: Entity,
+    button_styles: &mut Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
+) {
+    if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger) {
+        *variant = ButtonVariant::Default;
+        set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
+    }
+}
 
 #[derive(Component)]
 pub struct PopoverAnchor(pub Entity);
@@ -385,6 +431,28 @@ pub fn popover_content() -> impl Bundle {
         row_gap: px(12.0),
         padding: UiRect::all(px(12.0)),
         ..default()
+    }
+}
+
+fn cleanup_tracked_popovers(
+    mut trackers: Query<&mut PopoverTracker>,
+    popovers: Query<Entity, With<EditorPopover>>,
+    mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
+) {
+    for mut tracker in &mut trackers {
+        let Some(popover_entity) = tracker.popover else {
+            continue;
+        };
+
+        if popovers.get(popover_entity).is_ok() {
+            continue;
+        }
+
+        tracker.popover = None;
+
+        if let Some(trigger_entity) = tracker.trigger {
+            deactivate_trigger(trigger_entity, &mut button_styles);
+        }
     }
 }
 

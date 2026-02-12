@@ -9,15 +9,13 @@ use bevy::ui::UiGlobalTransform;
 use bevy_ui_text_input::TextInputQueue;
 use bevy_ui_text_input::actions::{TextInputAction, TextInputEdit};
 
-use crate::ui::widgets::button::{
-    ButtonClickEvent, ButtonProps, ButtonVariant, button, set_button_variant,
-};
+use crate::ui::widgets::button::{ButtonClickEvent, ButtonProps, ButtonVariant, button};
 
 use crate::ui::tokens::{TEXT_MUTED_COLOR, TEXT_SIZE};
 use crate::ui::widgets::combobox::{ComboBoxChangeEvent, combobox_icon_with_selected};
 use crate::ui::widgets::popover::{
-    EditorPopover, PopoverHeaderProps, PopoverPlacement, PopoverProps, popover, popover_content,
-    popover_header,
+    PopoverHeaderProps, PopoverPlacement, PopoverProps, PopoverTracker, activate_trigger,
+    deactivate_trigger, popover, popover_content, popover_header,
 };
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditPrefix, TextEditProps, text_edit};
 use crate::ui::widgets::utils::{find_ancestor, is_descendant_of};
@@ -54,7 +52,6 @@ pub fn plugin(app: &mut App) {
                 handle_input_field_blur,
                 update_trigger_display,
                 sync_text_inputs_to_state,
-                handle_popover_closed,
             ),
         );
 }
@@ -69,7 +66,6 @@ pub struct ColorPickerState {
     pub brightness: f32,
     pub alpha: f32,
     pub input_mode: ColorInputMode,
-    popover: Option<Entity>,
 }
 
 impl Default for ColorPickerState {
@@ -80,7 +76,6 @@ impl Default for ColorPickerState {
             brightness: 1.0,
             alpha: 1.0,
             input_mode: ColorInputMode::Rgb,
-            popover: None,
         }
     }
 }
@@ -94,7 +89,6 @@ impl ColorPickerState {
             brightness: v,
             alpha: rgba[3],
             input_mode: ColorInputMode::Rgb,
-            popover: None,
         }
     }
 
@@ -206,6 +200,7 @@ pub fn color_picker(props: ColorPickerProps) -> impl Bundle {
         EditorColorPicker,
         ColorPickerState::from_rgba(color),
         ColorPickerConfig { inline },
+        PopoverTracker::default(),
         Node {
             flex_direction: FlexDirection::Column,
             ..default()
@@ -1197,7 +1192,7 @@ fn handle_trigger_click(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     triggers: Query<&ColorPickerTrigger>,
-    mut pickers: Query<&mut ColorPickerState>,
+    mut trackers: Query<&mut PopoverTracker>,
     existing_popovers: Query<(Entity, &ColorPickerPopover)>,
     mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
 ) {
@@ -1206,26 +1201,20 @@ fn handle_trigger_click(
     };
 
     let picker_entity = picker_trigger.0;
-    let Ok(mut state) = pickers.get_mut(picker_entity) else {
+    let Ok(mut tracker) = trackers.get_mut(picker_entity) else {
         return;
     };
 
     for (popover_entity, popover_ref) in &existing_popovers {
         if popover_ref.0 == picker_entity {
             commands.entity(popover_entity).try_despawn();
-            state.popover = None;
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
+            tracker.popover = None;
+            deactivate_trigger(trigger.entity, &mut button_styles);
             return;
         }
     }
 
-    if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger.entity) {
-        *variant = ButtonVariant::ActiveAlt;
-        set_button_variant(ButtonVariant::ActiveAlt, &mut bg, &mut border);
-    }
+    activate_trigger(trigger.entity, &mut button_styles);
 
     let popover_entity = commands
         .spawn((
@@ -1243,7 +1232,7 @@ fn handle_trigger_click(
         ))
         .id();
 
-    state.popover = Some(popover_entity);
+    tracker.open(popover_entity, trigger.entity);
 
     commands.entity(popover_entity).with_children(|parent| {
         parent.spawn(popover_header(
@@ -1253,35 +1242,6 @@ fn handle_trigger_click(
 
         parent.spawn((ColorPickerContent(picker_entity), popover_content()));
     });
-}
-
-fn handle_popover_closed(
-    mut pickers: Query<(Entity, &mut ColorPickerState), With<EditorColorPicker>>,
-    triggers: Query<(Entity, &ColorPickerTrigger)>,
-    popovers: Query<Entity, With<EditorPopover>>,
-    mut button_styles: Query<(&mut BackgroundColor, &mut BorderColor, &mut ButtonVariant)>,
-) {
-    for (picker_entity, mut state) in &mut pickers {
-        let Some(popover_entity) = state.popover else {
-            continue;
-        };
-
-        if popovers.get(popover_entity).is_ok() {
-            continue;
-        }
-
-        state.popover = None;
-
-        for (trigger_entity, trigger) in &triggers {
-            if trigger.0 != picker_entity {
-                continue;
-            }
-            if let Ok((mut bg, mut border, mut variant)) = button_styles.get_mut(trigger_entity) {
-                *variant = ButtonVariant::Default;
-                set_button_variant(ButtonVariant::Default, &mut bg, &mut border);
-            }
-        }
-    }
 }
 
 fn update_color_picker_visuals(
