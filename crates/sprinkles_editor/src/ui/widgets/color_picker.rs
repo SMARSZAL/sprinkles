@@ -20,6 +20,7 @@ use crate::ui::widgets::popover::{
     popover_header,
 };
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditPrefix, TextEditProps, text_edit};
+use crate::ui::widgets::utils::{find_ancestor, is_descendant_of};
 
 const SHADER_HSV_RECT_PATH: &str = "shaders/color_picker_hsv_rect.wgsl";
 const SHADER_HUE_PATH: &str = "shaders/color_picker_hue.wgsl";
@@ -1439,7 +1440,7 @@ fn handle_input_field_blur(
     mut pickers: Query<&mut ColorPickerState>,
     input_fields: Query<&ColorInputField>,
     text_inputs: Query<
-        (&bevy_ui_text_input::TextInputBuffer, &ChildOf),
+        &bevy_ui_text_input::TextInputBuffer,
         With<crate::ui::widgets::text_edit::EditorTextEdit>,
     >,
     parents: Query<&ChildOf>,
@@ -1455,26 +1456,11 @@ fn handle_input_field_blur(
         return;
     }
 
-    let Ok((buffer, child_of)) = text_inputs.get(blurred_entity) else {
+    let Ok(buffer) = text_inputs.get(blurred_entity) else {
         return;
     };
 
-    let mut current = child_of.parent();
-    let mut field_opt = None;
-
-    for _ in 0..10 {
-        if let Ok(field) = input_fields.get(current) {
-            field_opt = Some(field);
-            break;
-        }
-        if let Ok(parent) = parents.get(current) {
-            current = parent.parent();
-        } else {
-            break;
-        }
-    }
-
-    let Some(field) = field_opt else {
+    let Some((_, field)) = find_ancestor(blurred_entity, &input_fields, &parents) else {
         return;
     };
 
@@ -1503,7 +1489,7 @@ fn sync_text_inputs_to_state(
     input_focus: Res<InputFocus>,
     pickers: Query<(Entity, &ColorPickerState), Changed<ColorPickerState>>,
     input_fields: Query<(Entity, &ColorInputField)>,
-    mut text_inputs: Query<(Entity, &mut TextInputQueue, &ChildOf), With<EditorTextEdit>>,
+    mut text_inputs: Query<(Entity, &mut TextInputQueue), With<EditorTextEdit>>,
     parents: Query<&ChildOf>,
 ) {
     for (picker_entity, state) in &pickers {
@@ -1514,27 +1500,12 @@ fn sync_text_inputs_to_state(
 
             let text = field.kind.format_value(state);
 
-            for (text_input_entity, mut queue, child_of) in &mut text_inputs {
+            for (text_input_entity, mut queue) in &mut text_inputs {
                 if input_focus.0 == Some(text_input_entity) {
                     continue;
                 }
 
-                let mut current = child_of.parent();
-                let mut is_descendant = false;
-
-                for _ in 0..10 {
-                    if current == field_entity {
-                        is_descendant = true;
-                        break;
-                    }
-                    if let Ok(parent) = parents.get(current) {
-                        current = parent.parent();
-                    } else {
-                        break;
-                    }
-                }
-
-                if is_descendant {
+                if is_descendant_of(text_input_entity, field_entity, &parents) {
                     queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
                     queue.add(TextInputAction::Edit(TextInputEdit::Paste(text.clone())));
                 }
@@ -1551,22 +1522,7 @@ fn handle_input_mode_change(
     input_rows: Query<(Entity, &ColorInputRow, &Children)>,
     parents: Query<&ChildOf>,
 ) {
-    let mut current = trigger.entity;
-    let mut field_opt = None;
-
-    for _ in 0..5 {
-        if let Ok(field) = input_fields.get(current) {
-            field_opt = Some(field);
-            break;
-        }
-        if let Ok(parent) = parents.get(current) {
-            current = parent.parent();
-        } else {
-            break;
-        }
-    }
-
-    let Some(field) = field_opt else {
+    let Some((_, field)) = find_ancestor(trigger.entity, &input_fields, &parents) else {
         return;
     };
 

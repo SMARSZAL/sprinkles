@@ -22,6 +22,7 @@ use crate::ui::widgets::popover::{
 use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
 
 use crate::ui::icons::ICON_MORE;
+use crate::ui::widgets::utils::is_descendant_of;
 use crate::ui::widgets::vector_edit::{VectorEditProps, vector_edit};
 
 use sprinkles::textures::preset::{PresetTexture, TextureRef};
@@ -874,21 +875,6 @@ fn fields_row() -> impl Bundle {
         column_gap: Val::Px(8.0),
         ..default()
     }
-}
-
-fn is_descendant_of(entity: Entity, ancestor: Entity, parents: &Query<&ChildOf>) -> bool {
-    let mut current = entity;
-    for _ in 0..50 {
-        if current == ancestor {
-            return true;
-        }
-        if let Ok(child_of) = parents.get(current) {
-            current = child_of.parent();
-        } else {
-            return false;
-        }
-    }
-    false
 }
 
 fn texture_ref_variants() -> Vec<VariantDefinition> {

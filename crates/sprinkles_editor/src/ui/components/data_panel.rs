@@ -16,6 +16,7 @@ use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::text_edit::{
     EditorTextEdit, TextEditCommitEvent, TextEditProps, text_edit,
 };
+use crate::ui::widgets::utils::find_ancestor;
 use crate::viewport::{RespawnCollidersEvent, RespawnEmittersEvent};
 
 const DOUBLE_CLICK_THRESHOLD: f32 = 0.3;
@@ -697,7 +698,7 @@ fn find_inner_text_edit(
 fn on_rename_commit(
     trigger: On<TextEditCommitEvent>,
     mut commands: Commands,
-    rename_inputs: Query<(Entity, &RenameInput)>,
+    rename_inputs: Query<&RenameInput>,
     parents: Query<&ChildOf>,
     items: Query<(&InspectableItem, &Children)>,
     mut buttons: Query<(Entity, &mut Node), With<ItemButton>>,
@@ -710,23 +711,7 @@ fn on_rename_commit(
 ) {
     let text_edit_entity = trigger.entity;
 
-    let mut current = text_edit_entity;
-    let mut rename_entity = None;
-    for _ in 0..10 {
-        if let Ok((entity, _)) = rename_inputs.get(current) {
-            rename_entity = Some(entity);
-            break;
-        }
-        let Ok(child_of) = parents.get(current) else {
-            break;
-        };
-        current = child_of.parent();
-    }
-
-    let Some(rename_entity) = rename_entity else {
-        return;
-    };
-    let Ok((_, rename_input)) = rename_inputs.get(rename_entity) else {
+    let Some((rename_entity, rename_input)) = find_ancestor(text_edit_entity, &rename_inputs, &parents) else {
         return;
     };
 

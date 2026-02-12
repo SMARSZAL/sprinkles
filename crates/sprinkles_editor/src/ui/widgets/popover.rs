@@ -7,6 +7,7 @@ use crate::ui::tokens::{
     BACKGROUND_COLOR, BORDER_COLOR, CORNER_RADIUS_LG, FONT_PATH, TEXT_DISPLAY_COLOR, TEXT_SIZE,
 };
 use crate::ui::widgets::button::{ButtonVariant, IconButtonProps, icon_button};
+use crate::ui::widgets::utils::is_descendant_of;
 
 const POPOVER_GAP: f32 = 4.0;
 
@@ -297,17 +298,6 @@ fn handle_popover_dismiss(
             commands.entity(entity).try_despawn();
         }
     }
-}
-
-fn is_descendant_of(entity: Entity, ancestor: Entity, parents: &Query<&ChildOf>) -> bool {
-    let mut current = entity;
-    while let Ok(child_of) = parents.get(current) {
-        if child_of.parent() == ancestor {
-            return true;
-        }
-        current = child_of.parent();
-    }
-    false
 }
 
 fn is_nested_in_popover(
