@@ -21,7 +21,9 @@ use bevy::prelude::*;
 use sprinkles::prelude::*;
 
 use crate::state::{EditorState, Inspectable};
-use crate::ui::tokens::{BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_LG, TEXT_SIZE_SM};
+use crate::ui::tokens::{
+    BORDER_COLOR, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_LG, TEXT_SIZE_SM,
+};
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
 use crate::ui::widgets::combobox::{ComboBoxOptionData, combobox_with_selected};
 use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
@@ -424,7 +426,10 @@ fn setup_inspector_section_fields(
                                 spawn_inspector_field(row, props, &asset_server);
                             }
                             InspectorItem::Variant { path, props } => {
-                                row.spawn((FieldBinding::emitter(&path, FieldKind::default()), variant_edit(props)));
+                                row.spawn((
+                                    FieldBinding::emitter(&path, FieldKind::default()),
+                                    variant_edit(props),
+                                ));
                             }
                         }
                     }

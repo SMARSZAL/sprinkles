@@ -27,11 +27,10 @@ struct CollisionModeComboBox;
 struct CollisionContent;
 
 pub fn plugin(app: &mut App) {
-    app.add_observer(handle_collision_mode_change)
-        .add_systems(
-            Update,
-            setup_collision_content.after(super::update_inspected_emitter_tracker),
-        );
+    app.add_observer(handle_collision_mode_change).add_systems(
+        Update,
+        setup_collision_content.after(super::update_inspected_emitter_tracker),
+    );
 }
 
 pub fn collision_section(asset_server: &AssetServer) -> impl Bundle {
@@ -135,11 +134,7 @@ fn setup_collision_content(
                             "bounce",
                             FieldKind::F32,
                         ),
-                        text_edit(
-                            TextEditProps::default()
-                                .with_label("Bounce")
-                                .numeric_f32(),
-                        ),
+                        text_edit(TextEditProps::default().with_label("Bounce").numeric_f32()),
                     ));
                 });
             }

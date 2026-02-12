@@ -11,7 +11,9 @@ use sprinkles::prelude::*;
 use sprinkles::textures::preset::{PresetTexture, TextureRef};
 
 use crate::state::EditorState;
-use crate::ui::components::binding::{FieldBinding, get_inspecting_emitter, resolve_variant_field_ref};
+use crate::ui::components::binding::{
+    FieldBinding, get_inspecting_emitter, resolve_variant_field_ref,
+};
 use crate::ui::tokens::{
     BORDER_COLOR, CORNER_RADIUS, FONT_PATH, TEXT_BODY_COLOR, TEXT_MUTED_COLOR, TEXT_SIZE_SM,
 };

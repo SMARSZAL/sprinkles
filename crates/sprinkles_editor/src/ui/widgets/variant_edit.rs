@@ -743,12 +743,8 @@ fn spawn_variant_fields_for_entity(
 
         for field in row_fields {
             let label = path_to_label(&field.name);
-            let binding = FieldBinding::emitter_variant(
-                path,
-                &field.name,
-                field.kind.clone(),
-                variant_edit,
-            );
+            let binding =
+                FieldBinding::emitter_variant(path, &field.name, field.kind.clone(), variant_edit);
 
             let field_entity =
                 spawn_field_widget(commands, asset_server, &field.kind, label, binding);

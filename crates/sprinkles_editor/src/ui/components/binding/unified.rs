@@ -14,9 +14,7 @@ use crate::ui::widgets::gradient_edit::{
 };
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditCommitEvent, set_text_input_value};
 use crate::ui::widgets::texture_edit::TextureEditCommitEvent;
-use crate::ui::widgets::variant_edit::{
-    EditorVariantEdit, VariantComboBox, VariantEditConfig,
-};
+use crate::ui::widgets::variant_edit::{EditorVariantEdit, VariantComboBox, VariantEditConfig};
 use crate::ui::widgets::vector_edit::VectorComponentIndex;
 use crate::viewport::RespawnEmittersEvent;
 

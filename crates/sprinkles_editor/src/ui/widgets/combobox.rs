@@ -96,7 +96,6 @@ pub(crate) struct ComboBoxConfig {
     initialized: bool,
 }
 
-
 #[derive(EntityEvent)]
 pub struct ComboBoxChangeEvent {
     pub entity: Entity,

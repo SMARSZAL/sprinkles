@@ -9,8 +9,7 @@ use crate::ui::widgets::variant_edit::{
 };
 
 use super::{
-    FieldBinding, FieldKind, MAX_ANCESTOR_DEPTH, ReflectPath, find_ancestor,
-    get_inspecting_emitter,
+    FieldBinding, FieldKind, MAX_ANCESTOR_DEPTH, ReflectPath, find_ancestor, get_inspecting_emitter,
 };
 
 #[derive(Component)]

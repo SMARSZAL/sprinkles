@@ -214,10 +214,7 @@ impl FieldBinding {
         }
     }
 
-    pub fn read_reflected<'a>(
-        &self,
-        emitter: &'a EmitterData,
-    ) -> Option<&'a dyn PartialReflect> {
+    pub fn read_reflected<'a>(&self, emitter: &'a EmitterData) -> Option<&'a dyn PartialReflect> {
         match &self.accessor {
             FieldAccessor::Emitter(path) => {
                 let reflect_path = ReflectPath::new(path);

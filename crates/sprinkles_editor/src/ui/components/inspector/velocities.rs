@@ -16,8 +16,8 @@ use crate::ui::widgets::popover::{
 };
 use crate::ui::widgets::vector_edit::VectorSuffixes;
 
-use super::{DynamicSectionContent, InspectorSection};
 use super::utils::name_to_label;
+use super::{DynamicSectionContent, InspectorSection};
 use crate::ui::components::binding::{
     get_inspecting_emitter, get_inspecting_emitter_mut, mark_dirty_and_restart,
 };
@@ -559,4 +559,3 @@ fn handle_velocity_edit(
             });
         });
 }
-
