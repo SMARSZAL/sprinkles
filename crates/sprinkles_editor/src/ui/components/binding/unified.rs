@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_ui_text_input::TextInputQueue;
 use sprinkles::prelude::*;
@@ -24,6 +25,69 @@ use super::{
     get_variant_index_by_reflection, get_vec2_component, get_vec3_component,
     mark_dirty_and_restart, parse_field_value, set_vec2_component, set_vec3_component,
 };
+
+use crate::ui::components::inspector::FieldKind;
+use crate::ui::widgets::variant_edit::VariantDefinition;
+use bevy::reflect::{PartialReflect, ReflectRef};
+
+#[derive(SystemParam)]
+pub(super) struct CommitContext<'w, 's> {
+    editor_state: Res<'w, EditorState>,
+    assets: ResMut<'w, Assets<ParticleSystemAsset>>,
+    dirty_state: ResMut<'w, DirtyState>,
+    bindings: Query<'w, 's, &'static FieldBinding>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    emitter_runtimes: Query<'w, 's, &'static mut EmitterRuntime>,
+}
+
+impl CommitContext<'_, '_> {
+    fn commit_reflected(
+        &mut self,
+        entity: Entity,
+        apply_fn: impl FnOnce(&mut dyn PartialReflect),
+    ) {
+        let Some((_, binding)) =
+            find_binding_for_entity(entity, &self.bindings, &self.parents)
+        else {
+            return;
+        };
+        let Some((_, emitter)) =
+            get_inspecting_emitter_mut(&self.editor_state, &mut self.assets)
+        else {
+            return;
+        };
+        if binding.write_reflected(emitter, apply_fn) {
+            mark_dirty_and_restart(
+                &mut self.dirty_state,
+                &mut self.emitter_runtimes,
+                emitter.time.fixed_seed,
+            );
+        }
+    }
+
+    fn commit_field_value(&mut self, entity: Entity, value: FieldValue) -> bool {
+        let Some((_, binding)) =
+            find_binding_for_entity(entity, &self.bindings, &self.parents)
+        else {
+            return false;
+        };
+        let should_respawn = requires_respawn_binding(binding);
+        let Some((_, emitter)) =
+            get_inspecting_emitter_mut(&self.editor_state, &mut self.assets)
+        else {
+            return false;
+        };
+        if binding.write_value(emitter, &value) {
+            mark_dirty_and_restart(
+                &mut self.dirty_state,
+                &mut self.emitter_runtimes,
+                emitter.time.fixed_seed,
+            );
+            return should_respawn;
+        }
+        false
+    }
+}
 
 const RESPAWN_FIELD_PATHS: &[&str] = &[
     "enabled",
@@ -121,13 +185,16 @@ pub(super) fn bind_widget_values(
     assets: Res<Assets<ParticleSystemAsset>>,
     tracker: Res<InspectedEmitterTracker>,
     new_bindings: Query<Entity, Added<FieldBinding>>,
+    new_variant_edits: Query<Entity, Added<EditorVariantEdit>>,
     bindings: Query<&FieldBinding>,
     parents: Query<&ChildOf>,
     mut checkbox_states: Query<(Entity, &mut CheckboxState)>,
     mut curve_edits: Query<(Entity, &mut CurveEditState), With<EditorCurveEdit>>,
     mut gradient_edits: Query<(Entity, &mut GradientEditState), With<EditorGradientEdit>>,
+    mut combobox_bindings: Query<(&FieldBinding, &mut ComboBoxConfig)>,
+    mut variant_edits: Query<(&FieldBinding, &mut VariantEditConfig), With<EditorVariantEdit>>,
 ) {
-    if !tracker.is_changed() && new_bindings.is_empty() {
+    if !tracker.is_changed() && new_bindings.is_empty() && new_variant_edits.is_empty() {
         return;
     }
 
@@ -178,6 +245,33 @@ pub(super) fn bind_widget_values(
             state.gradient = gradient.clone();
         }
     }
+
+    for (binding, mut config) in &mut combobox_bindings {
+        if !matches!(binding.kind, FieldKind::ComboBox { .. }) {
+            continue;
+        }
+        let value = binding.read_value(emitter);
+        if let FieldValue::U32(index) = value {
+            config.selected = index as usize;
+        }
+    }
+
+    for (binding, mut config) in &mut variant_edits {
+        let new_index = if binding.is_variant() {
+            let Some(reflected) = binding.read_reflected(emitter) else {
+                continue;
+            };
+            get_nested_variant_index(reflected, &config.variants)
+        } else {
+            let Some(idx) =
+                get_variant_index_by_reflection(emitter, binding.path(), &config.variants)
+            else {
+                continue;
+            };
+            idx
+        };
+        config.selected_index = new_index;
+    }
 }
 
 pub(super) fn bind_color_pickers(
@@ -214,89 +308,28 @@ pub(super) fn bind_color_pickers(
     }
 }
 
-pub(super) fn bind_combobox_fields(
-    editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
-    tracker: Res<InspectedEmitterTracker>,
-    mut combobox_bindings: Query<(&FieldBinding, &mut ComboBoxConfig)>,
-) {
-    if !tracker.is_changed() {
-        return;
-    }
-
-    let Some((_, emitter)) = get_inspecting_emitter(&editor_state, &assets) else {
-        return;
-    };
-
-    for (binding, mut config) in &mut combobox_bindings {
-        if !matches!(binding.kind, FieldKind::ComboBox { .. }) {
-            continue;
-        }
-
-        let value = binding.read_value(emitter);
-        if let FieldValue::U32(index) = value {
-            config.selected = index as usize;
-        }
-    }
-}
-
-pub(super) fn bind_variant_edits(
-    editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
-    tracker: Res<InspectedEmitterTracker>,
-    mut variant_edits: Query<(&FieldBinding, &mut VariantEditConfig), With<EditorVariantEdit>>,
-    new_variant_edits: Query<Entity, Added<EditorVariantEdit>>,
-) {
-    if !tracker.is_changed() && new_variant_edits.is_empty() {
-        return;
-    }
-
-    let Some((_, emitter)) = get_inspecting_emitter(&editor_state, &assets) else {
-        return;
-    };
-
-    for (binding, mut config) in &mut variant_edits {
-        let new_index = if binding.is_variant() {
-            let Some(reflected) = binding.read_reflected(emitter) else {
-                continue;
-            };
-            get_nested_variant_index(reflected, &config.variants)
-        } else {
-            let Some(idx) =
-                get_variant_index_by_reflection(emitter, binding.path(), &config.variants)
-            else {
-                continue;
-            };
-            idx
-        };
-
-        config.selected_index = new_index;
-    }
-}
-
 // --- commit: UI → data ---
 
 pub(super) fn handle_text_commit(
     trigger: On<TextEditCommitEvent>,
     mut commands: Commands,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
     vector_indices: Query<&VectorComponentIndex>,
 ) {
-    let Some((_, binding)) = find_binding_for_entity(trigger.entity, &bindings, &parents) else {
+    let Some((_, binding)) =
+        find_binding_for_entity(trigger.entity, &ctx.bindings, &ctx.parents)
+    else {
         return;
     };
 
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
+    let Some((_, emitter)) =
+        get_inspecting_emitter_mut(&ctx.editor_state, &mut ctx.assets)
+    else {
         return;
     };
 
     if let FieldKind::Vector(_suffixes) = &binding.kind {
-        let idx = find_ancestor(trigger.entity, &parents, MAX_ANCESTOR_DEPTH, |e| {
+        let idx = find_ancestor(trigger.entity, &ctx.parents, MAX_ANCESTOR_DEPTH, |e| {
             vector_indices.get(e).is_ok()
         })
         .and_then(|e| vector_indices.get(e).ok())
@@ -330,8 +363,8 @@ pub(super) fn handle_text_commit(
 
         if binding.write_value(emitter, &new_value) {
             mark_dirty_and_restart(
-                &mut dirty_state,
-                &mut emitter_runtimes,
+                &mut ctx.dirty_state,
+                &mut ctx.emitter_runtimes,
                 emitter.time.fixed_seed,
             );
             if requires_respawn_binding(binding) {
@@ -348,8 +381,8 @@ pub(super) fn handle_text_commit(
 
     if binding.write_value(emitter, &value) {
         mark_dirty_and_restart(
-            &mut dirty_state,
-            &mut emitter_runtimes,
+            &mut ctx.dirty_state,
+            &mut ctx.emitter_runtimes,
             emitter.time.fixed_seed,
         );
         if requires_respawn_binding(binding) {
@@ -361,58 +394,62 @@ pub(super) fn handle_text_commit(
 pub(super) fn handle_checkbox_commit(
     trigger: On<CheckboxCommitEvent>,
     mut commands: Commands,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
 ) {
-    if commit_field_value(
-        trigger.entity,
-        FieldValue::Bool(trigger.checked),
-        &bindings,
-        &parents,
-        &editor_state,
-        &mut assets,
-        &mut dirty_state,
-        &mut emitter_runtimes,
-    ) {
+    if ctx.commit_field_value(trigger.entity, FieldValue::Bool(trigger.checked)) {
         commands.trigger(RespawnEmittersEvent);
     }
 }
 
 pub(super) fn handle_combobox_change(
     trigger: On<ComboBoxChangeEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
     variant_comboboxes: Query<(), With<VariantComboBox>>,
 ) {
     if variant_comboboxes.get(trigger.entity).is_ok() {
         return;
     }
 
-    let Some((_, binding)) = find_binding_for_entity(trigger.entity, &bindings, &parents) else {
+    let Some((_, binding)) =
+        find_binding_for_entity(trigger.entity, &ctx.bindings, &ctx.parents)
+    else {
         return;
     };
 
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
+    let Some((_, emitter)) =
+        get_inspecting_emitter_mut(&ctx.editor_state, &mut ctx.assets)
+    else {
         return;
     };
 
-    let variant_name = trigger
-        .value
-        .clone()
-        .unwrap_or_else(|| trigger.label.split_whitespace().collect());
+    let is_optional = matches!(binding.kind, FieldKind::ComboBox { optional: true, .. });
 
-    if binding.set_enum_by_name(emitter, &variant_name) {
+    let changed = if is_optional {
+        let inner_variant = if trigger.selected == 0 {
+            None
+        } else {
+            Some(
+                trigger
+                    .value
+                    .as_deref()
+                    .unwrap_or(&trigger.label)
+                    .split_whitespace()
+                    .collect::<String>(),
+            )
+        };
+        binding.set_optional_enum(emitter, inner_variant.as_deref())
+    } else {
+        let variant_name = trigger
+            .value
+            .clone()
+            .unwrap_or_else(|| trigger.label.split_whitespace().collect());
+        binding.set_enum_by_name(emitter, &variant_name)
+    };
+
+    if changed {
         mark_dirty_and_restart(
-            &mut dirty_state,
-            &mut emitter_runtimes,
+            &mut ctx.dirty_state,
+            &mut ctx.emitter_runtimes,
             emitter.time.fixed_seed,
         );
     }
@@ -420,110 +457,51 @@ pub(super) fn handle_combobox_change(
 
 pub(super) fn handle_curve_commit(
     trigger: On<CurveEditCommitEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
 ) {
     let curve = trigger.curve.clone();
-    commit_reflected(
-        trigger.entity,
-        &bindings,
-        &parents,
-        &editor_state,
-        &mut assets,
-        &mut dirty_state,
-        &mut emitter_runtimes,
-        |target| {
-            if let Some(ct) = target.try_downcast_mut::<CurveTexture>() {
-                *ct = curve.clone();
-            } else if let Some(opt) = target.try_downcast_mut::<Option<CurveTexture>>() {
-                *opt = Some(curve);
-            }
-        },
-    );
+    ctx.commit_reflected(trigger.entity, |target| {
+        if let Some(ct) = target.try_downcast_mut::<CurveTexture>() {
+            *ct = curve.clone();
+        } else if let Some(opt) = target.try_downcast_mut::<Option<CurveTexture>>() {
+            *opt = Some(curve);
+        }
+    });
 }
 
 pub(super) fn handle_gradient_commit(
     trigger: On<GradientEditCommitEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
 ) {
     let gradient = trigger.gradient.clone();
-    commit_reflected(
-        trigger.entity,
-        &bindings,
-        &parents,
-        &editor_state,
-        &mut assets,
-        &mut dirty_state,
-        &mut emitter_runtimes,
-        |target| {
-            target.apply(&gradient);
-        },
-    );
+    ctx.commit_reflected(trigger.entity, |target| {
+        target.apply(&gradient);
+    });
 }
 
 pub(super) fn handle_color_commit(
     trigger: On<ColorPickerCommitEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
 ) {
-    commit_field_value(
-        trigger.entity,
-        FieldValue::Color(trigger.color),
-        &bindings,
-        &parents,
-        &editor_state,
-        &mut assets,
-        &mut dirty_state,
-        &mut emitter_runtimes,
-    );
+    ctx.commit_field_value(trigger.entity, FieldValue::Color(trigger.color));
 }
 
 pub(super) fn handle_texture_commit(
     trigger: On<TextureEditCommitEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    bindings: Query<&FieldBinding>,
-    parents: Query<&ChildOf>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ctx: CommitContext,
 ) {
-    commit_reflected(
-        trigger.entity,
-        &bindings,
-        &parents,
-        &editor_state,
-        &mut assets,
-        &mut dirty_state,
-        &mut emitter_runtimes,
-        |target| {
-            target.apply(&trigger.value);
-        },
-    );
+    ctx.commit_reflected(trigger.entity, |target| {
+        target.apply(&trigger.value);
+    });
 }
 
 // --- variant edit combobox (switching which enum variant is selected) ---
 
 pub(super) fn handle_variant_change(
     trigger: On<ComboBoxChangeEvent>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
+    mut ctx: CommitContext,
     variant_comboboxes: Query<&VariantComboBox>,
     variant_edit_configs: Query<(&VariantEditConfig, &FieldBinding)>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
 ) {
     let Ok(variant_combobox) = variant_comboboxes.get(trigger.entity) else {
         return;
@@ -538,28 +516,17 @@ pub(super) fn handle_variant_change(
         return;
     };
 
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
+    let Some((_, emitter)) =
+        get_inspecting_emitter_mut(&ctx.editor_state, &mut ctx.assets)
+    else {
         return;
     };
 
-    if binding.is_variant() {
-        let Some(default_value) = variant_def.create_default() else {
-            return;
-        };
-        let changed = binding.write_reflected(emitter, |field| {
-            field.apply(default_value.as_ref());
-        });
-        if changed {
-            mark_dirty_and_restart(
-                &mut dirty_state,
-                &mut emitter_runtimes,
-                emitter.time.fixed_seed,
-            );
-        }
-    } else {
-        let Some(default_value) = variant_def.create_default() else {
-            return;
-        };
+    let Some(default_value) = variant_def.create_default() else {
+        return;
+    };
+
+    if !binding.is_variant() {
         if let Some(current) = binding.read_reflected(emitter) {
             if let ReflectRef::Enum(current) = current.reflect_ref() {
                 if current.variant_name() == variant_def.name {
@@ -567,23 +534,20 @@ pub(super) fn handle_variant_change(
                 }
             }
         }
-        if binding.write_reflected(emitter, |field| {
-            field.apply(default_value.as_ref());
-        }) {
-            mark_dirty_and_restart(
-                &mut dirty_state,
-                &mut emitter_runtimes,
-                emitter.time.fixed_seed,
-            );
-        }
+    }
+
+    if binding.write_reflected(emitter, |field| {
+        field.apply(default_value.as_ref());
+    }) {
+        mark_dirty_and_restart(
+            &mut ctx.dirty_state,
+            &mut ctx.emitter_runtimes,
+            emitter.time.fixed_seed,
+        );
     }
 }
 
 // --- helpers ---
-
-use crate::ui::components::inspector::FieldKind;
-use crate::ui::widgets::variant_edit::VariantDefinition;
-use bevy::reflect::{PartialReflect, ReflectRef};
 
 #[derive(Component)]
 pub(super) struct BindingInitialized;
@@ -642,51 +606,4 @@ fn find_variant_index_by_name(name: &str, variants: &[VariantDefinition]) -> Opt
     variants
         .iter()
         .position(|v| v.name == name || v.aliases.iter().any(|a| a == name))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn commit_reflected(
-    entity: Entity,
-    bindings: &Query<&FieldBinding>,
-    parents: &Query<&ChildOf>,
-    editor_state: &EditorState,
-    assets: &mut Assets<ParticleSystemAsset>,
-    dirty_state: &mut DirtyState,
-    emitter_runtimes: &mut Query<&mut EmitterRuntime>,
-    apply_fn: impl FnOnce(&mut dyn PartialReflect),
-) {
-    let Some((_, binding)) = find_binding_for_entity(entity, bindings, parents) else {
-        return;
-    };
-    let Some((_, emitter)) = get_inspecting_emitter_mut(editor_state, assets) else {
-        return;
-    };
-    if binding.write_reflected(emitter, apply_fn) {
-        mark_dirty_and_restart(dirty_state, emitter_runtimes, emitter.time.fixed_seed);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn commit_field_value(
-    entity: Entity,
-    value: FieldValue,
-    bindings: &Query<&FieldBinding>,
-    parents: &Query<&ChildOf>,
-    editor_state: &EditorState,
-    assets: &mut Assets<ParticleSystemAsset>,
-    dirty_state: &mut DirtyState,
-    emitter_runtimes: &mut Query<&mut EmitterRuntime>,
-) -> bool {
-    let Some((_, binding)) = find_binding_for_entity(entity, bindings, parents) else {
-        return false;
-    };
-    let should_respawn = requires_respawn_binding(binding);
-    let Some((_, emitter)) = get_inspecting_emitter_mut(editor_state, assets) else {
-        return false;
-    };
-    if binding.write_value(emitter, &value) {
-        mark_dirty_and_restart(dirty_state, emitter_runtimes, emitter.time.fixed_seed);
-        return should_respawn;
-    }
-    false
 }

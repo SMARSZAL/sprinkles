@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use sprinkles::prelude::*;
 
-use crate::state::{DirtyState, EditorState};
 use crate::ui::components::inspector::utils::name_to_label;
 use crate::ui::tokens::FONT_PATH;
 use crate::ui::widgets::combobox::{ComboBoxChangeEvent, ComboBoxOptionData};
@@ -12,9 +11,7 @@ use super::{
     DynamicSectionContent, InspectorSection, inspector_section, section_needs_setup,
     spawn_labeled_combobox,
 };
-use crate::ui::components::binding::{
-    FieldBinding, get_inspecting_emitter, get_inspecting_emitter_mut, mark_dirty_and_restart,
-};
+use crate::ui::components::binding::{EmitterWriter, FieldBinding};
 use crate::ui::components::inspector::FieldKind;
 
 #[derive(Component)]
@@ -59,8 +56,7 @@ fn collision_mode_options() -> Vec<ComboBoxOptionData> {
 fn setup_collision_content(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
+    ew: EmitterWriter,
     sections: Query<(Entity, &InspectorSection), With<CollisionSection>>,
     existing: Query<Entity, With<CollisionContent>>,
 ) {
@@ -68,7 +64,7 @@ fn setup_collision_content(
         return;
     };
 
-    let emitter = get_inspecting_emitter(&editor_state, &assets).map(|(_, e)| e);
+    let emitter = ew.emitter();
     let mode = emitter.map(|e| &e.collision.mode);
     let mode_index = mode.map(collision_mode_index).unwrap_or(0);
     let is_rigid = matches!(mode, Some(Some(EmitterCollisionMode::Rigid { .. })));
@@ -148,19 +144,12 @@ fn handle_collision_mode_change(
     trigger: On<ComboBoxChangeEvent>,
     mut commands: Commands,
     collision_comboboxes: Query<(), With<CollisionModeComboBox>>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ew: EmitterWriter,
     existing: Query<Entity, With<CollisionContent>>,
 ) {
     if collision_comboboxes.get(trigger.entity).is_err() {
         return;
     }
-
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
-        return;
-    };
 
     let new_mode = match trigger.value.as_deref().unwrap_or(&trigger.label) {
         "None" => None,
@@ -172,16 +161,13 @@ fn handle_collision_mode_change(
         _ => return,
     };
 
-    if collision_mode_index(&emitter.collision.mode) == collision_mode_index(&new_mode) {
-        return;
-    }
-
-    emitter.collision.mode = new_mode;
-    mark_dirty_and_restart(
-        &mut dirty_state,
-        &mut emitter_runtimes,
-        emitter.time.fixed_seed,
-    );
+    ew.modify_emitter(|emitter| {
+        if collision_mode_index(&emitter.collision.mode) == collision_mode_index(&new_mode) {
+            return false;
+        }
+        emitter.collision.mode = new_mode;
+        true
+    });
 
     for entity in &existing {
         commands.entity(entity).try_despawn();

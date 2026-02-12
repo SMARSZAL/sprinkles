@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use sprinkles::prelude::*;
 
-use crate::state::{DirtyState, EditorState};
+use crate::state::EditorState;
 use crate::ui::tokens::BORDER_COLOR;
 use crate::ui::widgets::button::{
     ButtonClickEvent, ButtonProps, ButtonVariant, EditorButton, IconButtonProps, button,
@@ -18,9 +18,7 @@ use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::utils::name_to_label;
 use super::{DynamicSectionContent, InspectorSection};
-use crate::ui::components::binding::{
-    get_inspecting_emitter, get_inspecting_emitter_mut, mark_dirty_and_restart,
-};
+use crate::ui::components::binding::{EmitterWriter, get_inspecting_emitter};
 use crate::ui::icons::{ICON_CLOSE, ICON_MORE};
 
 const ANIMATED_VELOCITY_FIELDS: &[&str] = &["radial_velocity", "angular_velocity"];
@@ -400,10 +398,7 @@ fn handle_add_velocity_option(
     trigger: On<ButtonClickEvent>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ew: EmitterWriter,
     options: Query<&AddVelocityOption>,
     mut lists: Query<&mut VelocityList>,
     list_containers: Query<Entity, With<VelocityListContainer>>,
@@ -415,21 +410,19 @@ fn handle_add_velocity_option(
     };
     let field_name = option.0.clone();
 
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
-        return;
-    };
-
-    let path = format!(".velocities.{}", field_name);
-    if let Ok(target) = emitter.reflect_path_mut(path.as_str()) {
-        if let Some(av) = target.try_downcast_mut::<AnimatedVelocity>() {
-            *av = AnimatedVelocity {
-                velocity: ParticleRange::new(0.0, 1.0),
-                velocity_over_lifetime: None,
-            };
+    ew.modify_emitter(|emitter| {
+        let path = format!(".velocities.{}", field_name);
+        if let Ok(target) = emitter.reflect_path_mut(path.as_str()) {
+            if let Some(av) = target.try_downcast_mut::<AnimatedVelocity>() {
+                *av = AnimatedVelocity {
+                    velocity: ParticleRange::new(0.0, 1.0),
+                    velocity_over_lifetime: None,
+                };
+                return true;
+            }
         }
-    }
-
-    let fixed_seed = emitter.time.fixed_seed;
+        false
+    });
 
     for mut list in &mut lists {
         if !list.added.contains(&field_name) {
@@ -447,17 +440,12 @@ fn handle_add_velocity_option(
     for popover_entity in &popovers {
         commands.entity(popover_entity).try_despawn();
     }
-
-    mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, fixed_seed);
 }
 
 fn handle_velocity_delete(
     trigger: On<ButtonClickEvent>,
     mut commands: Commands,
-    editor_state: Res<EditorState>,
-    mut assets: ResMut<Assets<ParticleSystemAsset>>,
-    mut dirty_state: ResMut<DirtyState>,
-    mut emitter_runtimes: Query<&mut EmitterRuntime>,
+    mut ew: EmitterWriter,
     delete_buttons: Query<&VelocityDeleteButton>,
     mut lists: Query<&mut VelocityList>,
     item_rows: Query<(Entity, &VelocityItemRow)>,
@@ -468,18 +456,16 @@ fn handle_velocity_delete(
     };
     let field_name = delete_button.0.clone();
 
-    let Some((_, emitter)) = get_inspecting_emitter_mut(&editor_state, &mut assets) else {
-        return;
-    };
-
-    let path = format!(".velocities.{}", field_name);
-    if let Ok(target) = emitter.reflect_path_mut(path.as_str()) {
-        if let Some(av) = target.try_downcast_mut::<AnimatedVelocity>() {
-            *av = AnimatedVelocity::default();
+    ew.modify_emitter(|emitter| {
+        let path = format!(".velocities.{}", field_name);
+        if let Ok(target) = emitter.reflect_path_mut(path.as_str()) {
+            if let Some(av) = target.try_downcast_mut::<AnimatedVelocity>() {
+                *av = AnimatedVelocity::default();
+                return true;
+            }
         }
-    }
-
-    let fixed_seed = emitter.time.fixed_seed;
+        false
+    });
 
     for (row_entity, row) in &item_rows {
         if row.0 == field_name {
@@ -491,8 +477,6 @@ fn handle_velocity_delete(
         list.added.retain(|n| *n != field_name);
         update_separator(!list.added.is_empty(), &mut separators);
     }
-
-    mark_dirty_and_restart(&mut dirty_state, &mut emitter_runtimes, fixed_seed);
 }
 
 fn handle_velocity_edit(

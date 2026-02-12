@@ -1,8 +1,11 @@
 mod swatch;
 mod unified;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::reflect::{DynamicEnum, DynamicVariant, PartialReflect, ReflectMut, ReflectRef};
+use bevy::reflect::{
+    DynamicEnum, DynamicTuple, DynamicVariant, PartialReflect, ReflectMut, ReflectRef,
+};
 use sprinkles::prelude::*;
 
 use crate::state::{DirtyState, EditorState, Inspectable};
@@ -103,8 +106,6 @@ pub fn plugin(app: &mut App) {
                 unified::bind_text_inputs,
                 unified::bind_widget_values,
                 unified::bind_color_pickers,
-                unified::bind_combobox_fields,
-                unified::bind_variant_edits,
                 swatch::setup_variant_swatch,
                 swatch::sync_variant_swatch_from_gradient,
             )
@@ -214,6 +215,28 @@ impl FieldBinding {
         }
     }
 
+    pub fn set_optional_enum(
+        &self,
+        emitter: &mut EmitterData,
+        inner_variant_name: Option<&str>,
+    ) -> bool {
+        let reflect_path = ReflectPath::new(self.path());
+        let Ok(target) = emitter.reflect_path_mut(reflect_path.as_str()) else {
+            return false;
+        };
+        match &self.accessor {
+            FieldAccessor::Emitter(_) => {
+                set_optional_enum_by_name(target, inner_variant_name)
+            }
+            FieldAccessor::EmitterVariant { field_name, .. } => {
+                with_variant_field_mut(target, field_name, |field| {
+                    set_optional_enum_by_name(field, inner_variant_name)
+                })
+                .unwrap_or(false)
+            }
+        }
+    }
+
     pub fn read_reflected<'a>(&self, emitter: &'a EmitterData) -> Option<&'a dyn PartialReflect> {
         match &self.accessor {
             FieldAccessor::Emitter(path) => {
@@ -301,9 +324,22 @@ pub(super) enum FieldValue {
 impl FieldValue {
     pub(super) fn to_display_string(&self, kind: &FieldKind) -> Option<String> {
         match self {
-            FieldValue::F32(v) => f32::to_display_string(*v, kind),
-            FieldValue::U32(v) => u32::to_display_string(*v, kind),
-            FieldValue::OptionalU32(v) => Option::<u32>::to_display_string(*v, kind),
+            FieldValue::F32(v) => match kind {
+                FieldKind::F32Percent => {
+                    let display = (v * 100.0 * 100.0).round() / 100.0;
+                    Some(format_f32(display))
+                }
+                _ => Some(format_f32(*v)),
+            },
+            FieldValue::U32(v) => match kind {
+                FieldKind::U32OrEmpty if *v == 0 => None,
+                _ => Some(v.to_string()),
+            },
+            FieldValue::OptionalU32(v) => match (v, kind) {
+                (None, _) => None,
+                (Some(0), FieldKind::OptionalU32) => None,
+                (Some(v), _) => Some(v.to_string()),
+            },
             _ => None,
         }
     }
@@ -326,8 +362,6 @@ impl FieldValue {
 trait Bindable: Sized {
     fn try_from_reflected(value: &dyn PartialReflect) -> Option<Self>;
     fn apply_to_reflect(&self, target: &mut dyn PartialReflect) -> bool;
-    fn to_display_string(value: Self, kind: &FieldKind) -> Option<String>;
-    fn parse(text: &str, kind: &FieldKind) -> Option<Self>;
 }
 
 impl Bindable for f32 {
@@ -343,29 +377,6 @@ impl Bindable for f32 {
             }
         }
         false
-    }
-
-    fn to_display_string(value: Self, kind: &FieldKind) -> Option<String> {
-        match kind {
-            FieldKind::F32Percent => {
-                let display = (value * 100.0 * 100.0).round() / 100.0;
-                Some(format_f32(display))
-            }
-            _ => Some(format_f32(value)),
-        }
-    }
-
-    fn parse(text: &str, kind: &FieldKind) -> Option<Self> {
-        let text = text.trim();
-        match kind {
-            FieldKind::F32Percent => text
-                .trim_end_matches('%')
-                .trim()
-                .parse()
-                .ok()
-                .map(|v: f32| v / 100.0),
-            _ => text.trim_end_matches('s').trim().parse().ok(),
-        }
     }
 }
 
@@ -383,22 +394,6 @@ impl Bindable for u32 {
         }
         false
     }
-
-    fn to_display_string(value: Self, kind: &FieldKind) -> Option<String> {
-        match kind {
-            FieldKind::U32OrEmpty if value == 0 => None,
-            _ => Some(value.to_string()),
-        }
-    }
-
-    fn parse(text: &str, kind: &FieldKind) -> Option<Self> {
-        let text = text.trim();
-        if text.is_empty() && matches!(kind, FieldKind::U32OrEmpty) {
-            Some(0)
-        } else {
-            text.parse().ok()
-        }
-    }
 }
 
 impl Bindable for Option<u32> {
@@ -414,26 +409,6 @@ impl Bindable for Option<u32> {
             }
         }
         false
-    }
-
-    fn to_display_string(value: Self, kind: &FieldKind) -> Option<String> {
-        match (value, kind) {
-            (None, _) => None,
-            (Some(0), FieldKind::OptionalU32) => None,
-            (Some(v), _) => Some(v.to_string()),
-        }
-    }
-
-    fn parse(text: &str, kind: &FieldKind) -> Option<Self> {
-        let text = text.trim();
-        let _ = kind;
-        if text.is_empty() {
-            Some(None)
-        } else {
-            text.parse::<u32>()
-                .ok()
-                .map(|v| if v == 0 { None } else { Some(v) })
-        }
     }
 }
 
@@ -451,14 +426,6 @@ impl Bindable for bool {
         }
         false
     }
-
-    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
-        None
-    }
-
-    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
-        None
-    }
 }
 
 impl Bindable for Vec2 {
@@ -474,14 +441,6 @@ impl Bindable for Vec2 {
             }
         }
         false
-    }
-
-    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
-        None
-    }
-
-    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
-        None
     }
 }
 
@@ -499,14 +458,6 @@ impl Bindable for Vec3 {
         }
         false
     }
-
-    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
-        None
-    }
-
-    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
-        None
-    }
 }
 
 impl Bindable for [f32; 4] {
@@ -522,14 +473,6 @@ impl Bindable for [f32; 4] {
             }
         }
         false
-    }
-
-    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
-        None
-    }
-
-    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
-        None
     }
 }
 
@@ -549,14 +492,6 @@ impl Bindable for ParticleRange {
             }
         }
         false
-    }
-
-    fn to_display_string(_value: Self, _kind: &FieldKind) -> Option<String> {
-        None
-    }
-
-    fn parse(_text: &str, _kind: &FieldKind) -> Option<Self> {
-        None
     }
 }
 
@@ -603,28 +538,51 @@ pub(super) fn get_vec3_component(vec: Vec3, index: usize) -> f32 {
 }
 
 pub(super) fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
+    let text = text.trim();
     match kind {
-        FieldKind::F32 | FieldKind::F32Percent => f32::parse(text, kind)
-            .map(FieldValue::F32)
-            .unwrap_or(FieldValue::None),
-        FieldKind::U32 | FieldKind::U32OrEmpty => u32::parse(text, kind)
-            .map(FieldValue::U32)
-            .unwrap_or(FieldValue::None),
-        FieldKind::OptionalU32 => Option::<u32>::parse(text, kind)
-            .map(FieldValue::OptionalU32)
-            .unwrap_or(FieldValue::None),
-        FieldKind::Bool
-        | FieldKind::Vector(_)
-        | FieldKind::ComboBox { .. }
-        | FieldKind::Color
-        | FieldKind::Gradient
-        | FieldKind::Curve
-        | FieldKind::AnimatedVelocity
-        | FieldKind::TextureRef => FieldValue::None,
+        FieldKind::F32 | FieldKind::F32Percent => {
+            let parsed: Option<f32> = match kind {
+                FieldKind::F32Percent => text
+                    .trim_end_matches('%')
+                    .trim()
+                    .parse()
+                    .ok()
+                    .map(|v: f32| v / 100.0),
+                _ => text.trim_end_matches('s').trim().parse().ok(),
+            };
+            parsed.map(FieldValue::F32).unwrap_or(FieldValue::None)
+        }
+        FieldKind::U32 | FieldKind::U32OrEmpty => {
+            let parsed: Option<u32> = if text.is_empty() && matches!(kind, FieldKind::U32OrEmpty) {
+                Some(0)
+            } else {
+                text.parse().ok()
+            };
+            parsed.map(FieldValue::U32).unwrap_or(FieldValue::None)
+        }
+        FieldKind::OptionalU32 => {
+            let parsed: Option<Option<u32>> = if text.is_empty() {
+                Some(None)
+            } else {
+                text.parse::<u32>()
+                    .ok()
+                    .map(|v| if v == 0 { None } else { Some(v) })
+            };
+            parsed
+                .map(FieldValue::OptionalU32)
+                .unwrap_or(FieldValue::None)
+        }
+        _ => FieldValue::None,
     }
 }
 
-fn reflect_to_field_value(value: &dyn PartialReflect, _kind: &FieldKind) -> FieldValue {
+fn reflect_to_field_value(value: &dyn PartialReflect, kind: &FieldKind) -> FieldValue {
+    if let FieldKind::ComboBox { optional: true, .. } = kind {
+        if let Some(index) = read_optional_enum_index(value) {
+            return FieldValue::U32(index as u32);
+        }
+        return FieldValue::None;
+    }
     if let Some(v) = f32::try_from_reflected(value) {
         return FieldValue::F32(v);
     }
@@ -653,6 +611,21 @@ fn reflect_to_field_value(value: &dyn PartialReflect, _kind: &FieldKind) -> Fiel
         return FieldValue::U32(enum_ref.variant_index() as u32);
     }
     FieldValue::None
+}
+
+fn read_optional_enum_index(value: &dyn PartialReflect) -> Option<usize> {
+    let ReflectRef::Enum(enum_ref) = value.reflect_ref() else {
+        return None;
+    };
+    if enum_ref.variant_name() == "None" {
+        return Some(0);
+    }
+    let inner = enum_ref.field_at(0)?;
+    if let ReflectRef::Enum(inner_enum) = inner.reflect_ref() {
+        Some(inner_enum.variant_index() + 1)
+    } else {
+        None
+    }
 }
 
 fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldValue) -> bool {
@@ -764,6 +737,39 @@ pub(super) fn mark_dirty_and_restart(
     }
 }
 
+#[derive(SystemParam)]
+pub(crate) struct EmitterWriter<'w, 's> {
+    editor_state: Res<'w, EditorState>,
+    assets: ResMut<'w, Assets<ParticleSystemAsset>>,
+    dirty_state: ResMut<'w, DirtyState>,
+    emitter_runtimes: Query<'w, 's, &'static mut EmitterRuntime>,
+}
+
+impl EmitterWriter<'_, '_> {
+    pub(crate) fn modify_emitter(
+        &mut self,
+        f: impl FnOnce(&mut EmitterData) -> bool,
+    ) {
+        let Some((_, emitter)) =
+            get_inspecting_emitter_mut(&self.editor_state, &mut self.assets)
+        else {
+            return;
+        };
+        let fixed_seed = emitter.time.fixed_seed;
+        if f(emitter) {
+            mark_dirty_and_restart(
+                &mut self.dirty_state,
+                &mut self.emitter_runtimes,
+                fixed_seed,
+            );
+        }
+    }
+
+    pub(crate) fn emitter(&self) -> Option<&EmitterData> {
+        get_inspecting_emitter(&self.editor_state, &self.assets).map(|(_, e)| e)
+    }
+}
+
 fn set_enum_variant_by_name(target: &mut dyn PartialReflect, variant_name: &str) -> bool {
     let ReflectMut::Enum(enum_mut) = target.reflect_mut() else {
         return false;
@@ -776,4 +782,45 @@ fn set_enum_variant_by_name(target: &mut dyn PartialReflect, variant_name: &str)
     let dynamic_enum = DynamicEnum::new(variant_name, DynamicVariant::Unit);
     target.apply(&dynamic_enum);
     true
+}
+
+fn set_optional_enum_by_name(
+    target: &mut dyn PartialReflect,
+    inner_variant_name: Option<&str>,
+) -> bool {
+    let ReflectMut::Enum(enum_mut) = target.reflect_mut() else {
+        return false;
+    };
+
+    let is_none = enum_mut.variant_name() == "None";
+
+    match inner_variant_name {
+        None => {
+            if is_none {
+                return false;
+            }
+            let dynamic_enum = DynamicEnum::new("None", DynamicVariant::Unit);
+            target.apply(&dynamic_enum);
+            true
+        }
+        Some(variant_name) => {
+            if !is_none {
+                if let ReflectRef::Enum(enum_ref) = target.reflect_ref() {
+                    if let Some(inner) = enum_ref.field_at(0) {
+                        if let ReflectRef::Enum(inner_enum) = inner.reflect_ref() {
+                            if inner_enum.variant_name() == variant_name {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            let inner = DynamicEnum::new(variant_name, DynamicVariant::Unit);
+            let mut tuple = DynamicTuple::default();
+            tuple.insert(inner);
+            let some = DynamicEnum::new("Some", DynamicVariant::Tuple(tuple));
+            target.apply(&some);
+            true
+        }
+    }
 }

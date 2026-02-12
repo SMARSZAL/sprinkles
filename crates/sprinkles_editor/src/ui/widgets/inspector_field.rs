@@ -84,6 +84,17 @@ impl InspectorFieldProps {
         let option_labels: Vec<String> = options.iter().map(|o| o.label.clone()).collect();
         self.kind = FieldKind::ComboBox {
             options: option_labels,
+            optional: false,
+        };
+        self.combobox_options = Some(options);
+        self
+    }
+
+    pub fn optional_combobox(mut self, options: Vec<ComboBoxOptionData>) -> Self {
+        let option_labels: Vec<String> = options.iter().map(|o| o.label.clone()).collect();
+        self.kind = FieldKind::ComboBox {
+            options: option_labels,
+            optional: true,
         };
         self.combobox_options = Some(options);
         self
