@@ -248,10 +248,7 @@ impl FieldBinding {
         }
     }
 
-    pub(super) fn resolve_ref<'a>(
-        &self,
-        data: &'a dyn Reflect,
-    ) -> Option<&'a dyn PartialReflect> {
+    pub(super) fn resolve_ref<'a>(&self, data: &'a dyn Reflect) -> Option<&'a dyn PartialReflect> {
         let path = ReflectPath::new(self.path());
         let value = match data.reflect_path(path.as_str()) {
             Ok(v) => v,
@@ -297,10 +294,8 @@ impl FieldBinding {
     }
 
     pub(super) fn write_value(&self, data: &mut dyn Reflect, value: &FieldValue) -> bool {
-        self.with_resolved_mut(data, |target| {
-            apply_field_value_to_reflect(target, value)
-        })
-        .unwrap_or(false)
+        self.with_resolved_mut(data, |target| apply_field_value_to_reflect(target, value))
+            .unwrap_or(false)
     }
 
     pub fn set_enum_by_name(&self, data: &mut dyn Reflect, variant_name: &str) -> bool {
@@ -321,10 +316,7 @@ impl FieldBinding {
         .unwrap_or(false)
     }
 
-    pub fn read_reflected<'a>(
-        &self,
-        data: &'a dyn Reflect,
-    ) -> Option<&'a dyn PartialReflect> {
+    pub fn read_reflected<'a>(&self, data: &'a dyn Reflect) -> Option<&'a dyn PartialReflect> {
         self.resolve_ref(data)
     }
 
@@ -537,9 +529,13 @@ fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldVa
         FieldValue::Bool(v) => apply_with_change_check(target, v),
         FieldValue::Vec2(v) => apply_with_change_check(target, v),
         FieldValue::Vec3(v) => apply_with_change_check(target, v),
-        FieldValue::Range(min, max) => {
-            apply_with_change_check(target, &ParticleRange { min: *min, max: *max })
-        }
+        FieldValue::Range(min, max) => apply_with_change_check(
+            target,
+            &ParticleRange {
+                min: *min,
+                max: *max,
+            },
+        ),
         FieldValue::Color(c) => apply_with_change_check(target, c),
         FieldValue::None => false,
     }

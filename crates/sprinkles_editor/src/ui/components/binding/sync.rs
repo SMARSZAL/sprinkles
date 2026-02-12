@@ -6,7 +6,9 @@ use sprinkles::prelude::*;
 use crate::state::EditorState;
 use crate::ui::components::inspector::FieldKind;
 use crate::ui::widgets::checkbox::CheckboxState;
-use crate::ui::widgets::color_picker::{ColorPickerState, EditorColorPicker, TriggerSwatchMaterial};
+use crate::ui::widgets::color_picker::{
+    ColorPickerState, EditorColorPicker, TriggerSwatchMaterial,
+};
 use crate::ui::widgets::combobox::ComboBoxConfig;
 use crate::ui::widgets::curve_edit::{CurveEditState, EditorCurveEdit};
 use crate::ui::widgets::gradient_edit::{EditorGradientEdit, GradientEditState};
@@ -149,8 +151,7 @@ pub(super) fn bind_widget_values(
             };
             get_nested_variant_index(reflected, &config.variants)
         } else {
-            let Some(idx) =
-                get_variant_index_by_reflection(data, binding.path(), &config.variants)
+            let Some(idx) = get_variant_index_by_reflection(data, binding.path(), &config.variants)
             else {
                 continue;
             };

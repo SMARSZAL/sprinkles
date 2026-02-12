@@ -206,5 +206,7 @@ fn read_color_value<'a>(
     data: &'a dyn Reflect,
     binding: &FieldBinding,
 ) -> Option<&'a SolidOrGradientColor> {
-    binding.resolve_ref(data)?.try_downcast_ref::<SolidOrGradientColor>()
+    binding
+        .resolve_ref(data)?
+        .try_downcast_ref::<SolidOrGradientColor>()
 }

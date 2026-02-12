@@ -130,11 +130,7 @@ pub(super) fn handle_text_commit(
             let fixed_seed = read_fixed_seed(&*data);
 
             if binding.write_value(data, &new_value) {
-                mark_dirty_and_restart(
-                    &mut ctx.dirty_state,
-                    &mut ctx.emitter_runtimes,
-                    fixed_seed,
-                );
+                mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
                 if requires_respawn_binding(&binding) {
                     commands.trigger(RespawnEmittersEvent);
                 }
@@ -150,11 +146,7 @@ pub(super) fn handle_text_commit(
 
     let fixed_seed = read_fixed_seed(&*data);
     if binding.write_value(data, &value) {
-        mark_dirty_and_restart(
-            &mut ctx.dirty_state,
-            &mut ctx.emitter_runtimes,
-            fixed_seed,
-        );
+        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
         if requires_respawn_binding(&binding) {
             commands.trigger(RespawnEmittersEvent);
         }
@@ -215,11 +207,7 @@ pub(super) fn handle_combobox_change(
     };
 
     if changed {
-        mark_dirty_and_restart(
-            &mut ctx.dirty_state,
-            &mut ctx.emitter_runtimes,
-            fixed_seed,
-        );
+        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
     }
 }
 
@@ -292,11 +280,7 @@ pub(super) fn handle_variant_change(
     if binding.write_reflected(data, |field| {
         field.apply(default_value.as_ref());
     }) {
-        mark_dirty_and_restart(
-            &mut ctx.dirty_state,
-            &mut ctx.emitter_runtimes,
-            fixed_seed,
-        );
+        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
     }
 }
 
