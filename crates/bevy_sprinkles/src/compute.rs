@@ -95,22 +95,22 @@ pub fn init_particle_compute_pipeline(
         ..default()
     });
 
-    let gradient_sampler = render_device.create_sampler(&SamplerDescriptor {
-        label: Some("gradient_sampler"),
+    let linear_clamp_sampler = SamplerDescriptor {
         address_mode_u: bevy::render::render_resource::AddressMode::ClampToEdge,
         address_mode_v: bevy::render::render_resource::AddressMode::ClampToEdge,
         mag_filter: bevy::render::render_resource::FilterMode::Linear,
         min_filter: bevy::render::render_resource::FilterMode::Linear,
         ..default()
+    };
+
+    let gradient_sampler = render_device.create_sampler(&SamplerDescriptor {
+        label: Some("gradient_sampler"),
+        ..linear_clamp_sampler.clone()
     });
 
     let curve_sampler = render_device.create_sampler(&SamplerDescriptor {
         label: Some("curve_sampler"),
-        address_mode_u: bevy::render::render_resource::AddressMode::ClampToEdge,
-        address_mode_v: bevy::render::render_resource::AddressMode::ClampToEdge,
-        mag_filter: bevy::render::render_resource::FilterMode::Linear,
-        min_filter: bevy::render::render_resource::FilterMode::Linear,
-        ..default()
+        ..linear_clamp_sampler
     });
 
     let fallback_emission_buffer = render_device.create_buffer_with_data(
@@ -203,95 +203,79 @@ pub fn prepare_particle_compute_bind_groups(
             continue;
         };
 
-        let gradient_gpu_image = emitter_data
-            .gradient_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_gradient_gpu_image);
+        fn resolve_texture<'a>(
+            handle: &Option<Handle<Image>>,
+            gpu_images: &'a RenderAssets<GpuImage>,
+            fallback: Option<&'a GpuImage>,
+        ) -> Option<&'a GpuImage> {
+            handle
+                .as_ref()
+                .and_then(|h| gpu_images.get(h))
+                .or(fallback)
+        }
 
-        let color_over_lifetime_gpu_image = emitter_data
-            .color_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_gradient_gpu_image);
-
-        let scale_over_lifetime_gpu_image = emitter_data
-            .scale_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let alpha_over_lifetime_gpu_image = emitter_data
-            .alpha_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let emission_over_lifetime_gpu_image = emitter_data
-            .emission_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let turbulence_influence_over_lifetime_gpu_image = emitter_data
-            .turbulence_influence_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let radial_velocity_curve_gpu_image = emitter_data
-            .radial_velocity_curve_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let angle_over_lifetime_gpu_image = emitter_data
-            .angle_over_lifetime_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let angular_velocity_curve_gpu_image = emitter_data
-            .angular_velocity_curve_texture_handle
-            .as_ref()
-            .and_then(|h| gpu_images.get(h))
-            .or(fallback_curve_gpu_image);
-
-        let Some(gradient_image) = gradient_gpu_image else {
-            continue;
-        };
-
-        let Some(color_over_lifetime_image) = color_over_lifetime_gpu_image else {
-            continue;
-        };
-
-        let Some(scale_over_lifetime_image) = scale_over_lifetime_gpu_image else {
-            continue;
-        };
-
-        let Some(alpha_over_lifetime_image) = alpha_over_lifetime_gpu_image else {
-            continue;
-        };
-
-        let Some(turbulence_influence_over_lifetime_image) =
-            turbulence_influence_over_lifetime_gpu_image
+        let Some(gradient_image) = resolve_texture(
+            &emitter_data.gradient_texture_handle,
+            &gpu_images,
+            fallback_gradient_gpu_image,
+        )
         else {
             continue;
         };
-
-        let Some(emission_over_lifetime_image) = emission_over_lifetime_gpu_image else {
+        let Some(color_over_lifetime_image) = resolve_texture(
+            &emitter_data.color_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_gradient_gpu_image,
+        ) else {
             continue;
         };
-
-        let Some(radial_velocity_curve_image) = radial_velocity_curve_gpu_image else {
+        let Some(scale_over_lifetime_image) = resolve_texture(
+            &emitter_data.scale_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
             continue;
         };
-
-        let Some(angle_over_lifetime_image) = angle_over_lifetime_gpu_image else {
+        let Some(alpha_over_lifetime_image) = resolve_texture(
+            &emitter_data.alpha_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
             continue;
         };
-
-        let Some(angular_velocity_curve_image) = angular_velocity_curve_gpu_image else {
+        let Some(emission_over_lifetime_image) = resolve_texture(
+            &emitter_data.emission_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
+            continue;
+        };
+        let Some(turbulence_influence_over_lifetime_image) = resolve_texture(
+            &emitter_data.turbulence_influence_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
+            continue;
+        };
+        let Some(radial_velocity_curve_image) = resolve_texture(
+            &emitter_data.radial_velocity_curve_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
+            continue;
+        };
+        let Some(angle_over_lifetime_image) = resolve_texture(
+            &emitter_data.angle_over_lifetime_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
+            continue;
+        };
+        let Some(angular_velocity_curve_image) = resolve_texture(
+            &emitter_data.angular_velocity_curve_texture_handle,
+            &gpu_images,
+            fallback_curve_gpu_image,
+        ) else {
             continue;
         };
 
