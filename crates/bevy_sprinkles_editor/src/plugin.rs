@@ -13,11 +13,25 @@ use crate::viewport::{
     sync_playback_state, zoom_camera,
 };
 
+#[derive(Resource, Default)]
+struct CliArgs {
+    initial_file: Option<String>,
+}
+
+impl CliArgs {
+    fn from_env() -> Self {
+        Self {
+            initial_file: std::env::args().nth(1),
+        }
+    }
+}
+
 pub struct SprinklesEditorPlugin;
 
 impl Plugin for SprinklesEditorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(SprinklesPlugin)
+        app.insert_resource(CliArgs::from_env())
+            .add_plugins(SprinklesPlugin)
             .add_plugins(crate::io::plugin)
             .add_plugins(crate::state::plugin)
             .add_plugins(crate::project::plugin)
@@ -47,10 +61,32 @@ impl Plugin for SprinklesEditorPlugin {
 }
 
 fn load_initial_project(
+    cli_args: Res<CliArgs>,
     mut editor_state: ResMut<EditorState>,
     mut editor_data: ResMut<EditorData>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
 ) {
+    if let Some(file) = &cli_args.initial_file {
+        let path = project_path(file);
+        if let Some(asset) = load_project_from_path(&path) {
+            let has_emitters = !asset.emitters.is_empty();
+            let handle = assets.add(asset);
+            editor_state.current_project = Some(handle);
+            editor_state.current_project_path = Some(path);
+            if has_emitters {
+                editor_state.inspecting = Some(Inspecting {
+                    kind: Inspectable::Emitter,
+                    index: 0,
+                });
+            }
+            editor_data
+                .cache
+                .add_recent_project(file.clone());
+            save_editor_data(&editor_data);
+            return;
+        }
+    }
+
     if let Some(location) = &editor_data.cache.last_opened_project.clone() {
         let path = project_path(location);
         if path.exists() {
@@ -73,7 +109,7 @@ fn load_initial_project(
     let is_first_run = editor_data.cache.recent_projects.is_empty();
 
     if is_first_run {
-        let demo_file = "examples/3d_explosion.ron";
+        let demo_file = "examples/3d-explosion.ron";
         let demo_path = project_path(demo_file);
         if demo_path.exists() {
             if let Some(asset) = load_project_from_path(&demo_path) {
