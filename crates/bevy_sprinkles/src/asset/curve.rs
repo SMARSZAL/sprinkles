@@ -5,13 +5,21 @@ use std::str::FromStr;
 
 use super::Range;
 
+/// Interpolation mode between two [`CurvePoint`]s.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, Reflect)]
 pub enum CurveMode {
+    /// A single easing function applied across the entire segment.
     SingleCurve,
+    /// Two easing functions, one for each half of the segment, producing an
+    /// S-curve shape.
     #[default]
     DoubleCurve,
+    /// No interpolation; holds the left point's value for the entire segment.
     Hold,
+    /// Staircase interpolation with discrete steps. The number of steps is
+    /// derived from the tension parameter.
     Stairs,
+    /// Staircase interpolation with smooth transitions between steps.
     SmoothStairs,
 }
 
@@ -29,12 +37,17 @@ impl FromStr for CurveMode {
     }
 }
 
+/// The easing function used when interpolating between curve points.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, Reflect)]
 pub enum CurveEasing {
+    /// Power-based easing. The exponent is derived from the tension parameter.
     #[default]
     Power,
+    /// Sinusoidal easing.
     Sine,
+    /// Exponential easing.
     Expo,
+    /// Circular easing.
     Circ,
 }
 
@@ -55,19 +68,27 @@ fn default_tension() -> f64 {
     0.0
 }
 
+/// A single control point in a [`CurveTexture`].
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct CurvePoint {
+    /// Horizontal position along the curve, from `0.0` (start) to `1.0` (end).
     pub position: f32,
+    /// The value at this point, typically in `[0.0, 1.0]`.
     pub value: f64,
+    /// Interpolation mode for the segment leading to this point.
     #[serde(default)]
     pub mode: CurveMode,
+    /// Tension parameter that controls the curvature. The effect depends on the
+    /// [`mode`](Self::mode) and [`easing`](Self::easing). Defaults to `0.0` (linear).
     #[serde(default = "default_tension")]
     pub tension: f64,
+    /// Easing function applied within this segment.
     #[serde(default)]
     pub easing: CurveEasing,
 }
 
 impl CurvePoint {
+    /// Creates a new curve point at the given position with the given value.
     pub fn new(position: f32, value: f64) -> Self {
         Self {
             position,
@@ -78,16 +99,19 @@ impl CurvePoint {
         }
     }
 
+    /// Sets the interpolation mode for this point's segment.
     pub fn with_mode(mut self, mode: CurveMode) -> Self {
         self.mode = mode;
         self
     }
 
+    /// Sets the tension parameter for this point's segment.
     pub fn with_tension(mut self, tension: f64) -> Self {
         self.tension = tension;
         self
     }
 
+    /// Sets the easing function for this point's segment.
     pub fn with_easing(mut self, easing: CurveEasing) -> Self {
         self.easing = easing;
         self
@@ -98,11 +122,19 @@ fn is_empty_string(s: &Option<String>) -> bool {
     s.as_ref().is_none_or(|s| s.is_empty())
 }
 
+/// A piecewise curve defined by control points, baked into a 1D texture for GPU sampling.
+///
+/// Curve textures are used to animate particle properties (scale, alpha, velocity, etc.)
+/// over each particle's lifetime. The curve maps a normalized lifetime position `[0.0, 1.0]`
+/// to an output value, which is then scaled by the [`range`](Self::range).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct CurveTexture {
+    /// Optional display name for this curve (e.g., "Constant", "Fade Out").
     #[serde(default, skip_serializing_if = "is_empty_string")]
     pub name: Option<String>,
+    /// The control points that define the curve shape.
     pub points: Vec<CurvePoint>,
+    /// The output range that the curve values are mapped to. Defaults to `0.0..1.0`.
     #[serde(default)]
     pub range: Range,
 }
@@ -118,6 +150,7 @@ impl Default for CurveTexture {
 }
 
 impl CurveTexture {
+    /// Creates a new curve from the given control points with a default range.
     pub fn new(points: Vec<CurvePoint>) -> Self {
         Self {
             name: None,
@@ -126,16 +159,19 @@ impl CurveTexture {
         }
     }
 
+    /// Sets the display name for this curve.
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
 
+    /// Sets the output range for this curve.
     pub fn with_range(mut self, range: Range) -> Self {
         self.range = range;
         self
     }
 
+    /// Computes a hash key for texture caching.
     pub fn cache_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         for point in &self.points {
@@ -149,6 +185,7 @@ impl CurveTexture {
         hasher.finish()
     }
 
+    /// Returns `true` if all control points have the same value, meaning the curve is flat.
     pub fn is_constant(&self) -> bool {
         if self.points.len() < 2 {
             return true;
@@ -159,6 +196,7 @@ impl CurveTexture {
             .all(|p| (p.value - first_value).abs() < f64::EPSILON)
     }
 
+    /// Samples the curve at position `t` (clamped to `[0.0, 1.0]`), returning the interpolated value.
     pub fn sample(&self, t: f32) -> f32 {
         if self.points.is_empty() {
             return 1.0;

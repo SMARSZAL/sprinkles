@@ -13,12 +13,20 @@ use bevy::{
 
 const SHADER_ASSET_PATH: &str = "embedded://bevy_sprinkles/shaders/particle_material.wgsl";
 
+/// A [`MaterialExtension`] that drives GPU particle rendering.
+///
+/// This extension binds particle data buffers to the shader pipeline so that
+/// the vertex shader can read per-particle state (position, color, scale, etc.)
+/// and transform each mesh instance accordingly.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
 pub struct ParticleMaterialExtension {
+    /// Handle to the sorted particle data buffer, read by the vertex shader.
     #[storage(100, read_only)]
     pub sorted_particles: Handle<ShaderStorageBuffer>,
+    /// Maximum number of particles this buffer can hold.
     #[uniform(101)]
     pub max_particles: u32,
+    /// Particle behavior flags (see [`ParticleFlags`](crate::ParticleFlags)).
     #[uniform(102)]
     pub particle_flags: u32,
 }

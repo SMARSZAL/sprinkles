@@ -14,12 +14,18 @@ use crate::runtime::ParticleSystem3D;
 
 const TEXTURE_WIDTH: u32 = 256;
 
+/// Cache for baked gradient textures, avoiding redundant texture creation.
+///
+/// Each unique gradient (identified by its [`Gradient::cache_key`]) is baked into
+/// a 1D RGBA texture once and reused across all emitters that reference it.
 #[derive(Resource, Default)]
 pub struct GradientTextureCache {
     cache: HashMap<u64, Handle<Image>>,
 }
 
 impl GradientTextureCache {
+    /// Returns a cached texture handle for the gradient, creating and baking a new
+    /// texture if one doesn't already exist.
     pub fn get_or_create(
         &mut self,
         gradient: &Gradient,
@@ -35,6 +41,7 @@ impl GradientTextureCache {
         handle
     }
 
+    /// Returns the cached texture handle for the gradient, if it exists.
     pub fn get(&self, gradient: &Gradient) -> Option<Handle<Image>> {
         self.cache.get(&gradient.cache_key()).cloned()
     }
@@ -118,11 +125,14 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
+/// A 1x1 white fallback texture used when no gradient texture is available.
 #[derive(Resource, Clone, ExtractResource)]
 pub struct FallbackGradientTexture {
+    /// Handle to the fallback image.
     pub handle: Handle<Image>,
 }
 
+/// Bakes gradient textures for all active particle systems.
 pub fn prepare_gradient_textures(
     mut cache: ResMut<GradientTextureCache>,
     mut images: ResMut<Assets<Image>>,
@@ -142,12 +152,18 @@ pub fn prepare_gradient_textures(
     }
 }
 
+/// Cache for baked curve textures, avoiding redundant texture creation.
+///
+/// Each unique curve (identified by its [`CurveTexture::cache_key`]) is baked into
+/// a 1D grayscale texture once and reused across all emitters that reference it.
 #[derive(Resource, Default)]
 pub struct CurveTextureCache {
     cache: HashMap<u64, Handle<Image>>,
 }
 
 impl CurveTextureCache {
+    /// Returns a cached texture handle for the curve, creating and baking a new
+    /// texture if one doesn't already exist.
     pub fn get_or_create(
         &mut self,
         curve: &CurveTexture,
@@ -163,6 +179,7 @@ impl CurveTextureCache {
         handle
     }
 
+    /// Returns the cached texture handle for the curve, if it exists.
     pub fn get(&self, curve: &CurveTexture) -> Option<Handle<Image>> {
         self.cache.get(&curve.cache_key()).cloned()
     }
@@ -188,8 +205,10 @@ fn bake_curve_texture(curve: &CurveTexture) -> Image {
     create_1d_texture(data, TextureFormat::Rgba8Unorm)
 }
 
+/// A 1x1 white fallback texture used when no curve texture is available.
 #[derive(Resource, Clone, ExtractResource)]
 pub struct FallbackCurveTexture {
+    /// Handle to the fallback image.
     pub handle: Handle<Image>,
 }
 
@@ -201,6 +220,7 @@ impl CurveTextureCache {
     }
 }
 
+/// Bakes curve textures for all active particle systems.
 pub fn prepare_curve_textures(
     mut cache: ResMut<CurveTextureCache>,
     mut images: ResMut<Assets<Image>>,
@@ -254,11 +274,13 @@ fn create_fallback_texture(format: TextureFormat) -> Image {
     image
 }
 
+/// Creates and inserts the [`FallbackGradientTexture`] resource.
 pub fn create_fallback_gradient_texture(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let handle = images.add(create_fallback_texture(TextureFormat::Rgba8UnormSrgb));
     commands.insert_resource(FallbackGradientTexture { handle });
 }
 
+/// Creates and inserts the [`FallbackCurveTexture`] resource.
 pub fn create_fallback_curve_texture(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let handle = images.add(create_fallback_texture(TextureFormat::Rgba8Unorm));
     commands.insert_resource(FallbackCurveTexture { handle });

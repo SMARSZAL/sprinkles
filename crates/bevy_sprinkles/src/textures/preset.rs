@@ -7,24 +7,41 @@ use bevy::asset::embedded_asset;
 
 macro_rules! preset_textures {
     ($(($variant:ident, $display:literal, $asset:literal)),* $(,)?) => {
+        /// A built-in particle texture bundled with the crate.
+        ///
+        /// Preset textures are only available when the `preset-textures` feature is enabled.
+        /// Use [`TextureRef::Preset`] to reference one from an emitter's material configuration.
+        ///
+        /// All bundled textures are provided by [Kenney](https://kenney.nl/assets/particle-pack),
+        /// licensed under [CC0](https://creativecommons.org/publicdomain/zero/1.0/). ❤️
         #[cfg(feature = "preset-textures")]
         #[derive(Debug, Clone, Serialize, Deserialize, Reflect, Hash, PartialEq, Eq)]
         pub enum PresetTexture {
-            $($variant,)*
+            $(
+                #[doc = concat!(
+                    "<img src=\"https://raw.githubusercontent.com/doceazedo/sprinkles/main/crates/bevy_sprinkles/src/textures/",
+                    $asset,
+                    "\" width=\"64\" height=\"64\" style=\"background:#2b2b2b;border-radius:4px;padding:4px\" />"
+                )]
+                $variant,
+            )*
         }
 
         #[cfg(feature = "preset-textures")]
         impl PresetTexture {
+            /// Returns a slice of all available preset textures.
             pub fn all() -> &'static [PresetTexture] {
                 &[$(Self::$variant,)*]
             }
 
+            /// Returns the human-readable display name for this preset.
             pub fn display_name(&self) -> &'static str {
                 match self {
                     $(Self::$variant => $display,)*
                 }
             }
 
+            /// Returns the embedded asset path for loading this preset texture.
             pub fn embedded_path(&self) -> &'static str {
                 match self {
                     $(Self::$variant => concat!("embedded://bevy_sprinkles/textures/", $asset),)*
@@ -32,6 +49,7 @@ macro_rules! preset_textures {
             }
         }
 
+        /// Registers all preset texture assets as embedded assets in the Bevy app.
         #[cfg(feature = "preset-textures")]
         pub fn register_preset_textures(app: &mut App) {
             $(embedded_asset!(app, $asset);)*
@@ -122,15 +140,20 @@ preset_textures!(
     (Window4, "Window 4", "assets/window_04.png"),
 );
 
+/// A reference to a texture that can be loaded at runtime.
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect, Hash, PartialEq, Eq)]
 pub enum TextureRef {
+    /// A built-in preset texture. Only available with the `preset-textures` feature.
     #[cfg(feature = "preset-textures")]
     Preset(PresetTexture),
+    /// A texture loaded from the asset directory by path.
     Asset(String),
+    /// A texture loaded from a local/relative path.
     Local(String),
 }
 
 impl TextureRef {
+    /// Loads the referenced texture via the [`AssetServer`].
     pub fn load(&self, asset_server: &AssetServer) -> Handle<Image> {
         match self {
             #[cfg(feature = "preset-textures")]
