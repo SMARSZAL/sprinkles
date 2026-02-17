@@ -125,7 +125,8 @@ fn sync_toast_visual(
         if let Ok(mut border) = border_colors.get_mut(toast_entity) {
             let border_color = variant
                 .bg_color()
-                .mix((&TEXT_BODY_COLOR).into(), 0.1 * alpha);
+                .mix((&TEXT_BODY_COLOR).into(), 0.1 * alpha)
+                .with_alpha(alpha);
             *border = BorderColor::all(border_color);
         }
 
