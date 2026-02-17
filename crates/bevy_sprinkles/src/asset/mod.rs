@@ -7,7 +7,9 @@ pub mod versioning;
 
 pub use curve::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
 pub use gradient::{Gradient, GradientInterpolation, GradientStop, SolidOrGradientColor};
-pub use particle_material::{DrawPassMaterial, SerializableAlphaMode, StandardParticleMaterial};
+pub use particle_material::{
+    DrawPassMaterial, SerializableAlphaMode, SerializableFace, StandardParticleMaterial,
+};
 
 use bevy::{
     asset::{AssetLoader, LoadContext, io::Reader},

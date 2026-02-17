@@ -10,7 +10,7 @@ use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::types::VariantField;
 
-const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z"];
+const UPPERCASE_ACRONYMS: &[&str] = &["fps", "x", "y", "z", "ior"];
 
 pub fn name_to_label(name: &str) -> String {
     let sentence = name.to_sentence_case();

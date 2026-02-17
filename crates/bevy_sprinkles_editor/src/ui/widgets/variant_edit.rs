@@ -1,3 +1,4 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::reflect::{TypeInfo, Typed, VariantInfo};
 
@@ -22,6 +23,7 @@ use crate::ui::widgets::popover::{
 use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
 
 use crate::ui::icons::ICON_MORE;
+use crate::ui::widgets::scroll::scrollbar;
 use crate::ui::widgets::utils::is_descendant_of;
 use crate::ui::widgets::vector_edit::{VectorEditProps, vector_edit};
 
@@ -609,8 +611,25 @@ fn handle_variant_edit_click(
 
             if show_fields_container {
                 let fields_container = parent
-                    .spawn((VariantFieldsContainer(entity), popover_content()))
+                    .spawn((
+                        VariantFieldsContainer(entity),
+                        Hovered::default(),
+                        Node {
+                            width: percent(100),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(12.0),
+                            padding: UiRect::all(px(12.0)),
+                            max_height: px(384.0),
+                            overflow: Overflow::scroll_y(),
+                            ..default()
+                        },
+                    ))
                     .id();
+
+                parent
+                    .commands()
+                    .entity(fields_container)
+                    .with_child(scrollbar(fields_container));
 
                 if has_auto_fields {
                     if let Some(variant) = selected_variant {

@@ -7,8 +7,9 @@ pub use crate::asset::{
     EmitterScale, EmitterTime, EmitterTurbulence, EmitterVelocities,
     Gradient as ParticleGradient, GradientInterpolation, GradientStop, ParticleFlags, ParticleMesh,
     ParticleSystemAsset, ParticleSystemAuthors, ParticleSystemDimension, ParticlesColliderShape3D,
-    QuadOrientation, Range as ParticleRange, SerializableAlphaMode, SolidOrGradientColor,
-    StandardParticleMaterial, SubEmitterConfig, SubEmitterMode, TransformAlign,
+    QuadOrientation, Range as ParticleRange, SerializableAlphaMode, SerializableFace,
+    SolidOrGradientColor, StandardParticleMaterial, SubEmitterConfig, SubEmitterMode,
+    TransformAlign,
 };
 #[cfg(feature = "preset-textures")]
 pub use crate::textures::preset::PresetTexture;

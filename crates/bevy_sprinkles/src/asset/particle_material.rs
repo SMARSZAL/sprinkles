@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::alpha::AlphaMode};
+use bevy::{prelude::*, render::alpha::AlphaMode, render::render_resource::Face};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
@@ -86,6 +86,33 @@ impl From<AlphaMode> for SerializableAlphaMode {
     }
 }
 
+/// Serializable face culling mode, copied from wgpu's [`Face`].
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Reflect)]
+pub enum SerializableFace {
+    /// Front face.
+    Front,
+    /// Back face.
+    Back,
+}
+
+impl From<SerializableFace> for Face {
+    fn from(face: SerializableFace) -> Self {
+        match face {
+            SerializableFace::Front => Face::Front,
+            SerializableFace::Back => Face::Back,
+        }
+    }
+}
+
+impl From<Face> for SerializableFace {
+    fn from(face: Face) -> Self {
+        match face {
+            Face::Front => SerializableFace::Front,
+            Face::Back => SerializableFace::Back,
+        }
+    }
+}
+
 fn default_base_color() -> [f32; 4] {
     [1.0, 1.0, 1.0, 1.0]
 }
@@ -106,8 +133,56 @@ fn default_fog_enabled() -> bool {
     true
 }
 
+fn default_ior() -> f32 {
+    1.5
+}
+
+fn is_default_ior(v: &f32) -> bool {
+    *v == default_ior()
+}
+
+fn default_attenuation_distance() -> f32 {
+    f32::INFINITY
+}
+
+fn is_default_attenuation_distance(v: &f32) -> bool {
+    *v == default_attenuation_distance()
+}
+
+fn default_white_color() -> [f32; 4] {
+    default_base_color()
+}
+
+fn is_default_white_color(v: &[f32; 4]) -> bool {
+    *v == default_white_color()
+}
+
+fn default_cull_mode() -> Option<SerializableFace> {
+    Some(SerializableFace::Back)
+}
+
+fn is_default_cull_mode(v: &Option<SerializableFace>) -> bool {
+    *v == default_cull_mode()
+}
+
+fn default_clearcoat_perceptual_roughness() -> f32 {
+    default_perceptual_roughness()
+}
+
+fn is_default_clearcoat_perceptual_roughness(v: &f32) -> bool {
+    *v == default_clearcoat_perceptual_roughness()
+}
+
 fn is_default_emissive(v: &[f32; 4]) -> bool {
     *v == [0.0, 0.0, 0.0, 1.0]
+}
+
+fn color_from_array(c: [f32; 4]) -> Color {
+    Color::linear_rgba(c[0], c[1], c[2], c[3])
+}
+
+fn color_to_array(c: LinearRgba) -> [f32; 4] {
+    [c.red, c.green, c.blue, c.alpha]
 }
 
 /// A serializable PBR material for particles, copied from Bevy's [`StandardMaterial`](bevy::pbr::StandardMaterial).
@@ -147,6 +222,16 @@ pub struct StandardParticleMaterial {
     /// color of the emissive texture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emissive_texture: Option<TextureRef>,
+
+    /// The weight in which the camera exposure influences the emissive color.
+    ///
+    /// A value of `0.0` means the emissive color is not affected by the camera
+    /// exposure. In opposition, a value of `1.0` means the emissive color is
+    /// multiplied by the camera exposure.
+    ///
+    /// Defaults to `0.0`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub emissive_exposure_weight: f32,
 
     /// How to apply the alpha channel of the `base_color_texture`.
     ///
@@ -198,12 +283,143 @@ pub struct StandardParticleMaterial {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub normal_map_texture: Option<TextureRef>,
 
+    /// Normal map textures authored for DirectX have their y-component flipped.
+    /// Set this to flip it to right-handed conventions.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub flip_normal_map_y: bool,
+
+    /// Specifies the level of exposure to ambient light.
+    ///
+    /// This is usually generated and stored automatically ("baked") by 3D-modeling
+    /// software.
+    ///
+    /// Typically, steep concave parts of a model (such as the armpit of a shirt)
+    /// are darker, because they have little exposure to light. An occlusion map
+    /// specifies those parts of the model that light doesn't reach well.
+    ///
+    /// The material will be less lit in places where this texture is dark. This is
+    /// similar to ambient occlusion, but built into the model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occlusion_texture: Option<TextureRef>,
+
+    /// A color with which to modulate the [`reflectance`](Self::reflectance) for non-metals.
+    ///
+    /// The specular highlights and reflection are tinted with this color. Note
+    /// that it has no effect for non-metals.
+    ///
+    /// Defaults to white `[1.0, 1.0, 1.0, 1.0]`.
+    #[serde(default = "default_white_color", skip_serializing_if = "is_default_white_color")]
+    pub specular_tint: [f32; 4],
+
+    /// The amount of light transmitted diffusely through the material (i.e. "translucency").
+    ///
+    /// Implemented as a second, flipped Lambertian diffuse lobe, which provides
+    /// an inexpensive but plausible approximation of translucency for thin
+    /// dielectric objects (e.g. paper, leaves, some fabrics) or thicker volumetric
+    /// materials with short scattering distances (e.g. porcelain, wax).
+    ///
+    /// - When set to `0.0` (the default) no diffuse light is transmitted;
+    /// - When set to `1.0` all diffuse light is transmitted through the material;
+    /// - Values higher than `0.5` will cause more diffuse light to be transmitted
+    ///   than reflected, resulting in a "darker" appearance on the side facing the
+    ///   light than the opposite side. (e.g. plant leaves)
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub diffuse_transmission: f32,
+
+    /// The amount of light transmitted specularly through the material (i.e. via refraction).
+    ///
+    /// - When set to `0.0` (the default) no light is transmitted.
+    /// - When set to `1.0` all light is transmitted through the material.
+    ///
+    /// The material's [`base_color`](Self::base_color) also modulates the
+    /// transmitted light.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub specular_transmission: f32,
+
+    /// Thickness of the volume beneath the material surface.
+    ///
+    /// When set to `0.0` (the default) the material appears as an infinitely-thin
+    /// film, transmitting light without distorting it.
+    ///
+    /// When set to any other value, the material distorts light like a thick lens.
+    ///
+    /// Typically used in conjunction with [`specular_transmission`](Self::specular_transmission)
+    /// and [`ior`](Self::ior), or with [`diffuse_transmission`](Self::diffuse_transmission).
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub thickness: f32,
+
+    /// The index of refraction of the material.
+    ///
+    /// Defaults to `1.5`.
+    #[serde(default = "default_ior", skip_serializing_if = "is_default_ior")]
+    pub ior: f32,
+
+    /// How far, on average, light travels through the volume beneath the material's
+    /// surface before being absorbed.
+    ///
+    /// Defaults to [`f32::INFINITY`], i.e. light is never absorbed.
+    #[serde(default = "default_attenuation_distance", skip_serializing_if = "is_default_attenuation_distance")]
+    pub attenuation_distance: f32,
+
+    /// The resulting (non-absorbed) color after white light travels through the
+    /// attenuation distance.
+    ///
+    /// Defaults to white `[1.0, 1.0, 1.0, 1.0]`, i.e. no change.
+    #[serde(default = "default_white_color", skip_serializing_if = "is_default_white_color")]
+    pub attenuation_color: [f32; 4],
+
+    /// An extra thin translucent layer on top of the main PBR layer.
+    ///
+    /// This is typically used for painted surfaces. This value specifies the
+    /// strength of the layer, which affects how visible the clearcoat layer
+    /// will be.
+    ///
+    /// Defaults to `0.0`, specifying no clearcoat layer.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub clearcoat: f32,
+
+    /// The roughness of the clearcoat material.
+    ///
+    /// This is specified in exactly the same way as
+    /// [`perceptual_roughness`](Self::perceptual_roughness). If the
+    /// [`clearcoat`](Self::clearcoat) value is zero, this has no effect.
+    ///
+    /// Defaults to `0.5`.
+    #[serde(default = "default_clearcoat_perceptual_roughness", skip_serializing_if = "is_default_clearcoat_perceptual_roughness")]
+    pub clearcoat_perceptual_roughness: f32,
+
+    /// Increases the roughness along a specific direction, so that the specular
+    /// highlight will be stretched instead of being a circular lobe.
+    ///
+    /// This value ranges from `0.0` (perfectly circular) to `1.0` (maximally
+    /// stretched).
+    ///
+    /// This is typically used for modeling surfaces such as brushed metal and
+    /// hair, in which one direction of the surface but not the other is smooth.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub anisotropy_strength: f32,
+
+    /// The direction of increased roughness, in radians relative to the mesh tangent.
+    ///
+    /// This parameter has no effect if [`anisotropy_strength`](Self::anisotropy_strength)
+    /// is zero.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub anisotropy_rotation: f32,
+
     /// Support two-sided lighting by automatically flipping the normals for
     /// "back" faces within the PBR lighting shader.
     ///
     /// Defaults to `false`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub double_sided: bool,
+
+    /// Whether to cull the "front", "back" or neither side of a mesh.
+    ///
+    /// If set to `None`, the two sides of the mesh are visible.
+    ///
+    /// Defaults to `Some(Back)`.
+    #[serde(default = "default_cull_mode", skip_serializing_if = "is_default_cull_mode")]
+    pub cull_mode: Option<SerializableFace>,
 
     /// Whether to apply only the base color to this material.
     ///
@@ -217,6 +433,16 @@ pub struct StandardParticleMaterial {
     /// Defaults to `true`.
     #[serde(default = "default_fog_enabled", skip_serializing_if = "is_true")]
     pub fog_enabled: bool,
+
+    /// Adjust rendered depth.
+    ///
+    /// A material with a positive depth bias will render closer to the camera
+    /// while negative values cause the material to render behind other objects.
+    /// This is independent of the viewport.
+    ///
+    /// Defaults to `0.0`.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub depth_bias: f32,
 }
 
 impl Default for StandardParticleMaterial {
@@ -226,15 +452,31 @@ impl Default for StandardParticleMaterial {
             base_color_texture: None,
             emissive: [0.0, 0.0, 0.0, 1.0],
             emissive_texture: None,
+            emissive_exposure_weight: 0.0,
+            alpha_mode: default_alpha_mode(),
             perceptual_roughness: default_perceptual_roughness(),
             metallic: 0.0,
+            reflectance: default_reflectance(),
             metallic_roughness_texture: None,
             normal_map_texture: None,
-            alpha_mode: default_alpha_mode(),
+            flip_normal_map_y: false,
+            occlusion_texture: None,
+            specular_tint: default_white_color(),
+            diffuse_transmission: 0.0,
+            specular_transmission: 0.0,
+            thickness: 0.0,
+            ior: default_ior(),
+            attenuation_distance: default_attenuation_distance(),
+            attenuation_color: default_white_color(),
+            clearcoat: 0.0,
+            clearcoat_perceptual_roughness: default_clearcoat_perceptual_roughness(),
+            anisotropy_strength: 0.0,
+            anisotropy_rotation: 0.0,
             double_sided: false,
+            cull_mode: default_cull_mode(),
             unlit: false,
             fog_enabled: true,
-            reflectance: default_reflectance(),
+            depth_bias: 0.0,
         }
     }
 }
@@ -243,46 +485,38 @@ impl StandardParticleMaterial {
     /// Converts this serializable material into a Bevy [`StandardMaterial`],
     /// loading any referenced textures via the provided [`AssetServer`].
     pub fn to_standard_material(&self, asset_server: &AssetServer) -> StandardMaterial {
-        let base_color = Color::linear_rgba(
-            self.base_color[0],
-            self.base_color[1],
-            self.base_color[2],
-            self.base_color[3],
-        );
-
-        let emissive = Color::linear_rgba(
-            self.emissive[0],
-            self.emissive[1],
-            self.emissive[2],
-            self.emissive[3],
-        );
+        let load_tex = |tex: &Option<TextureRef>| tex.as_ref().map(|t| t.load(asset_server));
 
         StandardMaterial {
-            base_color,
-            base_color_texture: self
-                .base_color_texture
-                .as_ref()
-                .map(|tex_ref| tex_ref.load(asset_server)),
-            emissive: emissive.into(),
-            emissive_texture: self
-                .emissive_texture
-                .as_ref()
-                .map(|tex_ref| tex_ref.load(asset_server)),
+            base_color: color_from_array(self.base_color),
+            base_color_texture: load_tex(&self.base_color_texture),
+            emissive: color_from_array(self.emissive).into(),
+            emissive_texture: load_tex(&self.emissive_texture),
+            emissive_exposure_weight: self.emissive_exposure_weight,
+            alpha_mode: self.alpha_mode.into(),
             perceptual_roughness: self.perceptual_roughness,
             metallic: self.metallic,
-            metallic_roughness_texture: self
-                .metallic_roughness_texture
-                .as_ref()
-                .map(|tex_ref| tex_ref.load(asset_server)),
-            normal_map_texture: self
-                .normal_map_texture
-                .as_ref()
-                .map(|tex_ref| tex_ref.load(asset_server)),
-            alpha_mode: self.alpha_mode.into(),
+            reflectance: self.reflectance,
+            metallic_roughness_texture: load_tex(&self.metallic_roughness_texture),
+            normal_map_texture: load_tex(&self.normal_map_texture),
+            flip_normal_map_y: self.flip_normal_map_y,
+            occlusion_texture: load_tex(&self.occlusion_texture),
+            specular_tint: color_from_array(self.specular_tint),
+            diffuse_transmission: self.diffuse_transmission,
+            specular_transmission: self.specular_transmission,
+            thickness: self.thickness,
+            ior: self.ior,
+            attenuation_distance: self.attenuation_distance,
+            attenuation_color: color_from_array(self.attenuation_color),
+            clearcoat: self.clearcoat,
+            clearcoat_perceptual_roughness: self.clearcoat_perceptual_roughness,
+            anisotropy_strength: self.anisotropy_strength,
+            anisotropy_rotation: self.anisotropy_rotation,
             double_sided: self.double_sided,
+            cull_mode: self.cull_mode.map(|f| f.into()),
             unlit: self.unlit,
             fog_enabled: self.fog_enabled,
-            reflectance: self.reflectance,
+            depth_bias: self.depth_bias,
             ..default()
         }
     }
@@ -291,54 +525,83 @@ impl StandardParticleMaterial {
     ///
     /// Texture references are not preserved. Only color and numeric properties are copied.
     pub fn from_standard_material(material: &StandardMaterial) -> Self {
-        let base_color = material.base_color.to_linear();
-        let emissive = material.emissive;
-
         Self {
-            base_color: [
-                base_color.red,
-                base_color.green,
-                base_color.blue,
-                base_color.alpha,
-            ],
+            base_color: color_to_array(material.base_color.to_linear()),
             base_color_texture: None,
-            emissive: [emissive.red, emissive.green, emissive.blue, emissive.alpha],
+            emissive: color_to_array(material.emissive.into()),
             emissive_texture: None,
+            emissive_exposure_weight: material.emissive_exposure_weight,
+            alpha_mode: material.alpha_mode.into(),
             perceptual_roughness: material.perceptual_roughness,
             metallic: material.metallic,
+            reflectance: material.reflectance,
             metallic_roughness_texture: None,
             normal_map_texture: None,
-            alpha_mode: material.alpha_mode.into(),
+            flip_normal_map_y: material.flip_normal_map_y,
+            occlusion_texture: None,
+            specular_tint: color_to_array(material.specular_tint.to_linear()),
+            diffuse_transmission: material.diffuse_transmission,
+            specular_transmission: material.specular_transmission,
+            thickness: material.thickness,
+            ior: material.ior,
+            attenuation_distance: material.attenuation_distance,
+            attenuation_color: color_to_array(material.attenuation_color.to_linear()),
+            clearcoat: material.clearcoat,
+            clearcoat_perceptual_roughness: material.clearcoat_perceptual_roughness,
+            anisotropy_strength: material.anisotropy_strength,
+            anisotropy_rotation: material.anisotropy_rotation,
             double_sided: material.double_sided,
+            cull_mode: material.cull_mode.map(|f| f.into()),
             unlit: material.unlit,
             fog_enabled: material.fog_enabled,
-            reflectance: material.reflectance,
+            depth_bias: material.depth_bias,
         }
     }
 
     /// Computes a hash key for material caching.
     pub fn cache_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        for c in self.base_color {
-            c.to_bits().hash(&mut hasher);
-        }
+        let hash_f32 = |h: &mut std::collections::hash_map::DefaultHasher, v: f32| {
+            v.to_bits().hash(h);
+        };
+        let hash_color = |h: &mut std::collections::hash_map::DefaultHasher, c: &[f32; 4]| {
+            for v in c {
+                v.to_bits().hash(h);
+            }
+        };
+
+        hash_color(&mut hasher, &self.base_color);
         self.base_color_texture.hash(&mut hasher);
-        for c in self.emissive {
-            c.to_bits().hash(&mut hasher);
-        }
+        hash_color(&mut hasher, &self.emissive);
         self.emissive_texture.hash(&mut hasher);
-        self.perceptual_roughness.to_bits().hash(&mut hasher);
-        self.metallic.to_bits().hash(&mut hasher);
-        self.metallic_roughness_texture.hash(&mut hasher);
-        self.normal_map_texture.hash(&mut hasher);
+        hash_f32(&mut hasher, self.emissive_exposure_weight);
         std::mem::discriminant(&self.alpha_mode).hash(&mut hasher);
         if let SerializableAlphaMode::Mask { cutoff } = self.alpha_mode {
             cutoff.to_bits().hash(&mut hasher);
         }
+        hash_f32(&mut hasher, self.perceptual_roughness);
+        hash_f32(&mut hasher, self.metallic);
+        hash_f32(&mut hasher, self.reflectance);
+        self.metallic_roughness_texture.hash(&mut hasher);
+        self.normal_map_texture.hash(&mut hasher);
+        self.flip_normal_map_y.hash(&mut hasher);
+        self.occlusion_texture.hash(&mut hasher);
+        hash_color(&mut hasher, &self.specular_tint);
+        hash_f32(&mut hasher, self.diffuse_transmission);
+        hash_f32(&mut hasher, self.specular_transmission);
+        hash_f32(&mut hasher, self.thickness);
+        hash_f32(&mut hasher, self.ior);
+        hash_f32(&mut hasher, self.attenuation_distance);
+        hash_color(&mut hasher, &self.attenuation_color);
+        hash_f32(&mut hasher, self.clearcoat);
+        hash_f32(&mut hasher, self.clearcoat_perceptual_roughness);
+        hash_f32(&mut hasher, self.anisotropy_strength);
+        hash_f32(&mut hasher, self.anisotropy_rotation);
         self.double_sided.hash(&mut hasher);
+        self.cull_mode.hash(&mut hasher);
         self.unlit.hash(&mut hasher);
         self.fog_enabled.hash(&mut hasher);
-        self.reflectance.to_bits().hash(&mut hasher);
+        hash_f32(&mut hasher, self.depth_bias);
         hasher.finish()
     }
 }
