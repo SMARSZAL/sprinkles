@@ -2,6 +2,11 @@
 name = "bevy_sprinkles"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "GPU particle system for Bevy"
+repository = "https://github.com/doceazedo/sprinkles"
+keywords = ["bevy", "particle-system", "particles", "vfx"]
+categories = ["game-development", "simulation"]
 
 [lints]
 workspace = true
