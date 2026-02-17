@@ -2,6 +2,8 @@ mod curve;
 mod gradient;
 mod particle_material;
 pub(crate) mod serde_helpers;
+/// Asset format version tracking and compatibility validation.
+pub mod versioning;
 
 pub use curve::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
 pub use gradient::{Gradient, GradientInterpolation, GradientStop, SolidOrGradientColor};
@@ -16,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use serde_helpers::*;
+use versioning::{VersionStatus, current_format_version};
 
 /// Asset loader for [`ParticleSystemAsset`] files in RON format.
 #[derive(Default, TypePath)]
@@ -31,6 +34,17 @@ pub enum ParticleSystemAssetLoaderError {
     /// The asset file contained invalid RON syntax.
     #[error("Could not parse RON: {0}")]
     Ron(#[from] ron::error::SpannedError),
+    /// The asset file has an unknown format version, likely from a newer Sprinkles.
+    #[error("Unknown sprinkles_version. You may need a newer version of Sprinkles.")]
+    UnknownVersion,
+    /// The asset file has a version that requires breaking changes to upgrade.
+    #[error("Asset version \"{found}\" is incompatible with current version \"{current}\". Manual migration is required.")]
+    IncompatibleVersion {
+        /// The version found in the asset file.
+        found: String,
+        /// The current format version.
+        current: String,
+    },
 }
 
 impl AssetLoader for ParticleSystemAssetLoader {
@@ -42,11 +56,29 @@ impl AssetLoader for ParticleSystemAssetLoader {
         &self,
         reader: &mut dyn Reader,
         _settings: &(),
-        _load_context: &mut LoadContext<'_>,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let asset = ron::de::from_bytes::<ParticleSystemAsset>(&bytes)?;
+        let mut asset = ron::de::from_bytes::<ParticleSystemAsset>(&bytes)?;
+
+        match asset.try_upgrade_version() {
+            VersionStatus::Current => {}
+            VersionStatus::Outdated { found, current } => {
+                let path = load_context.path();
+                warn!("{path:?}: loaded asset with sprinkles_version \"{found}\", current is \"{current}\"");
+            }
+            VersionStatus::Incompatible { found, current } => {
+                return Err(ParticleSystemAssetLoaderError::IncompatibleVersion {
+                    found,
+                    current: current.to_string(),
+                });
+            }
+            VersionStatus::Unknown => {
+                return Err(ParticleSystemAssetLoaderError::UnknownVersion);
+            }
+        }
+
         Ok(asset)
     }
 
@@ -1022,6 +1054,7 @@ pub struct ParticleSystemAuthors {
 /// or [`ParticleSystem2D`](crate::ParticleSystem2D) component to render the effect.
 #[derive(Asset, TypePath, Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleSystemAsset {
+    sprinkles_version: String,
     /// Display name for this particle system.
     pub name: String,
     /// Whether this is a 3D or 2D particle system.
@@ -1034,4 +1067,36 @@ pub struct ParticleSystemAsset {
     /// Optional attribution information.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authors: Option<ParticleSystemAuthors>,
+}
+
+impl ParticleSystemAsset {
+    /// Creates a new particle system asset with the current format version.
+    pub fn new(
+        name: String,
+        dimension: ParticleSystemDimension,
+        emitters: Vec<EmitterData>,
+        colliders: Vec<ColliderData>,
+        authors: Option<ParticleSystemAuthors>,
+    ) -> Self {
+        Self {
+            sprinkles_version: current_format_version().to_string(),
+            name,
+            dimension,
+            emitters,
+            colliders,
+            authors,
+        }
+    }
+
+    /// Validates this asset's `sprinkles_version` against the current format version.
+    ///
+    /// If the version is outdated but compatible, it is automatically upgraded.
+    /// Returns the original [`VersionStatus`] so the caller can react accordingly.
+    pub fn try_upgrade_version(&mut self) -> VersionStatus {
+        let status = versioning::validate_version(&self.sprinkles_version);
+        if matches!(status, VersionStatus::Outdated { .. }) {
+            self.sprinkles_version = current_format_version().to_string();
+        }
+        status
+    }
 }

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
 
+use bevy_sprinkles::asset::versioning::{self, VersionStatus};
 use bevy_sprinkles::asset::{ParticleSystemAsset, ParticleSystemAssetLoader};
 
 #[derive(Asset, TypePath, Debug, Serialize, Deserialize, PartialEq)]
@@ -124,7 +125,7 @@ fn test_bevy_loads_valid_ron_particle_system() {
     assert_eq!(asset.name, "Test Particle System");
     assert_eq!(asset.emitters.len(), 1);
     assert_eq!(asset.emitters[0].name, "Test Emitter");
-    assert_eq!(asset.emitters[0].amount, 16);
+    assert_eq!(asset.emitters[0].emission.particles_amount, 16);
 }
 
 #[test]
@@ -145,7 +146,7 @@ fn test_bevy_loads_valid_whatever_extension_particle_system() {
     let asset = assets.get(&handle).expect("Asset should be available");
 
     assert_eq!(asset.name, "Test Particle System (Whatever Extension)");
-    assert_eq!(asset.emitters[0].amount, 8);
+    assert_eq!(asset.emitters[0].emission.particles_amount, 8);
 }
 
 #[test]
@@ -249,4 +250,72 @@ fn test_dummy_data_loader_extension() {
     let loader = DummyDataAssetLoader;
     let extensions = loader.extensions();
     assert_eq!(extensions, &["ron"]);
+}
+
+#[test]
+fn test_outdated_version_loads_successfully() {
+    let mut app = create_test_app();
+
+    let handle: Handle<ParticleSystemAsset> = {
+        let asset_server = app.world().resource::<AssetServer>();
+        asset_server.load("outdated_particle_system.ron")
+    };
+
+    assert!(
+        run_until_loaded(&mut app, &handle, 100),
+        "Should load outdated but compatible particle system"
+    );
+
+    let assets = app.world().resource::<Assets<ParticleSystemAsset>>();
+    let asset = assets.get(&handle).expect("Asset should be available");
+    assert_eq!(asset.name, "Outdated Particle System");
+}
+
+#[test]
+fn test_unknown_version_fails_to_load() {
+    let mut app = create_test_app();
+
+    let handle: Handle<ParticleSystemAsset> = {
+        let asset_server = app.world().resource::<AssetServer>();
+        asset_server.load("unknown_version_particle_system.ron")
+    };
+
+    assert!(
+        run_until_failed(&mut app, &handle, 100),
+        "Should fail to load particle system with unknown version"
+    );
+}
+
+#[test]
+fn test_validate_version_current() {
+    let current = versioning::current_format_version();
+    assert!(matches!(
+        versioning::validate_version(current),
+        VersionStatus::Current
+    ));
+}
+
+#[test]
+fn test_validate_version_outdated() {
+    assert!(matches!(
+        versioning::validate_version("0.0"),
+        VersionStatus::Outdated { .. }
+    ));
+}
+
+#[test]
+fn test_validate_version_unknown() {
+    assert!(matches!(
+        versioning::validate_version("99.99"),
+        VersionStatus::Unknown
+    ));
+}
+
+#[test]
+fn test_validate_version_incompatible() {
+    // with current FORMAT_VERSIONS (0.0 non-breaking, 0.1 non-breaking), there is
+    // no incompatible path. verify the logic by checking that can_auto_upgrade
+    // returns false when the target version is unknown (simulating a gap).
+    assert!(!versioning::can_auto_upgrade("0.0", "99.99"));
+    assert!(!versioning::can_auto_upgrade("99.99", "0.1"));
 }

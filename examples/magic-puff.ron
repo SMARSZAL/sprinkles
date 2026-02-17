@@ -1,4 +1,5 @@
 (
+    sprinkles_version: "0.1",
     name: "Magic Puff",
     dimension: D3,
     emitters: [

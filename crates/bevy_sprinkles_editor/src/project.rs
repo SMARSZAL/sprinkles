@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
+use bevy_sprinkles::asset::versioning::VersionStatus;
 use bevy_sprinkles::prelude::*;
 
 use crate::io::{EditorData, project_path, save_editor_data, working_dir};
@@ -74,12 +75,39 @@ fn on_open_project_event(
     let location = &event.0;
     let path = project_path(location);
 
-    let Some(asset) = load_project_from_path(&path) else {
+    let Some(mut asset) = load_project_from_path(&path) else {
         commands.trigger(ToastEvent::error(format!(
             "Failed to open project: {location}"
         )));
         return;
     };
+
+    let filename = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| location.clone());
+
+    match asset.try_upgrade_version() {
+        VersionStatus::Current => {}
+        VersionStatus::Outdated { current, .. } => {
+            dirty_state.has_unsaved_changes = true;
+            commands.trigger(ToastEvent::success(format!(
+                "Project \"{filename}\" will be updated to {current} on the next save"
+            )));
+        }
+        VersionStatus::Incompatible { found, current } => {
+            commands.trigger(ToastEvent::error(format!(
+                "Project \"{filename}\" (version {found}) is incompatible with Sprinkles {current}"
+            )));
+            return;
+        }
+        VersionStatus::Unknown => {
+            commands.trigger(ToastEvent::error(format!(
+                "Project \"{filename}\" has an unknown version. You may need to update Sprinkles."
+            )));
+            return;
+        }
+    }
 
     let has_emitters = !asset.emitters.is_empty();
     let handle = assets.add(asset);

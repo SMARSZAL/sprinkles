@@ -800,16 +800,16 @@ fn handle_create_project(
         let _ = std::fs::create_dir_all(parent);
     }
 
-    let asset = bevy_sprinkles::asset::ParticleSystemAsset {
+    let asset = bevy_sprinkles::asset::ParticleSystemAsset::new(
         name,
-        dimension: bevy_sprinkles::asset::ParticleSystemDimension::D3,
-        emitters: vec![bevy_sprinkles::asset::EmitterData {
+        bevy_sprinkles::asset::ParticleSystemDimension::D3,
+        vec![bevy_sprinkles::asset::EmitterData {
             name: "Emitter 1".to_string(),
             ..Default::default()
         }],
-        colliders: vec![],
-        authors: None,
-    };
+        vec![],
+        None,
+    );
 
     let result = Arc::new(Mutex::new(None));
     save_project_to_path(path.clone(), &asset, result.clone());

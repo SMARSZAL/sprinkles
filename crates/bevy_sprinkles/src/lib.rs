@@ -62,10 +62,10 @@
 //! use bevy_sprinkles::prelude::*;
 //!
 //! fn setup(mut commands: Commands, mut assets: ResMut<Assets<ParticleSystemAsset>>) {
-//!     let handle = assets.add(ParticleSystemAsset {
-//!         name: "My Effect".into(),
-//!         dimension: ParticleSystemDimension::D3,
-//!         emitters: vec![EmitterData {
+//!     let handle = assets.add(ParticleSystemAsset::new(
+//!         "My Effect".into(),
+//!         ParticleSystemDimension::D3,
+//!         vec![EmitterData {
 //!             emission: EmitterEmission {
 //!                 particles_amount: 32,
 //!                 ..default()
@@ -77,8 +77,9 @@
 //!             },
 //!             ..default()
 //!         }],
-//!         colliders: vec![],
-//!     });
+//!         vec![],
+//!         None,
+//!     ));
 //!
 //!     commands.spawn(ParticleSystem3D { handle });
 //! }

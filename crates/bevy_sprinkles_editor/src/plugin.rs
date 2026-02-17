@@ -131,16 +131,16 @@ fn load_initial_project(
         }
     }
 
-    let asset = bevy_sprinkles::asset::ParticleSystemAsset {
-        name: "New project".to_string(),
-        dimension: bevy_sprinkles::asset::ParticleSystemDimension::D3,
-        emitters: vec![bevy_sprinkles::asset::EmitterData {
+    let asset = bevy_sprinkles::asset::ParticleSystemAsset::new(
+        "New project".to_string(),
+        bevy_sprinkles::asset::ParticleSystemDimension::D3,
+        vec![bevy_sprinkles::asset::EmitterData {
             name: "Emitter 1".to_string(),
             ..Default::default()
         }],
-        colliders: vec![],
-        authors: None,
-    };
+        vec![],
+        None,
+    );
     let handle = assets.add(asset);
     editor_state.current_project = Some(handle);
     editor_state.inspecting = Some(Inspecting {
