@@ -247,11 +247,14 @@ fn handle_trigger_click(
                     .with_left_icon(ICON_FOLDER_OPEN),
             ),
         ))
-        .with_child(button(
-            ButtonProps::new("Examples")
-                .with_variant(ButtonVariant::Ghost)
-                .align_left()
-                .with_left_icon(ICON_FOLDER_IMAGE),
+        .with_child((
+            crate::ui::components::examples_dialog::ExamplesButton,
+            button(
+                ButtonProps::new("Examples")
+                    .with_variant(ButtonVariant::Ghost)
+                    .align_left()
+                    .with_left_icon(ICON_FOLDER_IMAGE),
+            ),
         ))
         .id();
 
@@ -805,6 +808,7 @@ fn handle_create_project(
             ..Default::default()
         }],
         colliders: vec![],
+        authors: None,
     };
 
     let result = Arc::new(Mutex::new(None));

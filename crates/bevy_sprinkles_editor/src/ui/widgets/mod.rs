@@ -12,6 +12,7 @@ pub mod link;
 pub mod panel;
 pub mod panel_section;
 pub mod popover;
+pub mod scroll;
 pub mod separator;
 pub mod text_edit;
 pub mod texture_edit;

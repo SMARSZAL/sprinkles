@@ -1005,6 +1005,16 @@ impl Default for ColliderData {
     }
 }
 
+/// Attribution information for a particle system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleSystemAuthors {
+    /// The original creator this effect was inspired by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspired_by: Option<String>,
+    /// The person who submitted or ported this effect.
+    pub submitted_by: String,
+}
+
 /// A complete particle system asset, loadable from RON files.
 ///
 /// Contains one or more emitters and optional colliders that together define a
@@ -1021,4 +1031,7 @@ pub struct ParticleSystemAsset {
     /// Optional colliders that particles can interact with.
     #[serde(default)]
     pub colliders: Vec<ColliderData>,
+    /// Optional attribution information.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authors: Option<ParticleSystemAuthors>,
 }

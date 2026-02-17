@@ -139,6 +139,7 @@ fn load_initial_project(
             ..Default::default()
         }],
         colliders: vec![],
+        authors: None,
     };
     let handle = assets.add(asset);
     editor_state.current_project = Some(handle);

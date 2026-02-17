@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_easings::{CustomComponentEase, EaseFunction, EasingComponent, EasingType, Lerp};
 
@@ -25,6 +26,7 @@ pub fn plugin(app: &mut App) {
         .add_observer(on_action_button_click)
         .add_observer(on_cancel_button_click)
         .add_observer(on_close_button_click)
+        .add_observer(on_close_dialog)
         .add_systems(
             Update,
             (
@@ -87,6 +89,9 @@ pub struct DialogActionEvent {
 }
 
 #[derive(Event)]
+pub struct CloseDialogEvent;
+
+#[derive(Event)]
 pub struct OpenDialogEvent {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -96,6 +101,8 @@ pub struct OpenDialogEvent {
     pub has_close_button: bool,
     pub close_on_click_outside: bool,
     pub close_on_esc: bool,
+    pub max_width: Option<Val>,
+    pub content_padding: UiRect,
 }
 
 impl OpenDialogEvent {
@@ -109,6 +116,8 @@ impl OpenDialogEvent {
             has_close_button: true,
             close_on_click_outside: true,
             close_on_esc: true,
+            max_width: None,
+            content_padding: UiRect::all(px(24)),
         }
     }
 
@@ -154,6 +163,16 @@ impl OpenDialogEvent {
 
     pub fn with_close_on_esc(mut self, close_on_esc: bool) -> Self {
         self.close_on_esc = close_on_esc;
+        self
+    }
+
+    pub fn with_max_width(mut self, max_width: Val) -> Self {
+        self.max_width = Some(max_width);
+        self
+    }
+
+    pub fn without_content_padding(mut self) -> Self {
+        self.content_padding = UiRect::ZERO;
         self
     }
 }
@@ -222,6 +241,9 @@ impl Lerp for DialogVisual {
 
 #[derive(Component)]
 struct PromptBaseAlpha(f32);
+
+#[derive(Component)]
+struct BaseBgAlpha(f32);
 
 #[derive(Component)]
 struct DespawningDialog;
@@ -359,7 +381,7 @@ fn spawn_dialog(commands: &mut Commands, asset_server: &AssetServer, event: &Ope
         Interaction::None,
         Node {
             width: percent(100),
-            max_width: px(448),
+            max_width: event.max_width.unwrap_or(px(448)),
             border: UiRect::all(px(1)),
             border_radius: BorderRadius::all(px(6)),
             flex_direction: FlexDirection::Column,
@@ -381,7 +403,7 @@ fn spawn_dialog(commands: &mut Commands, asset_server: &AssetServer, event: &Ope
         DialogChildrenSlot,
         Node {
             display: Display::None,
-            padding: UiRect::all(px(24)),
+            padding: event.content_padding,
             border: UiRect::bottom(px(1)),
             flex_direction: FlexDirection::Column,
             row_gap: px(12),
@@ -467,23 +489,125 @@ fn dismiss_dialog(commands: &mut Commands, entity: Entity, visual: &DialogVisual
     ));
 }
 
+#[derive(SystemParam)]
+struct AlphaQueries<'w, 's> {
+    transforms: Query<'w, 's, &'static mut UiTransform>,
+    bg_colors: Query<'w, 's, &'static mut BackgroundColor>,
+    border_colors: Query<'w, 's, &'static mut BorderColor>,
+    text_colors: Query<'w, 's, &'static mut TextColor>,
+    image_nodes: Query<'w, 's, &'static mut ImageNode>,
+    prompts: Query<'w, 's, (Entity, &'static mut TextInputPrompt)>,
+    base_alphas: Query<'w, 's, &'static PromptBaseAlpha>,
+    base_bg_alphas: Query<'w, 's, &'static BaseBgAlpha>,
+    children: Query<'w, 's, &'static Children>,
+    buttons: Query<'w, 's, &'static ButtonVariant, With<EditorButton>>,
+}
+
+impl AlphaQueries<'_, '_> {
+    fn apply_recursive(
+        &mut self,
+        entity: Entity,
+        alpha: f32,
+        pending_base_bg: &mut Vec<(Entity, f32)>,
+    ) {
+        if let Ok(variant) = self.buttons.get(entity) {
+            if let Ok(mut bg) = self.bg_colors.get_mut(entity) {
+                bg.0 = variant
+                    .bg_color(false)
+                    .with_alpha(variant.bg_opacity(false) * alpha)
+                    .into();
+            }
+            if let Ok(mut border) = self.border_colors.get_mut(entity) {
+                *border = BorderColor::all(
+                    variant
+                        .border_color()
+                        .with_alpha(variant.border_opacity(false) * alpha),
+                );
+            }
+        } else {
+            if let Ok(mut bg) = self.bg_colors.get_mut(entity) {
+                let base: Srgba = bg.0.into();
+                let base_alpha = if let Ok(stored) = self.base_bg_alphas.get(entity) {
+                    stored.0
+                } else {
+                    pending_base_bg.push((entity, base.alpha));
+                    base.alpha
+                };
+                bg.0 = base.with_alpha(base_alpha * alpha).into();
+            }
+            if let Ok(mut border) = self.border_colors.get_mut(entity) {
+                let base: Srgba = border.top.into();
+                *border = BorderColor::all(base.with_alpha(alpha));
+            }
+        }
+
+        if let Ok(mut text_color) = self.text_colors.get_mut(entity) {
+            let base: Srgba = text_color.0.into();
+            text_color.0 = base.with_alpha(alpha).into();
+        }
+
+        if let Ok(mut image) = self.image_nodes.get_mut(entity) {
+            let base: Srgba = image.color.into();
+            image.color = base.with_alpha(alpha).into();
+        }
+
+        if let Ok((_, mut prompt)) = self.prompts.get_mut(entity) {
+            if let Some(color) = &mut prompt.color {
+                let base: Srgba = (*color).into();
+                let base_alpha = self
+                    .base_alphas
+                    .get(entity)
+                    .map(|b| b.0)
+                    .unwrap_or(base.alpha);
+                *color = base.with_alpha(base_alpha * alpha).into();
+            }
+        }
+
+        if let Ok(children) = self.children.get(entity) {
+            let children: Vec<Entity> = children.iter().collect();
+            for child in children {
+                self.apply_recursive(child, alpha, pending_base_bg);
+            }
+        }
+    }
+
+    fn sync_panel(
+        &mut self,
+        panel: Entity,
+        visual: &DialogVisual,
+        alpha: f32,
+        pending_base_bg: &mut Vec<(Entity, f32)>,
+    ) {
+        if let Ok(mut transform) = self.transforms.get_mut(panel) {
+            transform.scale = visual.scale;
+            transform.translation.y = px(visual.offset_y);
+        }
+
+        if let Ok(mut bg) = self.bg_colors.get_mut(panel) {
+            bg.0 = BACKGROUND_COLOR.with_alpha(alpha).into();
+        }
+        if let Ok(mut border) = self.border_colors.get_mut(panel) {
+            *border = BorderColor::all(BORDER_COLOR.with_alpha(alpha));
+        }
+
+        if let Ok(children) = self.children.get(panel) {
+            let children: Vec<Entity> = children.iter().collect();
+            for child in children {
+                self.apply_recursive(child, alpha, pending_base_bg);
+            }
+        }
+    }
+}
+
 fn sync_dialog_visual(
     dialogs: Query<(&DialogVisual, &Children), Changed<DialogVisual>>,
     mut commands: Commands,
-    mut transforms: Query<&mut UiTransform>,
-    mut bg_colors: Query<&mut BackgroundColor>,
-    mut border_colors: Query<&mut BorderColor>,
-    mut text_colors: Query<&mut TextColor>,
-    mut image_nodes: Query<&mut ImageNode>,
-    mut prompts: Query<(Entity, &mut TextInputPrompt)>,
-    base_alphas: Query<&PromptBaseAlpha>,
-    children_query: Query<&Children>,
+    mut alpha_queries: AlphaQueries,
     backdrop_query: Query<Entity, With<DialogBackdrop>>,
-    buttons: Query<(&ButtonVariant, &Children), With<EditorButton>>,
 ) {
     if !dialogs.is_empty() {
-        for (entity, prompt) in &prompts {
-            if base_alphas.contains(entity) {
+        for (entity, prompt) in &alpha_queries.prompts {
+            if alpha_queries.base_alphas.contains(entity) {
                 continue;
             }
             if let Some(color) = prompt.color {
@@ -493,6 +617,8 @@ fn sync_dialog_visual(
         }
     }
 
+    let mut pending_base_bg = Vec::new();
+
     for (visual, dialog_children) in &dialogs {
         let alpha = visual.opacity;
 
@@ -501,72 +627,24 @@ fn sync_dialog_visual(
                 continue;
             }
 
-            if let Ok(mut bg) = bg_colors.get_mut(child) {
+            if let Ok(mut bg) = alpha_queries.bg_colors.get_mut(child) {
                 bg.0 = Color::BLACK.with_alpha(BACKDROP_TARGET_OPACITY * alpha);
             }
 
-            let Ok(backdrop_children) = children_query.get(child) else {
+            let Ok(backdrop_children) = alpha_queries.children.get(child) else {
                 continue;
             };
+            let panels: Vec<Entity> = backdrop_children.iter().collect();
 
-            for panel in backdrop_children.iter() {
-                sync_panel_visual(
-                    panel,
-                    visual,
-                    alpha,
-                    &mut transforms,
-                    &mut bg_colors,
-                    &mut border_colors,
-                    &mut text_colors,
-                    &mut image_nodes,
-                    &mut prompts,
-                    &base_alphas,
-                    &children_query,
-                    &buttons,
-                );
+            for panel in panels {
+                alpha_queries.sync_panel(panel, visual, alpha, &mut pending_base_bg);
             }
         }
     }
-}
 
-fn sync_panel_visual(
-    panel: Entity,
-    visual: &DialogVisual,
-    alpha: f32,
-    transforms: &mut Query<&mut UiTransform>,
-    bg_colors: &mut Query<&mut BackgroundColor>,
-    border_colors: &mut Query<&mut BorderColor>,
-    text_colors: &mut Query<&mut TextColor>,
-    image_nodes: &mut Query<&mut ImageNode>,
-    prompts: &mut Query<(Entity, &mut TextInputPrompt)>,
-    base_alphas: &Query<&PromptBaseAlpha>,
-    children_query: &Query<&Children>,
-    buttons: &Query<(&ButtonVariant, &Children), With<EditorButton>>,
-) {
-    if let Ok(mut transform) = transforms.get_mut(panel) {
-        transform.scale = visual.scale;
-        transform.translation.y = px(visual.offset_y);
+    for (entity, alpha) in pending_base_bg {
+        commands.entity(entity).insert(BaseBgAlpha(alpha));
     }
-
-    if let Ok(mut bg) = bg_colors.get_mut(panel) {
-        bg.0 = BACKGROUND_COLOR.with_alpha(alpha).into();
-    }
-    if let Ok(mut border) = border_colors.get_mut(panel) {
-        *border = BorderColor::all(BORDER_COLOR.with_alpha(alpha));
-    }
-
-    apply_alpha_recursive(
-        panel,
-        alpha,
-        children_query,
-        text_colors,
-        image_nodes,
-        bg_colors,
-        border_colors,
-        prompts,
-        base_alphas,
-        buttons,
-    );
 }
 
 fn sync_children_slot_visibility(
@@ -578,106 +656,6 @@ fn sync_children_slot_visibility(
         } else {
             Display::Flex
         };
-    }
-}
-
-fn apply_button_alpha(
-    entity: Entity,
-    alpha: f32,
-    variant: &ButtonVariant,
-    button_children: &Children,
-    bg_colors: &mut Query<&mut BackgroundColor>,
-    border_colors: &mut Query<&mut BorderColor>,
-    text_colors: &mut Query<&mut TextColor>,
-    image_nodes: &mut Query<&mut ImageNode>,
-) {
-    if let Ok(mut bg) = bg_colors.get_mut(entity) {
-        bg.0 = variant
-            .bg_color(false)
-            .with_alpha(variant.bg_opacity(false) * alpha)
-            .into();
-    }
-    if let Ok(mut border) = border_colors.get_mut(entity) {
-        *border = BorderColor::all(
-            variant
-                .border_color()
-                .with_alpha(variant.border_opacity(false) * alpha),
-        );
-    }
-    for btn_child in button_children.iter() {
-        if let Ok(mut text_color) = text_colors.get_mut(btn_child) {
-            text_color.0 = variant.text_color().with_alpha(alpha).into();
-        }
-        if let Ok(mut image) = image_nodes.get_mut(btn_child) {
-            image.color = variant.text_color().with_alpha(alpha).into();
-        }
-    }
-}
-
-fn apply_alpha_recursive(
-    entity: Entity,
-    alpha: f32,
-    children_query: &Query<&Children>,
-    text_colors: &mut Query<&mut TextColor>,
-    image_nodes: &mut Query<&mut ImageNode>,
-    bg_colors: &mut Query<&mut BackgroundColor>,
-    border_colors: &mut Query<&mut BorderColor>,
-    prompts: &mut Query<(Entity, &mut TextInputPrompt)>,
-    base_alphas: &Query<&PromptBaseAlpha>,
-    buttons: &Query<(&ButtonVariant, &Children), With<EditorButton>>,
-) {
-    if let Ok((variant, button_children)) = buttons.get(entity) {
-        apply_button_alpha(
-            entity,
-            alpha,
-            variant,
-            button_children,
-            bg_colors,
-            border_colors,
-            text_colors,
-            image_nodes,
-        );
-        return;
-    }
-
-    if let Ok(mut text_color) = text_colors.get_mut(entity) {
-        let base: Srgba = text_color.0.into();
-        text_color.0 = base.with_alpha(alpha).into();
-    }
-
-    if let Ok(mut image) = image_nodes.get_mut(entity) {
-        let base: Srgba = image.color.into();
-        image.color = base.with_alpha(alpha).into();
-    }
-
-    if let Ok(mut border) = border_colors.get_mut(entity) {
-        let base: Srgba = border.top.into();
-        *border = BorderColor::all(base.with_alpha(alpha));
-    }
-
-    if let Ok((_, mut prompt)) = prompts.get_mut(entity) {
-        if let Some(color) = &mut prompt.color {
-            let base: Srgba = (*color).into();
-            let base_alpha = base_alphas.get(entity).map(|b| b.0).unwrap_or(base.alpha);
-            *color = base.with_alpha(base_alpha * alpha).into();
-        }
-    }
-
-    if let Ok(children) = children_query.get(entity) {
-        for child in children.iter() {
-            apply_alpha_recursive(
-                child,
-                alpha,
-                children_query,
-                text_colors,
-                image_nodes,
-                bg_colors,
-                border_colors,
-                prompts,
-                base_alphas,
-                buttons,
-            );
-        }
     }
 }
 
@@ -724,6 +702,16 @@ fn handle_esc_key(
         if config.close_on_esc {
             dismiss_dialog(&mut commands, entity, visual);
         }
+    }
+}
+
+fn on_close_dialog(
+    _event: On<CloseDialogEvent>,
+    dialogs: Query<(Entity, &DialogVisual), (With<EditorDialog>, Without<DespawningDialog>)>,
+    mut commands: Commands,
+) {
+    for (entity, visual) in &dialogs {
+        dismiss_dialog(&mut commands, entity, visual);
     }
 }
 

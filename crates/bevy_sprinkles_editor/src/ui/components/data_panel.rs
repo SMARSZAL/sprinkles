@@ -11,7 +11,8 @@ use crate::ui::widgets::combobox::{
     ComboBoxChangeEvent, ComboBoxPopover, ComboBoxTrigger, combobox_icon,
 };
 use crate::ui::widgets::dialog::{DialogActionEvent, EditorDialog, OpenConfirmationDialogEvent};
-use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_scrollbar};
+use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel};
+use crate::ui::widgets::scroll::scrollbar;
 use crate::ui::widgets::panel_section::{PanelSectionProps, panel_section};
 use crate::ui::widgets::text_edit::{
     EditorTextEdit, TextEditCommitEvent, TextEditProps, text_edit,
@@ -113,7 +114,7 @@ fn setup_data_panel(
     for panel_entity in &panels {
         commands
             .entity(panel_entity)
-            .with_child(panel_scrollbar(panel_entity))
+            .with_child(scrollbar(panel_entity))
             .with_children(|parent| {
                 parent
                     .spawn((

@@ -27,7 +27,8 @@ use crate::ui::tokens::{
 use crate::ui::widgets::checkbox::{CheckboxProps, checkbox};
 use crate::ui::widgets::combobox::{ComboBoxOptionData, combobox_with_selected};
 use crate::ui::widgets::inspector_field::{InspectorFieldProps, fields_row, spawn_inspector_field};
-use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel, panel_scrollbar};
+use crate::ui::widgets::panel::{PanelDirection, PanelProps, panel};
+use crate::ui::widgets::scroll::scrollbar;
 use crate::ui::widgets::panel_section::{PanelSectionProps, PanelSectionSize, panel_section};
 use crate::ui::widgets::variant_edit::{VariantEditProps, variant_edit};
 
@@ -160,7 +161,7 @@ fn setup_inspector_panel(
     for panel_entity in &panels {
         commands
             .entity(panel_entity)
-            .with_child(panel_scrollbar(panel_entity))
+            .with_child(scrollbar(panel_entity))
             .with_children(|parent| {
                 parent.spawn(panel_title(&asset_server));
 
