@@ -6,6 +6,7 @@ use crate::ui::widgets::inspector_field::InspectorFieldProps;
 use crate::ui::widgets::variant_edit::{VariantDefinition, VariantEditProps};
 use crate::ui::widgets::vector_edit::VectorSuffixes;
 
+use super::types::{FieldKind, VariantField};
 use super::utils::{VariantConfig, combobox_options_from_reflect, variants_from_reflect};
 use super::{InspectorItem, InspectorSection, inspector_section};
 use crate::ui::icons::{
@@ -133,6 +134,20 @@ fn material_variants() -> Vec<VariantDefinition> {
             VariantConfig::default()
                 .fields_from::<StandardParticleMaterial>()
                 .override_combobox::<SerializableAlphaMode>("alpha_mode")
+                .override_optional_combobox::<SerializableFace>("cull_mode")
+                .override_field(
+                    "perceptual_roughness",
+                    VariantField::f32("perceptual_roughness")
+                        .with_min(0.089)
+                        .with_max(1.0),
+                )
+                .override_field("metallic", VariantField::percent("metallic"))
+                .override_field("reflectance", VariantField::percent("reflectance"))
+                .override_field(
+                    "attenuation_distance",
+                    VariantField::new("attenuation_distance")
+                        .with_kind(FieldKind::F32OrInfinity),
+                )
                 .override_rows(vec![
                     vec!["base_color", "base_color_texture"],
                     vec!["emissive", "emissive_texture"],

@@ -384,6 +384,7 @@ impl FieldValue {
                     let display = (v * 100.0 * 100.0).round() / 100.0;
                     Some(format_f32(display))
                 }
+                FieldKind::F32OrInfinity if v.is_infinite() => None,
                 _ => Some(format_f32(*v)),
             },
             FieldValue::U32(v) => match kind {
@@ -433,7 +434,7 @@ pub(super) fn format_f32(v: f32) -> String {
 pub(super) fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
     let text = text.trim();
     match kind {
-        FieldKind::F32 | FieldKind::F32Percent => {
+        FieldKind::F32 | FieldKind::F32Percent | FieldKind::F32OrInfinity => {
             let parsed: Option<f32> = match kind {
                 FieldKind::F32Percent => text
                     .trim_end_matches('%')
@@ -441,6 +442,7 @@ pub(super) fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
                     .parse()
                     .ok()
                     .map(|v: f32| v / 100.0),
+                FieldKind::F32OrInfinity if text.is_empty() => Some(f32::INFINITY),
                 _ => text.trim_end_matches('s').trim().parse().ok(),
             };
             parsed.map(FieldValue::F32).unwrap_or(FieldValue::None)

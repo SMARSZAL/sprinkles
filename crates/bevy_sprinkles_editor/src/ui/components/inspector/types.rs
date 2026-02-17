@@ -5,6 +5,7 @@ pub enum FieldKind {
     #[default]
     F32,
     F32Percent,
+    F32OrInfinity,
     U32,
     U32OrEmpty,
     OptionalU32,
@@ -25,6 +26,8 @@ pub enum FieldKind {
 pub struct VariantField {
     pub name: String,
     pub kind: FieldKind,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
 }
 
 impl VariantField {
@@ -32,6 +35,8 @@ impl VariantField {
         Self {
             name: name.into(),
             kind: FieldKind::default(),
+            min: None,
+            max: None,
         }
     }
 
@@ -58,6 +63,13 @@ impl VariantField {
         })
     }
 
+    pub fn optional_combobox(name: impl Into<String>, options: Vec<impl Into<String>>) -> Self {
+        Self::new(name).with_kind(FieldKind::ComboBox {
+            options: options.into_iter().map(Into::into).collect(),
+            optional: true,
+        })
+    }
+
     pub fn color(name: impl Into<String>) -> Self {
         Self::new(name).with_kind(FieldKind::Color)
     }
@@ -74,8 +86,22 @@ impl VariantField {
         Self::new(name).with_kind(FieldKind::TextureRef)
     }
 
+    pub fn percent(name: impl Into<String>) -> Self {
+        Self::new(name).with_kind(FieldKind::F32Percent)
+    }
+
     pub fn with_kind(mut self, kind: FieldKind) -> Self {
         self.kind = kind;
+        self
+    }
+
+    pub fn with_min(mut self, min: f64) -> Self {
+        self.min = Some(min);
+        self
+    }
+
+    pub fn with_max(mut self, max: f64) -> Self {
+        self.max = Some(max);
         self
     }
 }

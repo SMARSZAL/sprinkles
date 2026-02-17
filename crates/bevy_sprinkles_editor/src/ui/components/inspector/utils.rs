@@ -101,6 +101,16 @@ impl VariantConfig {
         self.override_field(name, VariantField::combobox(name, options))
     }
 
+    pub fn override_optional_combobox<T: Typed>(self, name: &'static str) -> Self {
+        let mut options = vec!["Disabled".to_string()];
+        options.extend(
+            combobox_options_from_reflect::<T>()
+                .iter()
+                .map(|o| o.label.clone()),
+        );
+        self.override_field(name, VariantField::optional_combobox(name, options))
+    }
+
     pub fn override_suffixes(mut self, name: &'static str, suffixes: VectorSuffixes) -> Self {
         self.suffix_overrides.push((name, suffixes));
         self

@@ -654,6 +654,7 @@
                     perceptual_roughness: 0.5,
                     reflectance: 0.5,
                     double_sided: true,
+                    cull_mode: None,
                     unlit: true,
                 )),
                 shadow_caster: false,

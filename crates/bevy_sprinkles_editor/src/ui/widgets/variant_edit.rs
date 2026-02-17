@@ -760,7 +760,7 @@ fn spawn_variant_fields_for_entity(
                 FieldBinding::emitter_variant(path, &field.name, field.kind.clone(), variant_edit);
 
             let field_entity =
-                spawn_field_widget(commands, asset_server, &field.kind, label, binding);
+                spawn_field_widget(commands, asset_server, field, label, binding);
             commands.entity(row_entity).add_child(field_entity);
         }
     }
@@ -769,17 +769,31 @@ fn spawn_variant_fields_for_entity(
 fn spawn_field_widget(
     commands: &mut Commands,
     asset_server: &AssetServer,
-    kind: &FieldKind,
+    field: &VariantField,
     label: String,
     binding: FieldBinding,
 ) -> Entity {
+    let kind = &field.kind;
     match kind {
-        FieldKind::F32 | FieldKind::F32Percent => commands
-            .spawn((
-                binding,
-                text_edit(TextEditProps::default().with_label(label).numeric_f32()),
-            ))
-            .id(),
+        FieldKind::F32 | FieldKind::F32Percent | FieldKind::F32OrInfinity => {
+            let mut props = TextEditProps::default().with_label(label).numeric_f32();
+            match kind {
+                FieldKind::F32Percent => {
+                    props = props.with_suffix("%").with_min(0.0).with_max(100.0);
+                }
+                FieldKind::F32OrInfinity => {
+                    props = props.with_placeholder("∞").allow_empty();
+                }
+                _ => {}
+            }
+            if let Some(min) = field.min {
+                props = props.with_min(min);
+            }
+            if let Some(max) = field.max {
+                props = props.with_max(max);
+            }
+            commands.spawn((binding, text_edit(props))).id()
+        }
 
         FieldKind::U32 | FieldKind::U32OrEmpty | FieldKind::OptionalU32 => commands
             .spawn((
