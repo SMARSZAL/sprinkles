@@ -75,7 +75,7 @@ Then run it from anywhere with the `sprinkles` command.
 
 ## Documentation
 
-Documentation is available at [docs.rs](https://docs.rs/bevy/latest/bevy_sprinkles).
+Documentation is available at [docs.rs](https://docs.rs/bevy_sprinkles/latest/bevy_sprinkles/).
 
 ## Bevy version table
 
