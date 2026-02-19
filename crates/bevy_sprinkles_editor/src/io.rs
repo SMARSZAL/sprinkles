@@ -81,8 +81,11 @@ fn editor_data_path() -> PathBuf {
 
 pub fn project_path(relative_path: &str) -> PathBuf {
     let p = PathBuf::from(relative_path);
+
     if p.is_absolute() {
         p
+    } else if p.starts_with("~") {
+        PathBuf::from(shellexpand::tilde(relative_path).to_string())
     } else {
         data_dir().join(relative_path)
     }
