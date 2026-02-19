@@ -1,7 +1,6 @@
 (
     sprinkles_version: "0.1",
     name: "Windy Snow",
-    author: "olekspickle",
     dimension: D3,
     emitters: [
         (
@@ -201,4 +200,7 @@
         ),
     ],
     colliders: [],
+    authors: Some((
+        submitted_by: "olekspickle",
+    )),
 )
