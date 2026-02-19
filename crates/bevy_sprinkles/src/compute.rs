@@ -22,6 +22,7 @@ use bevy::{
 use std::borrow::Cow;
 
 use bevy::render::render_resource::ShaderType;
+use bevy::shader::PipelineCacheError;
 
 use crate::extract::{
     ColliderUniform, EmitterUniforms, ExtractedColliders, ExtractedEmitterData,
@@ -378,9 +379,12 @@ impl render_graph::Node for ParticleComputeNode {
             CachedPipelineState::Ok(_) => {
                 self.ready = true;
             }
-            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => {}
+            CachedPipelineState::Queued
+            | CachedPipelineState::Creating(_)
+            | CachedPipelineState::Err(PipelineCacheError::ShaderNotLoaded(_))
+            | CachedPipelineState::Err(PipelineCacheError::ShaderImportNotYetAvailable) => {}
             CachedPipelineState::Err(err) => {
-                panic!("Failed to load particle compute shader: {err}")
+                panic!("Failed to compile particle compute shader: {err}")
             }
         }
     }
