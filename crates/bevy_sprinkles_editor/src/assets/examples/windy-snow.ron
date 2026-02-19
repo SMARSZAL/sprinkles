@@ -1,6 +1,7 @@
 (
     sprinkles_version: "0.1",
-    name: "velvet-fog",
+    name: "Windy Snow",
+    author: "olekspickle",
     dimension: D3,
     emitters: [
         (

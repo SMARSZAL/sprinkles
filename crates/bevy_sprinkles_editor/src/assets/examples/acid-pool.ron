@@ -1,6 +1,7 @@
 (
     sprinkles_version: "0.1",
-    name: "acid-cloud",
+    name: "Acid Pool",
+    author: "olekspickle",
     dimension: D3,
     emitters: [
         (
