@@ -1,9 +1,15 @@
 use bevy::prelude::*;
 use bevy_sprinkles::prelude::*;
 
+use crate::state::EditorState;
+use crate::ui::components::binding::{FieldBinding, get_inspecting_emitter};
 use crate::ui::widgets::combobox::ComboBoxOptionData;
 use crate::ui::widgets::inspector_field::InspectorFieldProps;
-use crate::ui::widgets::variant_edit::{VariantDefinition, VariantEditProps};
+use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
+use crate::ui::widgets::utils::find_ancestor;
+use crate::ui::widgets::variant_edit::{
+    VariantDefinition, VariantEditProps, VariantFieldsContainer,
+};
 use crate::ui::widgets::vector_edit::VectorSuffixes;
 
 use super::types::{FieldKind, VariantField};
@@ -13,7 +19,15 @@ use crate::ui::icons::{
     ICON_CONE, ICON_CUBE, ICON_MESH_CYLINDER, ICON_MESH_PLANE, ICON_MESH_UVSPHERE,
 };
 
-pub fn plugin(_app: &mut App) {}
+#[derive(Component)]
+struct MaskCutoffRow;
+
+pub fn plugin(app: &mut App) {
+    app.add_systems(
+        Update,
+        sync_mask_cutoff.after(super::update_inspected_emitter_tracker),
+    );
+}
 
 pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {
     inspector_section(
@@ -187,4 +201,139 @@ fn material_variants() -> Vec<VariantDefinition> {
             }),
         ),
     ])
+}
+
+fn find_ancestor_child_of(
+    entity: Entity,
+    target_parent: Entity,
+    parents: &Query<&ChildOf>,
+) -> Option<Entity> {
+    let mut current = entity;
+    for _ in 0..20 {
+        let parent = parents.get(current).ok()?.parent();
+        if parent == target_parent {
+            return Some(current);
+        }
+        current = parent;
+    }
+    None
+}
+
+fn extract_mask_cutoff(
+    editor_state: &EditorState,
+    assets: &Assets<ParticleSystemAsset>,
+) -> Option<f32> {
+    let (_, emitter) = get_inspecting_emitter(editor_state, assets)?;
+    let DrawPassMaterial::Standard(mat) = &emitter.draw_pass.material else {
+        return None;
+    };
+    let SerializableAlphaMode::Mask { cutoff } = mat.alpha_mode else {
+        return None;
+    };
+    Some(cutoff)
+}
+
+fn find_insertion_point(
+    bindings: &Query<(Entity, &FieldBinding)>,
+    parents: &Query<&ChildOf>,
+    children_query: &Query<&Children>,
+    containers: &Query<&VariantFieldsContainer>,
+) -> Option<(Entity, usize, Entity)> {
+    let (alpha_entity, _) = bindings
+        .iter()
+        .find(|(_, b)| b.path() == "draw_pass.material" && b.field_name() == Some("alpha_mode"))?;
+
+    let (container, _) = find_ancestor(alpha_entity, containers, parents)?;
+    let row = find_ancestor_child_of(alpha_entity, container, parents)?;
+    let container_children = children_query.get(container).ok()?;
+    let row_index = container_children.iter().position(|c| c == row)?;
+
+    Some((container, row_index, alpha_entity))
+}
+
+fn spawn_cutoff_row(
+    commands: &mut Commands,
+    cutoff: f32,
+    alpha_binding: &FieldBinding,
+    container: Entity,
+    row_index: usize,
+) {
+    let cutoff_binding = if let Some(ve) = alpha_binding.variant_edit {
+        FieldBinding::emitter_variant(
+            "draw_pass.material",
+            "alpha_mode.cutoff",
+            FieldKind::F32,
+            ve,
+        )
+    } else {
+        FieldBinding::emitter_variant_field(
+            "draw_pass.material",
+            "alpha_mode.cutoff",
+            FieldKind::F32,
+        )
+    };
+
+    let cutoff_row = commands
+        .spawn((
+            MaskCutoffRow,
+            Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(8.0),
+                ..default()
+            },
+        ))
+        .with_child((
+            cutoff_binding,
+            text_edit(
+                TextEditProps::default()
+                    .with_label("Cutoff")
+                    .with_default_value(crate::ui::components::binding::format_f32(cutoff))
+                    .numeric_f32()
+                    .with_min(0.0)
+                    .with_max(1.0),
+            ),
+        ))
+        .id();
+
+    commands
+        .entity(container)
+        .insert_children(row_index + 1, &[cutoff_row]);
+}
+
+fn sync_mask_cutoff(
+    mut commands: Commands,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    existing: Query<Entity, With<MaskCutoffRow>>,
+    bindings: Query<(Entity, &FieldBinding)>,
+    parents: Query<&ChildOf>,
+    children_query: Query<&Children>,
+    containers: Query<&VariantFieldsContainer>,
+) {
+    if !editor_state.is_changed() && !assets.is_changed() {
+        return;
+    }
+
+    let cutoff_value = extract_mask_cutoff(&editor_state, &assets);
+    let has_row = !existing.is_empty();
+
+    match (cutoff_value, has_row) {
+        (Some(cutoff), false) => {
+            let Some((container, row_index, alpha_entity)) =
+                find_insertion_point(&bindings, &parents, &children_query, &containers)
+            else {
+                return;
+            };
+            let Some((_, alpha_binding)) = bindings.iter().find(|(e, _)| *e == alpha_entity) else {
+                return;
+            };
+            spawn_cutoff_row(&mut commands, cutoff, alpha_binding, container, row_index);
+        }
+        (None, true) => {
+            for entity in &existing {
+                commands.entity(entity).try_despawn();
+            }
+        }
+        _ => {}
+    }
 }

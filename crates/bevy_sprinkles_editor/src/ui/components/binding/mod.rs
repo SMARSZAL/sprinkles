@@ -5,7 +5,8 @@ mod sync;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::reflect::{
-    DynamicEnum, DynamicTuple, DynamicVariant, PartialReflect, ReflectMut, ReflectRef,
+    DynamicEnum, DynamicStruct, DynamicTuple, DynamicVariant, PartialReflect, ReflectMut,
+    ReflectRef, TypeInfo, VariantInfo,
 };
 use bevy_sprinkles::prelude::*;
 
@@ -261,7 +262,7 @@ impl FieldBinding {
         match &self.accessor {
             FieldAccessor::Direct(_) => Some(value),
             FieldAccessor::VariantField { field_name, .. } => {
-                resolve_variant_field_ref(value, field_name)
+                resolve_chained_variant_field_ref(value, field_name)
             }
         }
     }
@@ -282,7 +283,7 @@ impl FieldBinding {
         match &self.accessor {
             FieldAccessor::Direct(_) => Some(f(target)),
             FieldAccessor::VariantField { field_name, .. } => {
-                with_variant_field_mut(target, field_name, f)
+                with_chained_variant_field_mut(target, field_name, f)
             }
         }
     }
@@ -637,6 +638,36 @@ where
     None
 }
 
+fn resolve_chained_variant_field_ref<'a>(
+    value: &'a dyn PartialReflect,
+    field_name: &str,
+) -> Option<&'a dyn PartialReflect> {
+    if let Some((first, rest)) = field_name.split_once('.') {
+        let intermediate = resolve_variant_field_ref(value, first)?;
+        resolve_chained_variant_field_ref(intermediate, rest)
+    } else {
+        resolve_variant_field_ref(value, field_name)
+    }
+}
+
+fn with_chained_variant_field_mut<F, R>(
+    value: &mut dyn PartialReflect,
+    field_name: &str,
+    f: F,
+) -> Option<R>
+where
+    F: FnOnce(&mut dyn PartialReflect) -> R,
+{
+    if let Some((first, rest)) = field_name.split_once('.') {
+        with_variant_field_mut(value, first, |intermediate| {
+            with_chained_variant_field_mut(intermediate, rest, f)
+        })
+        .flatten()
+    } else {
+        with_variant_field_mut(value, field_name, f)
+    }
+}
+
 pub(super) fn find_ancestor_entity(
     entity: Entity,
     target: Entity,
@@ -693,6 +724,56 @@ impl EmitterWriter<'_, '_> {
     }
 }
 
+fn default_for_type_id(type_id: std::any::TypeId) -> Option<Box<dyn PartialReflect>> {
+    if type_id == std::any::TypeId::of::<f32>() {
+        Some(Box::new(0.0f32))
+    } else if type_id == std::any::TypeId::of::<f64>() {
+        Some(Box::new(0.0f64))
+    } else if type_id == std::any::TypeId::of::<bool>() {
+        Some(Box::new(false))
+    } else if type_id == std::any::TypeId::of::<u32>() {
+        Some(Box::new(0u32))
+    } else if type_id == std::any::TypeId::of::<i32>() {
+        Some(Box::new(0i32))
+    } else if type_id == std::any::TypeId::of::<String>() {
+        Some(Box::new(String::new()))
+    } else {
+        None
+    }
+}
+
+fn build_dynamic_variant(type_info: Option<&TypeInfo>, variant_name: &str) -> DynamicVariant {
+    let Some(TypeInfo::Enum(enum_info)) = type_info else {
+        return DynamicVariant::Unit;
+    };
+    let Some(variant_info) = enum_info.variant(variant_name) else {
+        return DynamicVariant::Unit;
+    };
+    match variant_info {
+        VariantInfo::Struct(struct_info) => {
+            let mut dynamic_struct = DynamicStruct::default();
+            for field in struct_info.iter() {
+                let Some(default) = default_for_type_id(field.type_id()) else {
+                    return DynamicVariant::Unit;
+                };
+                dynamic_struct.insert_boxed(field.name(), default);
+            }
+            DynamicVariant::Struct(dynamic_struct)
+        }
+        VariantInfo::Tuple(tuple_info) => {
+            let mut dynamic_tuple = DynamicTuple::default();
+            for field in tuple_info.iter() {
+                let Some(default) = default_for_type_id(field.type_id()) else {
+                    return DynamicVariant::Unit;
+                };
+                dynamic_tuple.insert_boxed(default);
+            }
+            DynamicVariant::Tuple(dynamic_tuple)
+        }
+        VariantInfo::Unit(_) => DynamicVariant::Unit,
+    }
+}
+
 fn set_enum_variant_by_name(target: &mut dyn PartialReflect, variant_name: &str) -> bool {
     let ReflectMut::Enum(enum_mut) = target.reflect_mut() else {
         return false;
@@ -702,9 +783,23 @@ fn set_enum_variant_by_name(target: &mut dyn PartialReflect, variant_name: &str)
         return false;
     }
 
-    let dynamic_enum = DynamicEnum::new(variant_name, DynamicVariant::Unit);
+    let variant = build_dynamic_variant(target.get_represented_type_info(), variant_name);
+    let dynamic_enum = DynamicEnum::new(variant_name, variant);
     target.apply(&dynamic_enum);
     true
+}
+
+fn optional_enum_has_variant(target: &dyn PartialReflect, variant_name: &str) -> bool {
+    let ReflectRef::Enum(enum_ref) = target.reflect_ref() else {
+        return false;
+    };
+    let Some(inner) = enum_ref.field_at(0) else {
+        return false;
+    };
+    let ReflectRef::Enum(inner_enum) = inner.reflect_ref() else {
+        return false;
+    };
+    inner_enum.variant_name() == variant_name
 }
 
 fn set_optional_enum_by_name(
@@ -727,18 +822,19 @@ fn set_optional_enum_by_name(
             true
         }
         Some(variant_name) => {
-            if !is_none {
-                if let ReflectRef::Enum(enum_ref) = target.reflect_ref() {
-                    if let Some(inner) = enum_ref.field_at(0) {
-                        if let ReflectRef::Enum(inner_enum) = inner.reflect_ref() {
-                            if inner_enum.variant_name() == variant_name {
-                                return false;
-                            }
-                        }
-                    }
-                }
+            if !is_none && optional_enum_has_variant(target, variant_name) {
+                return false;
             }
-            let inner = DynamicEnum::new(variant_name, DynamicVariant::Unit);
+            let inner_type_info = target.get_represented_type_info().and_then(|ti| {
+                let TypeInfo::Enum(enum_info) = ti else {
+                    return None;
+                };
+                let some_variant = enum_info.variant("Some")?;
+                let tuple_variant = some_variant.as_tuple_variant().ok()?;
+                tuple_variant.field_at(0)?.type_info()
+            });
+            let variant = build_dynamic_variant(inner_type_info, variant_name);
+            let inner = DynamicEnum::new(variant_name, variant);
             let mut tuple = DynamicTuple::default();
             tuple.insert(inner);
             let some = DynamicEnum::new("Some", DynamicVariant::Tuple(tuple));
