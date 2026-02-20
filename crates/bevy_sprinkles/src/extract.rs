@@ -682,8 +682,7 @@ pub fn extract_colliders(
         }
 
         let transform = global_transform.to_matrix();
-        let offset_transform = transform * Mat4::from_translation(collider.position);
-        let inverse = offset_transform.inverse();
+        let inverse = transform.inverse();
 
         let (extents, collider_type) = match &collider.shape {
             ParticlesColliderShape3D::Sphere { radius } => {
@@ -693,7 +692,7 @@ pub fn extract_colliders(
         };
 
         colliders.push(ColliderUniform {
-            transform: offset_transform.to_cols_array(),
+            transform: transform.to_cols_array(),
             inverse_transform: inverse.to_cols_array(),
             extents,
             collider_type,

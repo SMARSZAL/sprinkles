@@ -475,13 +475,14 @@ pub fn draw_collider_gizmos(
                 let collider_transform = Transform {
                     translation: transform.translation,
                     rotation: transform.rotation,
-                    scale: *size,
+                    scale: transform.scale * *size,
                 };
                 gizmos.cube(collider_transform, color);
             }
             ParticlesColliderShape3D::Sphere { radius } => {
                 let isometry = Isometry3d::from_translation(transform.translation);
-                gizmos.sphere(isometry, *radius, color);
+                let scaled_radius = *radius * transform.scale.max_element();
+                gizmos.sphere(isometry, scaled_radius, color);
             }
         }
     }

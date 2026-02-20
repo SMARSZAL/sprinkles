@@ -29,9 +29,6 @@ struct ColliderShapeComboBox;
 #[derive(Component)]
 struct ColliderShapeField(&'static str);
 
-#[derive(Component)]
-struct ColliderPositionEdit;
-
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_collider_shape_change)
         .add_observer(handle_collider_text_commit)
@@ -79,7 +76,6 @@ fn setup_collider_content(
     };
 
     let shape = collider.shape.clone();
-    let position = collider.position;
     let selected = shape_index(&shape);
     let font: Handle<Font> = asset_server.load(FONT_PATH);
 
@@ -132,18 +128,6 @@ fn setup_collider_content(
                     });
                 }
             }
-
-            parent.spawn(fields_row()).with_children(|row| {
-                row.spawn((
-                    ColliderPositionEdit,
-                    vector_edit(
-                        VectorEditProps::default()
-                            .with_label("Position")
-                            .with_suffixes(VectorSuffixes::XYZ)
-                            .with_default_values(vec![position.x, position.y, position.z]),
-                    ),
-                ));
-            });
         })
         .id();
 
@@ -189,7 +173,6 @@ fn handle_collider_text_commit(
     trigger: On<TextEditCommitEvent>,
     parents: Query<&ChildOf>,
     shape_fields: Query<(&ColliderShapeField, &Children)>,
-    position_edits: Query<&Children, With<ColliderPositionEdit>>,
     editor_state: Res<EditorState>,
     mut assets: ResMut<Assets<ParticleSystemAsset>>,
     mut dirty_state: ResMut<DirtyState>,
@@ -229,27 +212,6 @@ fn handle_collider_text_commit(
         if changed {
             dirty_state.has_unsaved_changes = true;
         }
-        return;
-    }
-
-    if let Some(position_entity) = find_ancestor(trigger.entity, &parents, 10, |e| {
-        position_edits.get(e).is_ok()
-    }) {
-        let Ok(children) = position_edits.get(position_entity) else {
-            return;
-        };
-
-        let Some((_, collider)) = get_inspecting_collider_mut(&editor_state, &mut assets) else {
-            return;
-        };
-
-        match find_vector_component(trigger.entity, children, &parents) {
-            Some(0) => collider.position.x = value,
-            Some(1) => collider.position.y = value,
-            Some(2) => collider.position.z = value,
-            _ => return,
-        }
-        dirty_state.has_unsaved_changes = true;
     }
 }
 

@@ -16,6 +16,15 @@ use crate::{
 
 const MAX_FRAME_DELTA: f32 = 0.1;
 
+fn get_particle_asset<'a>(
+    parent_system: Entity,
+    particle_systems: &Query<&ParticleSystem3D>,
+    assets: &'a Assets<ParticleSystemAsset>,
+) -> Option<&'a ParticleSystemAsset> {
+    let particle_system = particle_systems.get(parent_system).ok()?;
+    assets.get(&particle_system.handle)
+}
+
 pub fn update_particle_time(
     time: Res<Time>,
     assets: Res<Assets<ParticleSystemAsset>>,
@@ -287,7 +296,6 @@ pub fn setup_particle_systems(
                     ParticlesCollider3D {
                         enabled: collider_data.enabled,
                         shape: collider_data.shape.clone(),
-                        position: Vec3::ZERO,
                     },
                     Transform::from_translation(collider_data.position),
                     Name::new(collider_data.name.clone()),
@@ -373,19 +381,37 @@ pub fn sync_collider_data(
     }
 
     for (collider, mut collider3d, mut transform) in collider_query.iter_mut() {
-        let Ok(particle_system) = particle_systems.get(collider.parent_system) else {
-            continue;
-        };
-        let Some(asset) = assets.get(&particle_system.handle) else {
-            continue;
-        };
-        let Some(collider_data) = asset.colliders.get(collider.collider_index) else {
+        let Some(collider_data) =
+            get_particle_asset(collider.parent_system, &particle_systems, &assets)
+                .and_then(|asset| asset.colliders.get(collider.collider_index))
+        else {
             continue;
         };
 
         collider3d.enabled = collider_data.enabled;
         collider3d.shape = collider_data.shape.clone();
-        transform.translation = collider_data.position;
+        *transform = Transform::from_translation(collider_data.position);
+    }
+}
+
+pub fn sync_emitter_transform(
+    particle_systems: Query<&ParticleSystem3D>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    mut emitter_query: Query<(&EmitterEntity, &EmitterRuntime, &mut Transform)>,
+) {
+    if !assets.is_changed() {
+        return;
+    }
+
+    for (emitter, runtime, mut transform) in emitter_query.iter_mut() {
+        let Some(emitter_data) =
+            get_particle_asset(emitter.parent_system, &particle_systems, &assets)
+                .and_then(|asset| asset.emitters.get(runtime.emitter_index))
+        else {
+            continue;
+        };
+
+        *transform = Transform::from_translation(emitter_data.position);
     }
 }
 
@@ -406,15 +432,10 @@ pub fn sync_particle_mesh(
     for (emitter_entity, emitter, runtime, buffer_handle, mut current_config, mut mesh_handle) in
         emitter_query.iter_mut()
     {
-        let Ok(particle_system) = particle_systems.get(emitter.parent_system) else {
-            continue;
-        };
-
-        let Some(asset) = assets.get(&particle_system.handle) else {
-            continue;
-        };
-
-        let Some(emitter_data) = asset.emitters.get(runtime.emitter_index) else {
+        let Some(emitter_data) =
+            get_particle_asset(emitter.parent_system, &particle_systems, &assets)
+                .and_then(|asset| asset.emitters.get(runtime.emitter_index))
+        else {
             continue;
         };
 
@@ -460,15 +481,10 @@ pub fn sync_particle_material(
         mut material_handle,
     ) in emitter_query.iter_mut()
     {
-        let Ok(particle_system) = particle_systems.get(emitter.parent_system) else {
-            continue;
-        };
-
-        let Some(asset) = assets.get(&particle_system.handle) else {
-            continue;
-        };
-
-        let Some(emitter_data) = asset.emitters.get(runtime.emitter_index) else {
+        let Some(emitter_data) =
+            get_particle_asset(emitter.parent_system, &particle_systems, &assets)
+                .and_then(|asset| asset.emitters.get(runtime.emitter_index))
+        else {
             continue;
         };
 

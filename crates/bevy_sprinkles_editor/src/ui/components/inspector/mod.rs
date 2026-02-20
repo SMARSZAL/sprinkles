@@ -9,6 +9,7 @@ mod particle_flags;
 mod scale;
 mod sub_emitter;
 mod time;
+mod transform;
 mod turbulence;
 pub mod types;
 pub mod utils;
@@ -187,6 +188,7 @@ fn setup_inspector_panel(
                             ))
                             .with_children(|emitter_content| {
                                 emitter_content.spawn(time::time_section(&asset_server));
+                                emitter_content.spawn(transform::transform_section(&asset_server));
                                 emitter_content.spawn(draw_pass::draw_pass_section(&asset_server));
                                 emitter_content.spawn(emission::emission_section(&asset_server));
                                 emitter_content.spawn(scale::scale_section(&asset_server));
@@ -219,6 +221,7 @@ fn setup_inspector_panel(
                                 collider_content.spawn(
                                     collider_properties::collider_properties_section(&asset_server),
                                 );
+                                collider_content.spawn(transform::transform_section(&asset_server));
                             });
                     });
             });

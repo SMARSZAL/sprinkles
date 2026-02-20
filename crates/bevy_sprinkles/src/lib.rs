@@ -186,7 +186,8 @@ use extract::{extract_colliders, extract_particle_systems};
 use sort::ParticleSortPlugin;
 use spawning::{
     cleanup_particle_entities, setup_particle_systems, sync_collider_data,
-    sync_emitter_mesh_transforms, sync_particle_material, sync_particle_mesh, update_particle_time,
+    sync_emitter_mesh_transforms, sync_emitter_transform, sync_particle_material,
+    sync_particle_mesh, update_particle_time,
 };
 use textures::{
     CurveTextureCache, FallbackCurveTexture, FallbackGradientTexture, GradientTextureCache,
@@ -230,6 +231,7 @@ impl Plugin for SprinklesPlugin {
                 sync_particle_mesh,
                 sync_particle_material,
                 sync_emitter_mesh_transforms,
+                sync_emitter_transform,
                 sync_collider_data,
                 update_particle_time,
                 cleanup_particle_entities,

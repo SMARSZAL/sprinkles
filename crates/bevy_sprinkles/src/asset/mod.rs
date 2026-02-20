@@ -236,9 +236,7 @@ pub struct EmitterData {
     #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
     pub enabled: bool,
 
-    /// Position offset of this emitter relative to the particle system entity.
-    ///
-    /// Defaults to [`Vec3::ZERO`].
+    /// Position offset relative to the particle system entity.
     #[serde(default, skip_serializing_if = "is_zero_vec3")]
     pub position: Vec3,
 
@@ -1021,8 +1019,8 @@ pub struct ColliderData {
     pub enabled: bool,
     /// The collision shape.
     pub shape: ParticlesColliderShape3D,
-    /// Position offset relative to the particle system entity. Defaults to [`Vec3::ZERO`].
-    #[serde(default)]
+    /// Position offset relative to the particle system entity.
+    #[serde(default, skip_serializing_if = "is_zero_vec3")]
     pub position: Vec3,
 }
 

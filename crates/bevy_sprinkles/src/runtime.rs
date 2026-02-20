@@ -321,8 +321,6 @@ pub struct ParticlesCollider3D {
     pub enabled: bool,
     /// The collision shape.
     pub shape: ParticlesColliderShape3D,
-    /// Position offset relative to the entity's transform.
-    pub position: Vec3,
 }
 
 impl Default for ParticlesCollider3D {
@@ -330,7 +328,6 @@ impl Default for ParticlesCollider3D {
         Self {
             enabled: true,
             shape: ParticlesColliderShape3D::default(),
-            position: Vec3::ZERO,
         }
     }
 }
