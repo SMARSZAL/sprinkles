@@ -185,11 +185,10 @@ pub fn setup_particle_systems(
             continue;
         }
 
-        commands.entity(system_entity).insert((
-            ParticleSystemRuntime::default(),
-            Transform::default(),
-            Visibility::default(),
-        ));
+        commands
+            .entity(system_entity)
+            .insert(ParticleSystemRuntime::default())
+            .insert_if_new((Transform::default(), Visibility::default()));
 
         let mut emitter_entities: Vec<Entity> = Vec::new();
 
