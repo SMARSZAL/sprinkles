@@ -18,6 +18,7 @@ This is an unordered list of planned features. Nothing here is guaranteed to be 
 - Reorder emitters and colliders via drag and drop
 - Better open project error messages (too vague)
 - In-editor docs
+- WASM build
 
 ### Project selector / hamburger menu
 
